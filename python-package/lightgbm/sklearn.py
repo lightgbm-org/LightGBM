@@ -1757,7 +1757,7 @@ class LGBMClassifier(_LGBMClassifierBase, LGBMModel):
         return result
 
     decision_function.__doc__ = _lgbmmodel_doc_predict.format(
-        description="Return the raw scores (decision function) for each sample.",
+        description="Return raw margin scores (raw scores before transformation). For binary classification, these are scores before applying sigmoid; for multiclass, before applying softmax.",
         X_shape="numpy array, pandas DataFrame, scipy.sparse, list of lists of int or float of shape = [n_samples, n_features]",
         output_name="raw_score",
         predicted_result_shape="array-like of shape = [n_samples] or shape = [n_samples, n_classes]",
