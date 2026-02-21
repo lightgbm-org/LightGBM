@@ -1736,6 +1736,34 @@ class LGBMClassifier(_LGBMClassifierBase, LGBMModel):
         X_leaves_shape="array-like of shape = [n_samples, n_trees] or shape = [n_samples, n_trees * n_classes]",
         X_SHAP_values_shape="array-like of shape = [n_samples, n_features + 1] or shape = [n_samples, (n_features + 1) * n_classes] or list with n_classes length of such objects",
     )
+    
+    def decision_function(
+        self,
+        X: _LGBM_ScikitMatrixLike,
+        start_iteration: int = 0,
+        num_iteration: Optional[int] = None,
+        validate_features: bool = False,
+        **kwargs: Any,
+    ) -> _LGBM_PredictReturnType:
+        """Docstring is set after definition, using a template."""
+        result = super().predict(
+            X=X,
+            raw_score=True,
+            start_iteration=start_iteration,
+            num_iteration=num_iteration,
+            validate_features=validate_features,
+            **kwargs,
+        )
+        return result
+
+    decision_function.__doc__ = _lgbmmodel_doc_predict.format(
+        description="Return the raw scores (decision function) for each sample.",
+        X_shape="numpy array, pandas DataFrame, scipy.sparse, list of lists of int or float of shape = [n_samples, n_features]",
+        output_name="raw_score",
+        predicted_result_shape="array-like of shape = [n_samples] or shape = [n_samples, n_classes]",
+        X_leaves_shape="array-like of shape = [n_samples, n_trees] or shape = [n_samples, n_trees * n_classes]",
+        X_SHAP_values_shape="array-like of shape = [n_samples, n_features + 1] or shape = [n_samples, (n_features + 1) * n_classes] or list with n_classes length of such objects",
+    )
 
     @property
     def classes_(self) -> np.ndarray:
