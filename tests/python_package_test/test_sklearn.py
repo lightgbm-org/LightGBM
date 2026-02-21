@@ -41,6 +41,7 @@ from .utils import (
     load_digits,
     load_iris,
     load_linnerud,
+    logistic_sigmoid,
     make_ranking,
     make_synthetic_regression,
     np_assert_array_equal,
@@ -971,6 +972,24 @@ def test_predict():
 
     res_class_sklearn = clf.predict(X_train)
     np.testing.assert_allclose(res_class_sklearn, y_train)
+
+
+def test_decision_function_and_predict_proba_consistency():
+    # binary
+    X, y = load_breast_cancer(return_X_y=True)
+    X_train, X_test, y_train, _ = train_test_split(X, y, test_size=0.2, random_state=42)
+    clf = lgb.LGBMClassifier(n_estimators=10, random_state=42, verbose=-1).fit(X_train, y_train)
+    df = clf.decision_function(X_test)
+    np.testing.assert_allclose(df, clf.predict(X_test, raw_score=True))
+    np.testing.assert_allclose(logistic_sigmoid(df), clf.predict_proba(X_test)[:, 1])
+
+    # multiclass
+    X, y = load_iris(return_X_y=True)
+    X_train, X_test, y_train, _ = train_test_split(X, y, test_size=0.2, random_state=42)
+    clf = lgb.LGBMClassifier(n_estimators=10, random_state=42, verbose=-1).fit(X_train, y_train)
+    df = clf.decision_function(X_test)
+    np.testing.assert_allclose(df, clf.predict(X_test, raw_score=True))
+    np.testing.assert_allclose(softmax(df), clf.predict_proba(X_test))
 
 
 def test_predict_with_params_from_init():
