@@ -255,8 +255,8 @@ class _EvalFunctionWrapper:
             ``func(y_true, y_pred)``,
             ``func(y_true, y_pred, weight)``
             or ``func(y_true, y_pred, weight, group)``
-            and returns (metric_name, metric_value, is_higher_better) or
-            list of (metric_name, metric_value, is_higher_better):
+            and returns (metric_name, metric_value, maximize) or
+            list of (metric_name, metric_value, maximize):
 
                 y_true : numpy 1-D array of shape = [n_samples]
                     The target values.
@@ -276,7 +276,7 @@ class _EvalFunctionWrapper:
                     Unique identifier for the metric (e.g. "custom_adjusted_mse").
                 metric_value : float
                     Value of the evaluation metric.
-                is_higher_better : bool
+                maximize : bool
                     Are higher values better? e.g. ``True`` for AUC and ``False`` for binary error.
         """
         self.func = func
@@ -301,7 +301,7 @@ class _EvalFunctionWrapper:
             Unique identifier for the metric (e.g. "custom_adjusted_mse").
         metric_value : float
             Value of the evaluation metric.
-        is_higher_better : bool
+        maximize : bool
             Are higher values better? e.g. ``True`` for AUC and ``False`` for binary error.
         """
         labels = _get_label_from_constructed_dataset(dataset)
@@ -397,8 +397,8 @@ _lgbmmodel_doc_custom_eval_note = """
     Custom eval function expects a callable with following signatures:
     ``func(y_true, y_pred)``, ``func(y_true, y_pred, weight)`` or
     ``func(y_true, y_pred, weight, group)``
-    and returns (metric_name, metric_value, is_higher_better) or
-    list of (metric_name, metric_value, is_higher_better):
+    and returns (metric_name, metric_value, maximize) or
+    list of (metric_name, metric_value, maximize):
 
         y_true : numpy 1-D array of shape = [n_samples]
             The target values.
@@ -418,7 +418,7 @@ _lgbmmodel_doc_custom_eval_note = """
             Unique identifier for the metric (e.g. "custom_adjusted_mse").
         metric_value : float
             Value of the evaluation metric.
-        is_higher_better : bool
+        maximize : bool
             Are higher values better? e.g. ``True`` for AUC and ``False`` for binary error.
 """
 

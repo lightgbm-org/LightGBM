@@ -3588,13 +3588,20 @@ _LGBM_CustomEvalFunction = Union[
 #
 class EvalResult(NamedTuple):
     """
-    TODO: docs
+    Result from computing an evaluation metric on a dataset.
+
+    In ``lightgbm<4.7.0``, evaluation results were stored in tuples like this:
+
+      * train(): ``(dataset_name, metric_name, metric_value, maximize)``
+      * cv(): ``(dataset_name, metric_name, mean(metric_value), maximize, std_dev(metric_value))``
+
+    
     """
 
     dataset_name: str
     metric_name: str
     metric_value: float
-    is_higher_better: bool
+    maximize: bool
     metric_std_dev: Optional[float] = None
 
     def __len__(self) -> int:
@@ -4386,7 +4393,7 @@ class Booster:
         feval : callable, list of callable, or None, optional (default=None)
             Customized evaluation function.
             Each evaluation function should accept two parameters: preds, eval_data,
-            and return (metric_name, metric_value, is_higher_better) or list of such tuples.
+            and return (metric_name, metric_value, maximize) or list of such tuples.
 
                 preds : numpy 1-D array or numpy 2-D array (for multi-class task)
                     The predicted values.
@@ -4399,14 +4406,14 @@ class Booster:
                     Unique identifier for the metric (e.g. "custom_adjusted_mse").
                 metric_value : float
                     Value of the evaluation metric.
-                is_higher_better : bool
+                maximize : bool
                     Are higher values better? e.g. ``True`` for AUC and ``False`` for binary error.
 
         Returns
         -------
         result : list[EvalResult]
             List of ``lightgbm.EvalResult`` objects, named tuples of the form
-            (dataset_name, metric_name, metric_value, is_higher_better).
+            (dataset_name, metric_name, metric_value, maximize).
         """
         if not isinstance(data, Dataset):
             raise TypeError("Can only eval for Dataset instance")
@@ -4436,7 +4443,7 @@ class Booster:
         feval : callable, list of callable, or None, optional (default=None)
             Customized evaluation function.
             Each evaluation function should accept two parameters: preds, eval_data,
-            and return (metric_name, metric_value, is_higher_better) or list of such tuples.
+            and return (metric_name, metric_value, maximize) or list of such tuples.
 
                 preds : numpy 1-D array or numpy 2-D array (for multi-class task)
                     The predicted values.
@@ -4449,14 +4456,14 @@ class Booster:
                     Unique identifier for the metric (e.g. "custom_adjusted_mse").
                 metric_value : float
                     Value of the evaluation metric.
-                is_higher_better : bool
+                maximize : bool
                     Are higher values better? e.g. ``True`` for AUC and ``False`` for binary error.
 
         Returns
         -------
         result : list[EvalResult]
             List of ``lightgbm.EvalResult`` objects, named tuples of the form
-            (dataset_name, metric_name, metric_value, is_higher_better).
+            (dataset_name, metric_name, metric_value, maximize).
         """
         return self.__inner_eval(data_name=self._train_data_name, data_idx=0, feval=feval)
 
@@ -4471,7 +4478,7 @@ class Booster:
         feval : callable, list of callable, or None, optional (default=None)
             Customized evaluation function.
             Each evaluation function should accept two parameters: preds, eval_data,
-            and return (metric_name, metric_value, is_higher_better) or list of such tuples.
+            and return (metric_name, metric_value, maximize) or list of such tuples.
 
                 preds : numpy 1-D array or numpy 2-D array (for multi-class task)
                     The predicted values.
@@ -4484,13 +4491,13 @@ class Booster:
                     Unique identifier for the metric (e.g. "custom_adjusted_mse").
                 metric_value : float
                     Value of the evaluation metric.
-                is_higher_better : bool
+                maximize : bool
                     Are higher values better? e.g. ``True`` for AUC and ``False`` for binary error.
 
         Returns
         -------
         result : list
-            List with (validation_dataset_name, metric_name, metric_value, is_higher_better) tuples.
+            List with (validation_dataset_name, metric_name, metric_value, maximize) tuples.
         """
         return [
             item
@@ -5250,7 +5257,7 @@ class Booster:
                         dataset_name=data_name,
                         metric_name=self.__name_inner_eval[i],
                         metric_value=result[i],
-                        is_higher_better=self.__higher_better_inner_eval[i],
+                        maximize=self.__higher_better_inner_eval[i],
                     )
                 )
         if callable(feval):
@@ -5271,7 +5278,7 @@ class Booster:
                                 dataset_name=data_name,
                                 metric_name=eval_tuple[0],
                                 metric_value=eval_tuple[1],
-                                is_higher_better=eval_tuple[2],
+                                maximize=eval_tuple[2],
                             )
                         )
                 else:
@@ -5280,7 +5287,7 @@ class Booster:
                             dataset_name=data_name,
                             metric_name=feval_ret[0],
                             metric_value=feval_ret[1],
-                            is_higher_better=feval_ret[2],
+                            maximize=feval_ret[2],
                         )
                     )
         return ret

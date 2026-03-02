@@ -48,7 +48,7 @@ class EarlyStopException(Exception):
         best_iteration : int
             The best iteration stopped.
             0-based... pass ``best_iteration=2`` to indicate that the third iteration was the best one.
-        best_score : list of (dataset_name, metric_name, metric_value, is_higher_better) tuple, (dataset_name, metric_name, metric_value, is_higher_better, stdv) tuple, or ``lightgbm.EvalResult``
+        best_score : list of (dataset_name, metric_name, metric_value, maximize) tuple, (dataset_name, metric_name, metric_value, maximize, stdv) tuple, or ``lightgbm.EvalResult``
             Scores for each metric, on each validation set, as of the best iteration.
 
         Notes
@@ -381,7 +381,7 @@ class _EarlyStoppingCallback:
         self.first_metric = first_metric_name
         for eval_ret, delta in zip(env.evaluation_result_list, deltas):
             self.best_iter.append(0)
-            if eval_ret.is_higher_better:
+            if eval_ret.maximize:
                 self.best_score.append(float("-inf"))
                 self.cmp_op.append(partial(self._gt_delta, delta=delta))
             else:

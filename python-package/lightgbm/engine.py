@@ -134,7 +134,7 @@ def train(
     feval : callable, list of callable, or None, optional (default=None)
         Customized evaluation function.
         Each evaluation function should accept two parameters: preds, eval_data,
-        and return (metric_name, metric_value, is_higher_better) or list of such tuples.
+        and return (metric_name, metric_value, maximize) or list of such tuples.
 
             preds : numpy 1-D array or numpy 2-D array (for multi-class task)
                 The predicted values.
@@ -147,7 +147,7 @@ def train(
                 Unique identifier for the metric (e.g. "custom_adjusted_mse").
             metric_value : float
                 Value of the evaluation metric.
-            is_higher_better : bool
+            maximize : bool
                 Are higher values better? e.g. ``True`` for AUC and ``False`` for binary error.
 
         To ignore the default metric corresponding to the used objective,
@@ -597,7 +597,7 @@ def _agg_cv_result(
     # build up 2 maps, of the form:
     #
     # OrderedDict{
-    #     (<dataset_name>, <metric_name>): <is_higher_better>
+    #     (<dataset_name>, <metric_name>): <maximize>
     # }
     #
     # OrderedDict{
@@ -609,14 +609,14 @@ def _agg_cv_result(
     for result_list in raw_results:
         for result in result_list:
             key = (result.dataset_name, result.metric_name)
-            metric_types[key] = result.is_higher_better
+            metric_types[key] = result.maximize
             metric_values.setdefault(key, [])
             metric_values[key].append(result.metric_value)
 
     # turn that into a list of tuples of the form:
     #
     # [
-    #     (<dataset_name>, <metric_name>, mean(<values>), <is_higher_better>, std_dev(<values>))
+    #     (<dataset_name>, <metric_name>, mean(<values>), <maximize>, std_dev(<values>))
     # ]
     # TODO: could this be refactored?
     return [
@@ -624,7 +624,7 @@ def _agg_cv_result(
             dataset_name=k[0],
             metric_name=k[1],
             metric_value=float(np.mean(v)),
-            is_higher_better=metric_types[k],
+            maximize=metric_types[k],
             metric_std_dev=float(np.std(v)),
         )
         for k, v in metric_values.items()
@@ -677,7 +677,7 @@ def cv(
     feval : callable, list of callable, or None, optional (default=None)
         Customized evaluation function.
         Each evaluation function should accept two parameters: preds, eval_data,
-        and return (metric_name, metric_value, is_higher_better) or list of such tuples.
+        and return (metric_name, metric_value, maximize) or list of such tuples.
 
             preds : numpy 1-D array or numpy 2-D array (for multi-class task)
                 The predicted values.
@@ -690,7 +690,7 @@ def cv(
                 Unique identifier for the metric (e.g. "custom_adjusted_mse").
             metric_value : float
                 Value of the evaluation metric.
-            is_higher_better : bool
+            maximize : bool
                 Are higher values better? e.g. ``True`` for AUC and ``False`` for binary error.
 
         To ignore the default metric corresponding to the used objective,
