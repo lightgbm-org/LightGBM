@@ -13,6 +13,7 @@ import pytest
 import scipy.sparse
 from scipy.stats import spearmanr
 from sklearn.base import clone
+from sklearn.calibration import CalibratedClassifierCV
 from sklearn.datasets import load_svmlight_file, make_blobs, make_multilabel_classification
 from sklearn.ensemble import StackingClassifier, StackingRegressor
 from sklearn.metrics import accuracy_score, log_loss, mean_squared_error, r2_score
@@ -990,6 +991,35 @@ def test_decision_function_and_predict_proba_consistency():
     preds_raw = clf.decision_function(X_test)
     np.testing.assert_allclose(preds_raw, clf.predict(X_test, raw_score=True))
     np.testing.assert_allclose(softmax(preds_raw), clf.predict_proba(X_test))
+
+
+@pytest.mark.parametrize("method", ["sigmoid", "isotonic"])
+def test_calibrated_classifier_cv(method):
+    # binary
+    X, y = load_breast_cancer(return_X_y=True)
+    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+    clf = CalibratedClassifierCV(lgb.LGBMClassifier(n_estimators=10, verbose=-1), method=method, cv=3)
+    clf.fit(X_train, y_train)
+    proba = clf.predict_proba(X_test)
+    assert proba.shape == (X_test.shape[0], 2)
+    np.testing.assert_array_less(proba, 1.0 + 1e-9)
+    np.testing.assert_array_less(-1e-9, proba)
+    np.testing.assert_allclose(proba.sum(axis=1), 1.0)
+    score = accuracy_score(y_test, clf.predict(X_test))
+    assert 0.8 <= score <= 1.0
+
+    # multiclass
+    X, y = load_iris(return_X_y=True)
+    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+    clf = CalibratedClassifierCV(lgb.LGBMClassifier(n_estimators=10, verbose=-1), method=method, cv=3)
+    clf.fit(X_train, y_train)
+    proba = clf.predict_proba(X_test)
+    assert proba.shape == (X_test.shape[0], 3)
+    np.testing.assert_array_less(proba, 1.0 + 1e-9)
+    np.testing.assert_array_less(-1e-9, proba)
+    np.testing.assert_allclose(proba.sum(axis=1), 1.0)
+    score = accuracy_score(y_test, clf.predict(X_test))
+    assert 0.8 <= score <= 1.0
 
 
 def test_predict_with_params_from_init():

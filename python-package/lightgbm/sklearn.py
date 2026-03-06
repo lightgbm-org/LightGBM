@@ -727,30 +727,35 @@ class LGBMModel(_LGBMModelBase):
         # "check_sample_weight_equivalence" can be removed when lightgbm's
         # minimum supported scikit-learn version is at least 1.6
         # ref: https://github.com/scikit-learn/scikit-learn/pull/30137
+        xfail_checks = {
+            "check_no_attributes_set_in_init": (
+                "scikit-learn incorrectly asserts that private attributes "
+                "cannot be set in __init__: "
+                "(see https://github.com/lightgbm-org/LightGBM/issues/2628)"
+            ),
+            "check_all_zero_sample_weights_error": (
+                "Beginning in scikit-learn 1.9, by default estimators are expected to reject "
+                "sample weight arrays that are all-0. LightGBM intentionally accepts such arrays. "
+                "LightGBM supports some operations where training on an all-0-weight input could make sense, "
+                "like batch updates with training continuation or manual model creation with forced splits."
+            ),
+            "check_sample_weight_equivalence": check_sample_weight_str,
+            "check_sample_weight_equivalence_on_dense_data": check_sample_weight_str,
+            "check_sample_weight_equivalence_on_sparse_data": check_sample_weight_str,
+        }
+        # "check_decision_proba_consistency" can be removed when lightgbm's
+        # minimum supported scikit-learn version is at least 1.2
+        major, minor, *_ = _sklearn_version.split(".")
+        if int(major) <= 1 and int(minor) < 2:
+            xfail_checks["check_decision_proba_consistency"] = (
+                "decision_function() returns raw margins while predict_proba() applies sigmoid in C++ "
+                "independently, causing different tie structures after rounding. "
+                "scikit-learn >= 1.2 relaxed this check to accept monotonically consistent scores."
+            )
         return {
             "allow_nan": True,
             "X_types": ["2darray", "sparse", "1dlabels"],
-            "_xfail_checks": {
-                "check_no_attributes_set_in_init": (
-                    "scikit-learn incorrectly asserts that private attributes "
-                    "cannot be set in __init__: "
-                    "(see https://github.com/lightgbm-org/LightGBM/issues/2628)"
-                ),
-                "check_all_zero_sample_weights_error": (
-                    "Beginning in scikit-learn 1.9, by default estimators are expected to reject "
-                    "sample weight arrays that are all-0. LightGBM intentionally accepts such arrays. "
-                    "LightGBM supports some operations where training on an all-0-weight input could make sense, "
-                    "like batch updates with training continuation or manual model creation with forced splits."
-                ),
-                "check_sample_weight_equivalence": check_sample_weight_str,
-                "check_sample_weight_equivalence_on_dense_data": check_sample_weight_str,
-                "check_sample_weight_equivalence_on_sparse_data": check_sample_weight_str,
-                "check_decision_proba_consistency": (
-                    "decision_function() returns raw margins while predict_proba() applies sigmoid in C++ "
-                    "independently, causing different tie structures after rounding. "
-                    "scikit-learn >= 1.2 relaxed this check to accept monotonically consistent scores."
-                ),
-            },
+            "_xfail_checks": xfail_checks,
         }
 
     @staticmethod
