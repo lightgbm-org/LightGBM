@@ -999,16 +999,22 @@ def test_calibrated_classifier_cv(method):
     # binary
     X, y = load_breast_cancer(return_X_y=True)
     X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+    _original_decision_function = lgb.LGBMClassifier.decision_function
+    call_count = {"count": 0}
+
+    def _wrapped_decision_function(self, *args, **kwargs):
+        call_count["count"] += 1
+        return _original_decision_function(self, *args, **kwargs)
+
     with patch.object(
         lgb.LGBMClassifier,
         "decision_function",
-        autospec=True,
-        wraps=lgb.LGBMClassifier.decision_function,
-    ) as mock_decision_function:
+        _wrapped_decision_function,
+    ):
         clf = CalibratedClassifierCV(lgb.LGBMClassifier(n_estimators=10, verbose=-1), method=method, cv=3)
         clf.fit(X_train, y_train)
         proba = clf.predict_proba(X_test)
-        assert mock_decision_function.call_count > 0
+        assert call_count["count"] > 0
     assert proba.shape == (X_test.shape[0], 2)
     np.testing.assert_array_less(proba, 1.0 + 1e-9)
     np.testing.assert_array_less(-1e-9, proba)
@@ -1019,16 +1025,16 @@ def test_calibrated_classifier_cv(method):
     # multiclass
     X, y = load_iris(return_X_y=True)
     X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+    call_count["count"] = 0
     with patch.object(
         lgb.LGBMClassifier,
         "decision_function",
-        autospec=True,
-        wraps=lgb.LGBMClassifier.decision_function,
-    ) as mock_decision_function:
+        _wrapped_decision_function,
+    ):
         clf = CalibratedClassifierCV(lgb.LGBMClassifier(n_estimators=10, verbose=-1), method=method, cv=3)
         clf.fit(X_train, y_train)
         proba = clf.predict_proba(X_test)
-        assert mock_decision_function.call_count > 0
+        assert call_count["count"] > 0
     assert proba.shape == (X_test.shape[0], 3)
     np.testing.assert_array_less(proba, 1.0 + 1e-9)
     np.testing.assert_array_less(-1e-9, proba)
