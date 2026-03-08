@@ -6,7 +6,7 @@ on:
       pr-branch:
         type: string
         description: |
-          Branch in microsoft/LightGBM to update.
+          Branch in lightgbm-org/LightGBM to update.
 
 permissions:
   actions: none
@@ -44,7 +44,7 @@ jobs:
         with:
           fetch-depth: 5
           submodules: false
-          repository: microsoft/LightGBM
+          repository: lightgbm-org/LightGBM
           ref: "refs/heads/${{ inputs.pr-branch }}"
           token: ${{ github.token }}
           persist-credentials: true
