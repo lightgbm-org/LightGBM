@@ -1,5 +1,10 @@
 <img src=https://github.com/lightgbm-org/LightGBM/blob/master/docs/logo/LightGBM_logo_black_text.svg width=300 />
 
+> [!NOTE]
+> This project moved from `Microsoft/LightGBM` to `lightgbm-org/LightGBM` in March 2026.
+> This repository is still the official LightGBM source code, managed by the same maintainers (including the creator of LightGBM).
+> For details, see https://github.com/lightgbm-org/LightGBM/issues/7187
+
 Light Gradient Boosting Machine
 ===============================
 
