@@ -78,7 +78,7 @@ jobs:
           $env:BUILD_SOURCESDIRECTORY = $env:BUILD_DIRECTORY
           & "$env:GITHUB_WORKSPACE/.ci/test-windows.ps1"
       - name: Upload artifacts
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: ${{ matrix.artifact-name }}
           path: ${{ env.BUILD_ARTIFACTSTAGINGDIRECTORY }}/*.jar

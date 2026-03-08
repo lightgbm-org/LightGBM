@@ -52,7 +52,7 @@ jobs:
           fi
           echo "${COMMIT_SHA}" > "${BUILD_ARTIFACTSTAGINGDIRECTORY}/commit.txt"
       - name: Upload artifacts
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: source-archive
           path: |

@@ -73,7 +73,7 @@ jobs:
             "${IMAGE_URI}" \
             /bin/bash ./docker-script.sh
       - name: Upload artifacts
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: linux-aarch64-wheel
           path: artifacts/*.whl
@@ -356,7 +356,7 @@ jobs:
           & "$env:GITHUB_WORKSPACE/.ci/test-windows.ps1"
       - name: Upload artifacts
         if: ${{ matrix.produces-artifacts == 'true' }}
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: ${{ matrix.artifact-name }}
           path: |
@@ -380,7 +380,7 @@ jobs:
           persist-credentials: false
           submodules: false
       - name: Download lib_lightgbm (all operating systems) and Windows CLI
-        uses: actions/download-artifact@v7
+        uses: actions/download-artifact@v8
         with:
           merge-multiple: true
           path: ${{ env.BUILD_ARTIFACTSTAGINGDIRECTORY }}
@@ -403,7 +403,7 @@ jobs:
             -Verbosity detailed \
             -OutputDirectory "${{ env.BUILD_ARTIFACTSTAGINGDIRECTORY }}"
       - name: Upload artifacts
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: nuget-package
           path: artifacts/*.nupkg

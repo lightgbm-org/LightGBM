@@ -30,7 +30,7 @@ jobs:
           $GITHUB_WORKSPACE/.ci/setup.sh || exit 1
           $GITHUB_WORKSPACE/.ci/build-docs.sh || exit 1
       - name: Check links
-        uses: lycheeverse/lychee-action@v2.7.0
+        uses: lycheeverse/lychee-action@v2.8.0
         with:
           args: >-
             --config=./docs/.lychee.toml
