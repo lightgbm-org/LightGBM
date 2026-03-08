@@ -8,7 +8,7 @@ This document is for LightGBM maintainers.
 
 Create a pull request into `master` which prepares the source code for release.
 
-Copy the description and checklist from the previous release PR (for example: https://github.com/microsoft/LightGBM/pull/6796).
+Copy the description and checklist from the previous release PR (for example: https://github.com/lightgbm-org/LightGBM/pull/6796).
 
 This should usually also include a checklist of other issues and PRs that should be completed for the release,
 and the PR should be used to discuss what makes it into the release.
@@ -27,7 +27,7 @@ These runs build and test the official artifacts that will be attached to the Gi
 
 ### Step 4: Create a Release
 
-Navigate to https://github.com/microsoft/LightGBM/releases.
+Navigate to https://github.com/lightgbm-org/LightGBM/releases.
 
 Click "edit" on the draft release that `release-drafter` has created there.
 
@@ -46,7 +46,7 @@ After creating a release, run the following from the root of the repo to populat
 
 # attach them to the GitHub release
 gh release upload \
-    --repo microsoft/LightGBM \
+    --repo lightgbm-org/LightGBM \
     "${TAG}" \
     ./release-artifacts/*
 ```

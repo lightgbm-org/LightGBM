@@ -130,7 +130,7 @@ jobs:
           # the package built with that compiler toolchain can't target the
           # CPUs on GitHub's runners.
           #
-          # ref: https://github.com/microsoft/LightGBM/pull/7096/files#r2590879590
+          # ref: https://github.com/lightgbm-org/LightGBM/pull/7096/files#r2590879590
           - os: LightGBM-GPU
             container: nvcr.io/nvidia/cuda:12.9.1-devel-ubuntu22.04
             os-display-name: ubuntu22.04-with-gpu

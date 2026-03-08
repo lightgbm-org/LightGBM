@@ -826,7 +826,7 @@ if(APPLE AND USE_OPENMP AND NOT BUILD_STATIC_LIB)
       # ensure that R's library directory is the first place the loader searches for
       # libomp.dylib when clang is used.
       #
-      # ref: https://github.com/microsoft/LightGBM/issues/6628
+      # ref: https://github.com/lightgbm-org/LightGBM/issues/6628
       #
       if(__BUILD_FOR_R)
         list(PREPEND __omp_install_rpaths "${LIBR_LIBS_DIR}")
