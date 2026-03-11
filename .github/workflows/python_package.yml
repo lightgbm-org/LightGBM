@@ -130,23 +130,25 @@ jobs:
           # the package built with that compiler toolchain can't target the
           # CPUs on GitHub's runners.
           #
-          # ref: https://github.com/microsoft/LightGBM/pull/7096/files#r2590879590
-          - os: LightGBM-GPU
-            container: nvcr.io/nvidia/cuda:12.9.1-devel-ubuntu22.04
-            os-display-name: ubuntu22.04-with-gpu
-            task: bdist
-            compiler: clang-17
-            method: wheel
-            python_version: '3.11'
-            in-ubuntu-base-container: 'true'
-          - os: LightGBM-GPU
-            container: nvcr.io/nvidia/cuda:12.9.1-devel-ubuntu22.04
-            os-display-name: ubuntu22.04-with-gpu
-            task: gpu
-            compiler: clang-17
-            method: source
-            python_version: '3.12'
-            in-ubuntu-base-container: 'true'
+          # ref: https://github.com/lightgbm-org/LightGBM/pull/7096/files#r2590879590
+          # TODO(jameslamb): restore these GPU jobs when we've clarified handling of GPU CI
+          #             ref: https://github.com/lightgbm-org/LightGBM/issues/7187
+          # - os: github-hosted-linux-gpu-amd64
+          #   container: nvcr.io/nvidia/cuda:12.9.1-devel-ubuntu22.04
+          #   os-display-name: ubuntu22.04-with-gpu
+          #   task: bdist
+          #   compiler: clang-17
+          #   method: wheel
+          #   python_version: '3.11'
+          #   in-ubuntu-base-container: 'true'
+          # - os: github-hosted-linux-gpu-amd64
+          #   container: nvcr.io/nvidia/cuda:12.9.1-devel-ubuntu22.04
+          #   os-display-name: ubuntu22.04-with-gpu
+          #   task: gpu
+          #   compiler: clang-17
+          #   method: source
+          #   python_version: '3.12'
+          #   in-ubuntu-base-container: 'true'
           - os: ubuntu-latest
             container: &manylinux_amd64_image lightgbm.azurecr.io/vsts-agent:manylinux_2_28_x86_64
             os-display-name: &manylinux_amd64_display_name 'manylinux_2_28'
@@ -307,7 +309,7 @@ jobs:
           persist-credentials: false
           submodules: true
       - name: Setup and run tests on Linux and macOS
-        if: startsWith(matrix.os, 'macos') || startsWith(matrix.os, 'ubuntu') || matrix.os == 'LightGBM-GPU'
+        if: startsWith(matrix.os, 'macos') || startsWith(matrix.os, 'ubuntu') || endsWith(matrix.os, 'gpu-amd64')
         shell: bash
         run: |
           export COMPILER="${{ matrix.compiler }}"
@@ -317,7 +319,10 @@ jobs:
           export METHOD="${{ matrix.method }}"
           if [[ "${{ matrix.os }}" =~ ^macos ]]; then
               export OS_NAME="macos"
-          elif [[ "${{ matrix.os }}" == "ubuntu-latest" ]] || [[ "${{ matrix.os }}" == "LightGBM-GPU" ]]; then
+          elif \
+            [[ "${{ matrix.os }}" == "ubuntu-latest" ]] \
+            || [[ "${{ matrix.os }}" == "github-hosted-linux-gpu-amd64" ]];
+          then
               export OS_NAME="linux"
               export PATH="/usr/lib64/openmpi/bin:${PATH}"
           fi

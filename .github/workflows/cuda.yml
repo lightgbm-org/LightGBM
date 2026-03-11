@@ -1,12 +1,6 @@
 name: CUDA Version
 
 on:
-  push:
-    branches:
-      - master
-  pull_request:
-    branches:
-      - master
   # Run manually by clicking a button in the UI
   workflow_dispatch:
 
@@ -21,7 +15,7 @@ jobs:
     name: ${{ matrix.task }} ${{ matrix.cuda_version }} ${{ matrix.method }} (${{ matrix.linux_version }}, ${{ matrix.compiler }}, Python ${{ matrix.python_version }})
     # yamllint disable-line rule:line-length
     # ref: https://docs.github.com/en/actions/concepts/runners/about-larger-runners#specifications-for-gpu-larger-runners
-    runs-on: LightGBM-GPU
+    runs-on: github-hosted-linux-gpu-amd64
     container:
       image: nvcr.io/nvidia/cuda:${{ matrix.cuda_version }}-devel-${{ matrix.linux_version }}
       env:

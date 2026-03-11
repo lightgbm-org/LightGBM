@@ -1743,7 +1743,7 @@ def test_all_expected_params_are_written_out_to_model_text(tmp_path):
     # add device-specific entries
     #
     # passed-in force_col_wise / force_row_wise parameters are ignored on CUDA and GPU builds...
-    # https://github.com/microsoft/LightGBM/blob/1d7ee63686272bceffd522284127573b511df6be/src/io/config.cpp#L375-L377
+    # https://github.com/lightgbm-org/LightGBM/blob/1d7ee63686272bceffd522284127573b511df6be/src/io/config.cpp#L375-L377
     if getenv("TASK", "") == "cuda":
         device_entries = ["[force_col_wise: 0]", "[force_row_wise: 1]", "[device_type: cuda]", "[gpu_use_dp: 1]"]
     elif getenv("TASK", "") == "gpu":
@@ -2467,7 +2467,7 @@ def test_mape_for_specific_boosting_types(boosting_type):
     pred = gbm.predict(X)
     pred_mean = pred.mean()
     # the following checks that dart and rf with mape can predict outside the 0-1 range
-    # https://github.com/microsoft/LightGBM/issues/1579
+    # https://github.com/lightgbm-org/LightGBM/issues/1579
     assert pred_mean > 8
 
 
@@ -4514,7 +4514,7 @@ def test_pandas_nullable_dtypes(rng_fixed_seed):
 
 def test_boost_from_average_with_single_leaf_trees():
     # test data are taken from bug report
-    # https://github.com/microsoft/LightGBM/issues/4708
+    # https://github.com/lightgbm-org/LightGBM/issues/4708
     X = np.array(
         [
             [1021.0589, 1018.9578],
@@ -4545,8 +4545,8 @@ def test_boost_from_average_with_single_leaf_trees():
 
 
 def test_cegb_split_buffer_clean(rng_fixed_seed):
-    # modified from https://github.com/microsoft/LightGBM/issues/3679#issuecomment-938652811
-    # and https://github.com/microsoft/LightGBM/pull/5087
+    # modified from https://github.com/lightgbm-org/LightGBM/issues/3679#issuecomment-938652811
+    # and https://github.com/lightgbm-org/LightGBM/pull/5087
     # test that the ``splits_per_leaf_`` of CEGB is cleaned before training a new tree
     # which is done in the fix #5164
     # without the fix:
