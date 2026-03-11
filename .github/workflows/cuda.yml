@@ -1,12 +1,6 @@
 name: CUDA Version
 
 on:
-  push:
-    branches:
-      - master
-  pull_request:
-    branches:
-      - master
   # Run manually by clicking a button in the UI
   workflow_dispatch:
 
@@ -45,6 +39,18 @@ jobs:
             python_version: "3.11"
             cuda_version: "12.8.0"
             linux_version: "ubuntu22.04"
+            task: cuda
+          - method: source
+            compiler: gcc
+            python_version: "3.13"
+            cuda_version: "12.2.2"
+            linux_version: "ubuntu22.04"
+            task: cuda
+          - method: pip
+            compiler: clang
+            python_version: "3.12"
+            cuda_version: "11.8.0"
+            linux_version: "ubuntu20.04"
             task: cuda
     steps:
       - name: Install latest git and sudo
