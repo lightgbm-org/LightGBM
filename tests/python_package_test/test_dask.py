@@ -1208,6 +1208,17 @@ def test_warns_and_continues_on_unrecognized_tree_learner(cluster):
         assert dask_regressor.fitted_
 
 
+@pytest.mark.parametrize("n_jobs", [-1, None])
+def test_does_not_warn_on_default_n_jobs_alias_values(cluster, n_jobs):
+    with Client(cluster) as client:
+        X = da.random.random((100, 10))
+        y = da.random.random((100, 1))
+        dask_regressor = lgb.DaskLGBMRegressor(client=client, n_estimators=1, num_leaves=2, n_jobs=n_jobs)
+        dask_regressor.fit(X, y)
+
+        assert dask_regressor.fitted_
+
+
 @pytest.mark.parametrize("tree_learner", ["data_parallel", "voting_parallel"])
 def test_training_respects_tree_learner_aliases(tree_learner, cluster):
     with Client(cluster) as client:
