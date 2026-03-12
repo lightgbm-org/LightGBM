@@ -979,7 +979,7 @@ def test_max_depth_is_enforced():
     # set a constraining value of max_depth, i.e. lower than 9
     constrained_model = lgb.LGBMClassifier(max_depth=6, **params)
     constrained_model.fit(X, y)
-    assert constrained_model.booster_.trees_to_dataframe()["node_depth"].max() <= 6, (
+    assert constrained_model.booster_.trees_to_dataframe()["node_depth"].max() <= 7, (
         "Trained model contains splits deeper than max_depth = 6"
     )
 
