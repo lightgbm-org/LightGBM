@@ -179,7 +179,7 @@ if ${BUILD_VIGNETTES} ; then
         #
         # Removing them manually here removes the need to use tar --exclude.
         #
-        # For background, see https://github.com/microsoft/LightGBM/pull/3946#pullrequestreview-799415812.
+        # For background, see https://github.com/lightgbm-org/LightGBM/pull/3946#pullrequestreview-799415812.
         rm -f ./lightgbm/src/*.o
         rm -f ./lightgbm/src/boosting/*.o
         rm -f ./lightgbm/src/io/*.o

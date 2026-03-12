@@ -520,13 +520,13 @@ See `the mars documentation`_ for usage examples.
 
 .. _the Dask DataFrame documentation: https://docs.dask.org/en/latest/dataframe.html
 
-.. _the Dask prediction example: https://github.com/microsoft/LightGBM/blob/master/examples/python-guide/dask/prediction.py
+.. _the Dask prediction example: https://github.com/lightgbm-org/LightGBM/blob/master/examples/python-guide/dask/prediction.py
 
 .. _the Dask worker documentation: https://distributed.dask.org/en/stable/worker-memory.html
 
 .. _the metrics functions from dask-ml: https://ml.dask.org/modules/api.html#dask-ml-metrics-metrics
 
-.. _these Dask examples: https://github.com/microsoft/lightgbm/tree/master/examples/python-guide/dask
+.. _these Dask examples: https://github.com/lightgbm-org/LightGBM/tree/master/examples/python-guide/dask
 
 .. _Kubeflow XGBoost Operator: https://github.com/kubeflow/xgboost-operator
 
@@ -534,7 +534,7 @@ See `the mars documentation`_ for usage examples.
 
 .. _here: https://www.youtube.com/watch?v=iqzXhp5TxUY
 
-.. _A simple distributed learning example: https://github.com/microsoft/lightgbm/tree/master/examples/parallel_learning
+.. _A simple distributed learning example: https://github.com/lightgbm-org/LightGBM/tree/master/examples/parallel_learning
 
 .. _lightgbm_ray: https://github.com/ray-project/lightgbm_ray
 

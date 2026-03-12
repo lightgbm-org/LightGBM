@@ -6,7 +6,7 @@ on:
       pr-branch:
         type: string
         description: |
-          Branch in microsoft/LightGBM to update.
+          Branch in lightgbm-org/LightGBM to update.
 
 permissions:
   actions: none
@@ -40,11 +40,11 @@ jobs:
         run: |
           git config --global --add safe.directory "${GITHUB_WORKSPACE}"
       - name: Checkout repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
         with:
           fetch-depth: 5
           submodules: false
-          repository: microsoft/LightGBM
+          repository: lightgbm-org/LightGBM
           ref: "refs/heads/${{ inputs.pr-branch }}"
           token: ${{ github.token }}
           persist-credentials: true

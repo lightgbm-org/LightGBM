@@ -35,7 +35,7 @@ jobs:
     timeout-minutes: 60
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
         with:
           fetch-depth: 5
           persist-credentials: false
@@ -73,7 +73,7 @@ jobs:
             "${IMAGE_URI}" \
             /bin/bash ./docker-script.sh
       - name: Upload artifacts
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f  # v7.0.0
         with:
           name: linux-aarch64-wheel
           path: artifacts/*.whl
@@ -130,23 +130,25 @@ jobs:
           # the package built with that compiler toolchain can't target the
           # CPUs on GitHub's runners.
           #
-          # ref: https://github.com/microsoft/LightGBM/pull/7096/files#r2590879590
-          - os: LightGBM-GPU
-            container: nvcr.io/nvidia/cuda:12.9.1-devel-ubuntu22.04
-            os-display-name: ubuntu22.04-with-gpu
-            task: bdist
-            compiler: clang-17
-            method: wheel
-            python_version: '3.11'
-            in-ubuntu-base-container: 'true'
-          - os: LightGBM-GPU
-            container: nvcr.io/nvidia/cuda:12.9.1-devel-ubuntu22.04
-            os-display-name: ubuntu22.04-with-gpu
-            task: gpu
-            compiler: clang-17
-            method: source
-            python_version: '3.12'
-            in-ubuntu-base-container: 'true'
+          # ref: https://github.com/lightgbm-org/LightGBM/pull/7096/files#r2590879590
+          # TODO(jameslamb): restore these GPU jobs when we've clarified handling of GPU CI
+          #             ref: https://github.com/lightgbm-org/LightGBM/issues/7187
+          # - os: github-hosted-linux-gpu-amd64
+          #   container: nvcr.io/nvidia/cuda:12.9.1-devel-ubuntu22.04
+          #   os-display-name: ubuntu22.04-with-gpu
+          #   task: bdist
+          #   compiler: clang-17
+          #   method: wheel
+          #   python_version: '3.11'
+          #   in-ubuntu-base-container: 'true'
+          # - os: github-hosted-linux-gpu-amd64
+          #   container: nvcr.io/nvidia/cuda:12.9.1-devel-ubuntu22.04
+          #   os-display-name: ubuntu22.04-with-gpu
+          #   task: gpu
+          #   compiler: clang-17
+          #   method: source
+          #   python_version: '3.12'
+          #   in-ubuntu-base-container: 'true'
           - os: ubuntu-latest
             container: &manylinux_amd64_image lightgbm.azurecr.io/vsts-agent:manylinux_2_28_x86_64
             os-display-name: &manylinux_amd64_display_name 'manylinux_2_28'
@@ -301,13 +303,13 @@ jobs:
         run: |
           git config --global --add safe.directory "${GITHUB_WORKSPACE}"
       - name: Checkout repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
         with:
           fetch-depth: 5
           persist-credentials: false
           submodules: true
       - name: Setup and run tests on Linux and macOS
-        if: startsWith(matrix.os, 'macos') || startsWith(matrix.os, 'ubuntu') || matrix.os == 'LightGBM-GPU'
+        if: startsWith(matrix.os, 'macos') || startsWith(matrix.os, 'ubuntu') || endsWith(matrix.os, 'gpu-amd64')
         shell: bash
         run: |
           export COMPILER="${{ matrix.compiler }}"
@@ -317,7 +319,10 @@ jobs:
           export METHOD="${{ matrix.method }}"
           if [[ "${{ matrix.os }}" =~ ^macos ]]; then
               export OS_NAME="macos"
-          elif [[ "${{ matrix.os }}" == "ubuntu-latest" ]] || [[ "${{ matrix.os }}" == "LightGBM-GPU" ]]; then
+          elif \
+            [[ "${{ matrix.os }}" == "ubuntu-latest" ]] \
+            || [[ "${{ matrix.os }}" == "github-hosted-linux-gpu-amd64" ]];
+          then
               export OS_NAME="linux"
               export PATH="/usr/lib64/openmpi/bin:${PATH}"
           fi
@@ -356,7 +361,7 @@ jobs:
           & "$env:GITHUB_WORKSPACE/.ci/test-windows.ps1"
       - name: Upload artifacts
         if: ${{ matrix.produces-artifacts == 'true' }}
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f  # v7.0.0
         with:
           name: ${{ matrix.artifact-name }}
           path: |
@@ -374,20 +379,20 @@ jobs:
     needs: [test]
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
         with:
           fetch-depth: 5
           persist-credentials: false
           submodules: false
       - name: Download lib_lightgbm (all operating systems) and Windows CLI
-        uses: actions/download-artifact@v8
+        uses: actions/download-artifact@70fc10c6e5e1ce46ad2ea6f2b72d43f7d47b13c3  # v8.0.0
         with:
           merge-multiple: true
           path: ${{ env.BUILD_ARTIFACTSTAGINGDIRECTORY }}
           pattern: '*amd64*-liblightgbm'
           run-id: ${{ github.run_id }}
       - name: Setup NuGet CLI
-        uses: NuGet/setup-nuget@v2
+        uses: NuGet/setup-nuget@323ab0502cd38fdc493335025a96c8fdb0edc71f  # v2.0.1
       # ref: https://github.com/NuGet/setup-nuget/issues/168
       - name: Setup mono
         run: |
@@ -403,7 +408,7 @@ jobs:
             -Verbosity detailed \
             -OutputDirectory "${{ env.BUILD_ARTIFACTSTAGINGDIRECTORY }}"
       - name: Upload artifacts
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f  # v7.0.0
         with:
           name: nuget-package
           path: artifacts/*.nupkg
@@ -415,7 +420,7 @@ jobs:
     timeout-minutes: 60
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
         with:
           fetch-depth: 5
           persist-credentials: false
@@ -450,7 +455,7 @@ jobs:
           - '3.9'
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
         with:
           fetch-depth: 5
           persist-credentials: false
@@ -482,6 +487,6 @@ jobs:
       - test-old-versions
     steps:
       - name: Note that all tests succeeded
-        uses: re-actors/alls-green@v1.2.2
+        uses: re-actors/alls-green@05ac9388f0aebcb5727afa17fcccfecd6f8ec5fe  # v1.2.2
         with:
           jobs: ${{ toJSON(needs) }}

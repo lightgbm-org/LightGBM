@@ -1187,7 +1187,7 @@ class _InnerPredictor:
                 preds = np.loadtxt(f.name, dtype=np.float64)
                 nrow = preds.shape[0]
         elif isinstance(data, scipy.sparse.csr_matrix):
-            # TODO: remove 'type: ignore[assignment]' when https://github.com/microsoft/LightGBM/pull/6348 is resolved.
+            # TODO: remove 'type: ignore[assignment]' when https://github.com/lightgbm-org/LightGBM/pull/6348 is resolved.
             preds, nrow = self.__pred_for_csr(  # type: ignore[assignment]
                 csr=data,
                 start_iteration=start_iteration,
@@ -1195,7 +1195,7 @@ class _InnerPredictor:
                 predict_type=predict_type,
             )
         elif isinstance(data, scipy.sparse.csc_matrix):
-            # TODO: remove 'type: ignore[assignment]' when https://github.com/microsoft/LightGBM/pull/6348 is resolved.
+            # TODO: remove 'type: ignore[assignment]' when https://github.com/lightgbm-org/LightGBM/pull/6348 is resolved.
             preds, nrow = self.__pred_for_csc(  # type: ignore[assignment]
                 csc=data,
                 start_iteration=start_iteration,
@@ -1233,7 +1233,7 @@ class _InnerPredictor:
                 csr = scipy.sparse.csr_matrix(data)
             except BaseException as err:
                 raise TypeError(f"Cannot predict data for type {type(data).__name__}") from err
-            # TODO: remove 'type: ignore[assignment]' when https://github.com/microsoft/LightGBM/pull/6348 is resolved.
+            # TODO: remove 'type: ignore[assignment]' when https://github.com/lightgbm-org/LightGBM/pull/6348 is resolved.
             preds, nrow = self.__pred_for_csr(  # type: ignore[assignment]
                 csr=csr,
                 start_iteration=start_iteration,
