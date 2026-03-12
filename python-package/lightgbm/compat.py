@@ -5,7 +5,7 @@ import inspect
 from typing import TYPE_CHECKING, Any, List
 
 # scikit-learn is intentionally imported first here,
-# see https://github.com/microsoft/LightGBM/issues/6509
+# see https://github.com/lightgbm-org/LightGBM/issues/6509
 """sklearn"""
 try:
     from sklearn import __version__ as _sklearn_version
@@ -228,7 +228,7 @@ try:
 
     DASK_INSTALLED = True
 # catching 'ValueError' here because of this:
-# https://github.com/microsoft/LightGBM/issues/6365#issuecomment-2002330003
+# https://github.com/lightgbm-org/LightGBM/issues/6365#issuecomment-2002330003
 #
 # That's potentially risky as dask does some significant import-time processing,
 # like loading configuration from environment variables and files, and catching

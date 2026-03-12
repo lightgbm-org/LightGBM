@@ -156,6 +156,26 @@ def test_plot_importance(params, breast_cancer_split, train_data):
 
 
 @pytest.mark.skipif(not MATPLOTLIB_INSTALLED, reason="matplotlib is not installed")
+def test_plot_importance_zero_splits():
+    X, y = load_breast_cancer(return_X_y=True)
+    model = lgb.train(
+        params={
+            "min_data_in_bin": X.shape[0] + 1,
+            "objective": "regression",
+            "verbose": -1,
+        },
+        train_set=lgb.Dataset(X, label=y),
+        num_boost_round=1,
+    )
+    with pytest.raises(ValueError, match="No non-zero feature importances found"):
+        lgb.plot_importance(model)
+    # ignore_zero=False should still produce a valid plot
+    ax = lgb.plot_importance(model, ignore_zero=False)
+    assert isinstance(ax, matplotlib.axes.Axes)
+    assert len(ax.patches) == X.shape[1]
+
+
+@pytest.mark.skipif(not MATPLOTLIB_INSTALLED, reason="matplotlib is not installed")
 def test_plot_split_value_histogram(params, breast_cancer_split, train_data):
     X_train, _, y_train, _ = breast_cancer_split
 
@@ -211,6 +231,16 @@ def test_plot_split_value_histogram(params, breast_cancer_split, train_data):
 
     with pytest.raises(TypeError, match="xlim must be a tuple of 2 elements."):
         lgb.plot_split_value_histogram(gbm0, 27, xlim="not a tuple")
+
+    ax4 = lgb.plot_split_value_histogram(gbm0, 27, ylim=(0, 100), title=None, xlabel=None, ylabel=None)
+    assert isinstance(ax4, matplotlib.axes.Axes)
+    assert ax4.get_title() == ""
+    assert ax4.get_xlabel() == ""
+    assert ax4.get_ylabel() == ""
+    assert ax4.get_ylim() == (0, 100)
+
+    with pytest.raises(TypeError, match="ylim must be a tuple of 2 elements."):
+        lgb.plot_split_value_histogram(gbm0, 27, ylim="not a tuple")
 
     with pytest.raises(
         ValueError, match="Cannot plot split value histogram, because feature 0 was not used in splitting"
@@ -366,8 +396,6 @@ def test_tree_with_categories_above_max_category_values(tmp_path):
 @pytest.mark.parametrize("use_missing", [True, False])
 @pytest.mark.parametrize("zero_as_missing", [True, False])
 def test_numeric_split_direction(use_missing, zero_as_missing):
-    if use_missing and zero_as_missing:
-        pytest.skip("use_missing and zero_as_missing both set to True")
     X, y = make_synthetic_regression()
     rng = np.random.RandomState(0)
     zero_mask = rng.rand(X.shape[0]) < 0.05
@@ -410,7 +438,12 @@ def test_numeric_split_direction(use_missing, zero_as_missing):
             )
             node = node["left_child"] if direction == "left" else node["right_child"]
         assert node["leaf_index"] == expected_leaf_nan
-        assert expected_leaf_zero != expected_leaf_nan
+        if zero_as_missing:
+            # zeros treated as missing -> same leaf as NaN
+            assert expected_leaf_zero == expected_leaf_nan
+        else:
+            # zeros are regular values -> different leaf from NaN
+            assert expected_leaf_zero != expected_leaf_nan
 
 
 @pytest.mark.skipif(not GRAPHVIZ_INSTALLED, reason="graphviz is not installed")
@@ -593,3 +626,13 @@ def test_plot_metrics(params, breast_cancer_split, train_data):
 
     with pytest.raises(TypeError, match="xlim must be a tuple of 2 elements."):
         lgb.plot_metric(evals_result0, metric="binary_logloss", xlim="not a tuple")
+
+    ax6 = lgb.plot_metric(evals_result0, metric="binary_logloss", ylim=(0, 15), title=None, xlabel=None, ylabel=None)
+    assert isinstance(ax6, matplotlib.axes.Axes)
+    assert ax6.get_title() == ""
+    assert ax6.get_xlabel() == ""
+    assert ax6.get_ylabel() == ""
+    assert ax6.get_ylim() == (0, 15)
+
+    with pytest.raises(TypeError, match="ylim must be a tuple of 2 elements."):
+        lgb.plot_metric(evals_result0, metric="binary_logloss", ylim="not a tuple")

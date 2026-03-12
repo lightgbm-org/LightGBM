@@ -13,7 +13,7 @@ export R_LIBS=$R_LIB_PATH
 export PATH="$R_LIB_PATH/R/bin:$PATH"
 
 # don't fail builds for long-running examples unless they're very long.
-# See https://github.com/microsoft/LightGBM/issues/4049#issuecomment-793412254.
+# See https://github.com/lightgbm-org/LightGBM/issues/4049#issuecomment-793412254.
 if [[ $R_BUILD_TYPE != "cran" ]]; then
     export _R_CHECK_EXAMPLE_TIMING_THRESHOLD_=30
 fi
@@ -105,11 +105,11 @@ fi
 
 # {Matrix} needs {lattice}, so this needs to run before manually installing {Matrix}.
 # This should be unnecessary on R >=4.4.0
-# ref: https://github.com/microsoft/LightGBM/issues/6433
+# ref: https://github.com/lightgbm-org/LightGBM/issues/6433
 Rscript --vanilla -e "install.packages('lattice', repos = '${CRAN_MIRROR}', lib = '${R_LIB_PATH}')"
 
 # manually install {Matrix}, as {Matrix}=1.7-0 raised its R floor all the way to R 4.4.0
-# ref: https://github.com/microsoft/LightGBM/issues/6433
+# ref: https://github.com/lightgbm-org/LightGBM/issues/6433
 Rscript --vanilla -e "install.packages('https://cran.r-project.org/src/contrib/Archive/Matrix/Matrix_1.6-5.tar.gz', repos = NULL, lib = '${R_LIB_PATH}')"
 
 # Manually install dependencies to avoid a CI-time dependency on devtools (for devtools::install_deps())
@@ -208,7 +208,7 @@ fi
 # actually use MM_PREFETCH preprocessor definition
 #
 # _mm_prefetch will not work on arm64 architecture
-# ref: https://github.com/microsoft/LightGBM/issues/4124
+# ref: https://github.com/lightgbm-org/LightGBM/issues/4124
 if [[ $ARCH != "arm64" ]]; then
     if [[ $R_BUILD_TYPE == "cran" ]]; then
         mm_prefetch_working=$(
