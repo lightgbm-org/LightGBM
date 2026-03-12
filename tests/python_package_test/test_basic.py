@@ -956,7 +956,7 @@ def test_feature_names_are_set_correctly_when_no_feature_names_passed_into_Datas
     assert ds.construct().feature_name == ["Column_0", "Column_1", "Column_2"]
 
 
-def test_max_depth_is_enforced(capsys):
+def test_max_depth_is_enforced():
     params = {
         "objective": "binary",
         "min_data": 10,
@@ -969,26 +969,19 @@ def test_max_depth_is_enforced(capsys):
         "random_state": 2,
     }
     X, y = make_blobs(n_samples=1_000, n_features=1, centers=2, random_state=2)
-    model = lgb.LGBMRegressor(**params)
+    model = lgb.LGBMClassifier(**params)
     model.fit(X, y)
-    fitted_max_depth = (
-        model.booster_.trees_to_dataframe().groupby("tree_index")["node_depth"].max().value_counts().index.max()
-    )
+    fitted_max_depth = model.booster_.trees_to_dataframe()["node_depth"].max()
     assert fitted_max_depth == 9, (
         "This data generation and model fitting procedure should be deterministic within backends. "
         "Both cpu and cuda should result in models with maximal tree depth 9."
     )
     # set a constraining value of max_depth, i.e. lower than 9
-    constrained_model = lgb.LGBMRegressor(max_depth=6, **params)
+    constrained_model = lgb.LGBMClassifier(max_depth=6, **params)
     constrained_model.fit(X, y)
-    assert (
-        constrained_model.booster_.trees_to_dataframe()
-        .groupby("tree_index")["node_depth"]
-        .max()
-        .value_counts()
-        .index.max()
-        <= 7
-    ), "Trained model contains splits deeper than max_depth = 6"
+    assert constrained_model.booster_.trees_to_dataframe()["node_depth"].max() <= 6, (
+        "Trained model contains splits deeper than max_depth = 6"
+    )
 
 
 # NOTE: this intentionally contains values where num_leaves <, ==, and > (max_depth^2)
