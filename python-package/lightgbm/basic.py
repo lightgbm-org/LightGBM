@@ -4907,6 +4907,14 @@ class Booster:
         )
         new_params["linear_tree"] = bool(out_is_linear.value)
         new_params.update(dataset_params)
+        if categorical_feature != "auto":
+            new_params["categorical_feature"] = categorical_feature
+        new_params = _choose_param_value(
+            main_param_name="categorical_feature",
+            params=new_params,
+            default_value=categorical_feature,
+        )
+        categorical_feature = new_params.pop("categorical_feature")
         train_set = Dataset(
             data=data,
             label=label,

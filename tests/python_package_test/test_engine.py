@@ -7,6 +7,7 @@ import pickle
 import platform
 import random
 import re
+import warnings
 from os import getenv
 from pathlib import Path
 from shutil import copyfile
@@ -2417,6 +2418,25 @@ def test_refit_with_one_tree_multiclass_classification():
     model = lgb.train(params, lgb_train, num_boost_round=1)
     model_refit = model.refit(X, y)
     assert isinstance(model_refit, lgb.Booster)
+
+
+def test_refit_with_categorical_features_does_not_warn_about_params(rng_fixed_seed):
+    x = np.concatenate([np.ones((1000, 1)), np.arange(0, 100, 0.1)[:, np.newaxis]], axis=1)
+    y = 2 * x[:, 1] + rng_fixed_seed.normal(0, 0.1, x.shape[0])
+    x[:250, 0] = 0
+    y[:250] += 10
+    train_data = lgb.Dataset(x, label=y, categorical_feature=[0])
+    params = {"linear_tree": True, "verbose": -1, "metric": "mse", "seed": 0, "subsample": 0.8, "bagging_freq": 1}
+    model = lgb.train(params, train_data, num_boost_round=10)
+
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        model.refit(x, label=y)
+
+    assert not any(
+        "categorical_feature keyword has been found in `params` and will be ignored" in str(w.message)
+        for w in caught
+    )
 
 
 def test_refit_dataset_params(rng):
