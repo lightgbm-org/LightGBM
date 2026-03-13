@@ -1560,6 +1560,35 @@ def test_string_serialized_params_retrieval(rng):
     assert new_model.params["verbosity"] == -100
 
 
+def test_text_dataset_with_weight_column_excludes_weight_from_features(tmp_path):
+    train_data_path = tmp_path / "train_with_weight.tsv"
+    train_data_path.write_text("\n".join([
+        "1\t0.2\t10\t0.1",
+        "0\t0.5\t20\t0.9",
+        "1\t0.3\t30\t0.2",
+        "0\t0.4\t40\t0.7",
+        "1\t0.1\t50\t0.4",
+    ]))
+
+    # Columns are: label, feature_0, weight, feature_1
+    train_set = lgb.Dataset(
+        str(train_data_path),
+        params={"label_column": 0, "weight_column": 1, "verbose": -1},
+    )
+    booster = lgb.train({"objective": "binary", "verbose": -1, "num_leaves": 2, "min_data": 1}, train_set, num_boost_round=3)
+
+    assert train_set.num_feature() == 2
+    assert train_set.get_feature_name() == ["Column_0", "Column_2"]
+    assert booster.num_feature() == 2
+    assert booster.feature_name() == ["Column_0", "Column_2"]
+
+    # Predict should work with only the real features and fail if weight column is provided as a feature.
+    preds = booster.predict(np.array([[0.2, 0.1], [0.5, 0.9]], dtype=np.float64))
+    assert preds.shape == (2,)
+    with pytest.raises(lgb.basic.LightGBMError, match=r"The number of features in data \(3\) is not the same as it was in training data \(2\)"):
+        booster.predict(np.array([[0.2, 10.0, 0.1], [0.5, 20.0, 0.9]], dtype=np.float64))
+
+
 def test_save_load_copy_pickle(tmp_path):
     def train_and_predict(init_model=None, return_model=False):
         X, y = make_synthetic_regression()
@@ -3426,6 +3455,14 @@ def test_forced_split_feature_indices(tmp_path):
     lgb_train = lgb.Dataset(X, y)
     params = {"objective": "regression", "forcedsplits_filename": tmp_split_file}
     with pytest.raises(lgb.basic.LightGBMError, match="Forced splits file includes feature index"):
+        lgb.train(params, lgb_train)
+
+
+def test_forced_split_missing_file(tmp_path):
+    X, y = make_synthetic_regression()
+    lgb_train = lgb.Dataset(X, y)
+    params = {"objective": "regression", "forcedsplits_filename": tmp_path / "does_not_exist.json"}
+    with pytest.raises(lgb.basic.LightGBMError, match="Could not open"):
         lgb.train(params, lgb_train)
 
 
