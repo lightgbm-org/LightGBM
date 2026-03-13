@@ -3429,6 +3429,14 @@ def test_forced_split_feature_indices(tmp_path):
         lgb.train(params, lgb_train)
 
 
+def test_forced_split_missing_file(tmp_path):
+    X, y = make_synthetic_regression()
+    lgb_train = lgb.Dataset(X, y)
+    params = {"objective": "regression", "forcedsplits_filename": tmp_path / "does_not_exist.json"}
+    with pytest.raises(lgb.basic.LightGBMError, match="Could not open"):
+        lgb.train(params, lgb_train)
+
+
 def test_forced_bins():
     x = np.empty((100, 2))
     x[:, 0] = np.arange(0, 1, 0.01)
