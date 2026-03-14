@@ -150,7 +150,7 @@ jobs:
           #   python_version: '3.12'
           #   in-ubuntu-base-container: 'true'
           - os: ubuntu-latest
-            container: &manylinux_amd64_image lightgbm.azurecr.io/vsts-agent:manylinux_2_28_x86_64
+            container: &manylinux_amd64_image ghcr.io/lightgbm-org/lightgbm-vsts-agent:manylinux_2_28_x86_64
             os-display-name: &manylinux_amd64_display_name 'manylinux_2_28'
             task: gpu
             method: source
