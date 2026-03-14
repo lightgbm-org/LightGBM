@@ -1,10 +1,12 @@
 /*!
- * Copyright (c) 2021 Microsoft Corporation. All rights reserved.
+ * Copyright (c) 2021-2026 Microsoft Corporation. All rights reserved.
+ * Copyright (c) 2021-2026 The LightGBM developers. All rights reserved.
  * Licensed under the MIT License. See LICENSE file in the project root for license information.
  */
 
 #ifdef USE_CUDA
 
+#include <LightGBM/cuda/cuda_rocm_interop.h>
 #include <LightGBM/cuda/cuda_utils.hu>
 
 namespace LightGBM {

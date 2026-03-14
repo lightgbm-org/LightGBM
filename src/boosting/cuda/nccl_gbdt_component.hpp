@@ -1,5 +1,6 @@
 /*!
- * Copyright (c) 2023 Microsoft Corporation. All rights reserved.
+ * Copyright (c) 2023-2026 Microsoft Corporation. All rights reserved.
+ * Copyright (c) 2023-2026 The LightGBM developers. All rights reserved.
  * Licensed under the MIT License. See LICENSE file in the project root for license information.
  */
 
@@ -28,7 +29,7 @@ class NCCLGBDTComponent: public NCCLInfo {
   ~NCCLGBDTComponent() {}
 
   void Init(const Config* config, const Dataset* train_data, const int num_tree_per_iteration, const bool boosting_on_gpu, const bool is_constant_hessian) {
-    cudaGetDeviceCount(&num_gpu_in_node_);
+    CUDASUCCESS_OR_FATAL(cudaGetDeviceCount(&num_gpu_in_node_));
     const data_size_t num_data_per_gpu = (train_data->num_data() + num_gpu_in_node_ - 1) / num_gpu_in_node_;
     data_start_index_ = num_data_per_gpu * local_gpu_rank_;
     data_end_index_ = std::min<data_size_t>(data_start_index_ + num_data_per_gpu, train_data->num_data());

@@ -1,5 +1,6 @@
 /*!
- * Copyright (c) 2023 Microsoft Corporation. All rights reserved.
+ * Copyright (c) 2023-2026 Microsoft Corporation. All rights reserved.
+ * Copyright (c) 2023-2026 The LightGBM developers. All rights reserved.
  * Licensed under the MIT License. See LICENSE file in the project root for license information.
  */
 
@@ -8,7 +9,11 @@
 
 #ifdef USE_CUDA
 
+#ifdef USE_ROCM
+#include <rccl/rccl.h>
+#else
 #include <nccl.h>
+#endif
 
 #include <LightGBM/cuda/cuda_utils.hu>
 #include <LightGBM/network.h>

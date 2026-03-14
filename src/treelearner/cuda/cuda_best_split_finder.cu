@@ -940,7 +940,11 @@ __global__ void FindBestSplitsDiscretizedForLeafKernel(
   if (is_feature_used_bytree[inner_feature_index]) {
     if (task->is_categorical) {
       __threadfence();  // ensure store issued before trap
+#if defined(USE_ROCM)
+      __builtin_trap();
+#else
       asm("trap;");
+#endif
     } else {
       if (!task->reverse) {
         if (use_16bit_bin) {

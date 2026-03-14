@@ -1,5 +1,7 @@
 /*!
  * Copyright (c) 2020-2021 IBM Corporation, Microsoft Corporation. All rights reserved.
+ * Copyright (c) 2020-2026 Microsoft Corporation. All rights reserved.
+ * Copyright (c) 2020-2026 The LightGBM developers. All rights reserved.
  * Licensed under the MIT License. See LICENSE file in the project root for license information.
  */
 
@@ -8,10 +10,15 @@
 
 #ifdef USE_CUDA
 
+#if defined(USE_ROCM)
+#include <LightGBM/cuda/cuda_rocm_interop.h>
+#include <rccl/rccl.h>
+#else
 #include <cuda.h>
 #include <cuda_runtime.h>
-#include <stdio.h>
 #include <nccl.h>
+#endif
+#include <stdio.h>
 
 #include <LightGBM/utils/log.h>
 #include <LightGBM/meta.h>
