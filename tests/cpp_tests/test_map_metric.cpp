@@ -15,14 +15,14 @@ class MapMetricTest : public testing::Test {};
 
 TEST_F(MapMetricTest, CalMapAtK) {
   std::vector<double> out(2);
-  LightGBM::MapMetric::CalMapAtK({2, 5}, 2,
-                                 new LightGBM::label_t[]{0.4f, 0.6f, 0.8f, 0.2f}, new double[]{1., 3., 2., 4.},
-                                 4, &out);
+  constexpr LightGBM::label_t labels1[] = {0.4f, 0.6f, 0.8f, 0.2f};
+  constexpr double scores1[] = {1., 3., 2., 4.};
+  LightGBM::MapMetric::CalMapAtK({2, 5}, 2, labels1, scores1, 4, &out);
   EXPECT_NEAR(out[0], 0.25, 1e-6);
   EXPECT_NEAR(out[1], 7 / 12., 1e-6);
-  LightGBM::MapMetric::CalMapAtK({2, 5}, 2,
-                                 new LightGBM::label_t[]{0.1f, 0.9f, 0.8f}, new double[]{6., 1., 2.},
-                                 3, &out);
+  constexpr LightGBM::label_t labels2[] = {0.1f, 0.9f, 0.8f};
+  constexpr double scores2[] = {6., 1., 2.};
+  LightGBM::MapMetric::CalMapAtK({2, 5}, 2, labels2, scores2, 3, &out);
   EXPECT_NEAR(out[0], 0.25, 1e-6);
   EXPECT_NEAR(out[1], 7 / 12., 1e-6);
 }
@@ -34,20 +34,21 @@ TEST_F(MapMetricTest, Eval) {
   constexpr LightGBM::data_size_t num_data = 9;
   LightGBM::Metadata metadata;
   metadata.Init(num_data, -1, -1);
-  metadata.SetQuery(new LightGBM::data_size_t[]{4, 3, 2}, 3);
-  metadata.SetLabel(new LightGBM::label_t[]{
-                      0.4f, 0.6f, 0.8f, 0.2f,  // query 0
-                      0.1f, 0.9f, 0.8f,  // query 1
-                      0.4f, 0.3f,  // query 2
-                    },
-                    num_data);
+  constexpr LightGBM::data_size_t query_sizes[] = {4, 3, 2};
+  metadata.SetQuery(query_sizes, 3);
+  constexpr LightGBM::label_t labels[] = {
+    0.4f, 0.6f, 0.8f, 0.2f,  // query 0
+    0.1f, 0.9f, 0.8f,  // query 1
+    0.4f, 0.3f,  // query 2
+  };
+  metadata.SetLabel(labels, num_data);
   metric.Init(metadata, num_data);
-  std::vector<double> out = metric.Eval(new double[]{
-                                          1., 3., 2., 4.,  // query 0
-                                          6., 1., 2.,  // query 1
-                                          3., 4.  // query 2
-                                        },
-                                        nullptr);
+  constexpr double scores[] = {
+    1., 3., 2., 4.,  // query 0
+    6., 1., 2.,  // query 1
+    3., 4.  // query 2
+  };
+  std::vector<double> out = metric.Eval(scores, nullptr);
   EXPECT_NEAR(out[0], 0.25, 1e-6);
   EXPECT_NEAR(out[1], 7 / 12., 1e-6);
 }
