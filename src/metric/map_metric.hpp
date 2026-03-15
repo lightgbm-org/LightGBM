@@ -44,11 +44,9 @@ class MapMetric:public Metric {
     query_weights_ = metadata.query_weights();
     npos_per_query_.resize(num_queries_, 0);
     for (data_size_t i = 0; i < num_queries_; ++i) {
-      npos_per_query_[i] = static_cast<data_size_t>(std::count_if(
-        label_ + query_boundaries_[i],
-        label_ + query_boundaries_[i + 1],
-        [](label_t l) { return l > 0.5f; }
-      ));
+      npos_per_query_[i] = static_cast<data_size_t>(std::count_if(label_ + query_boundaries_[i],
+                                                                  label_ + query_boundaries_[i + 1],
+                                                                  [](label_t l) { return l > 0.5f; }));
     }
     // sum of weights of eligible queries
     sum_query_weights_ = 0.0;
