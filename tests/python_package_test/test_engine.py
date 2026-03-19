@@ -2266,6 +2266,32 @@ def test_monotone_constraints(test_with_categorical_variable):
                 assert are_interactions_enforced(constrained_model, feature_sets)
 
 
+@pytest.mark.parametrize("test_with_categorical_variable", [True, False])
+def test_monotone_constraints_method_without_constraints(test_with_categorical_variable):
+    trainset = generate_trainset_for_monotone_constraints_tests(test_with_categorical_variable)
+
+    params = {
+        "min_data": 20,
+        "num_leaves": 20,
+        "monotone_constraints_method": "advanced",  # no monotone_constraints provided
+        "use_missing": False,
+    }
+
+    import pytest
+
+    with pytest.warns(UserWarning, match="monotone_constraints_method"):
+        booster = lgb.train(params, trainset)
+
+    # Ensure training didn't crash
+    assert booster is not None
+
+    # Ensure param still exists
+    assert "monotone_constraints_method" in booster.params
+
+    # Ensure fallback happened
+    assert booster.params["monotone_constraints_method"] == "basic"
+
+
 @pytest.mark.skipif(getenv("TASK", "") == "cuda", reason="Monotone constraints are not yet supported by CUDA version")
 def test_monotone_penalty():
     def are_first_splits_non_monotone(tree, n, monotone_constraints):
