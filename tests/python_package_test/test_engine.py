@@ -2277,10 +2277,8 @@ def test_monotone_constraints_method_without_constraints(test_with_categorical_v
         "use_missing": False,
     }
 
-    import pytest
-
     with pytest.warns(UserWarning, match="monotone_constraints_method"):
-        booster = lgb.train(params, trainset)
+        booster = lgb.train(params, trainset)   
 
     # Ensure training didn't crash
     assert booster is not None
