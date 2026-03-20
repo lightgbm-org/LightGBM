@@ -1,10 +1,14 @@
 /*!
- * Copyright (c) 2024 Microsoft Corporation. All rights reserved.
+ * Copyright (c) 2024-2026 Microsoft Corporation. All rights reserved.
+ * Copyright (c) 2024-2026 The LightGBM developers. All rights reserved.
  * Licensed under the MIT License. See LICENSE file in the project root for
  * license information.
  */
 
 #include "feature_histogram.hpp"
+
+#include <algorithm>
+#include <vector>
 
 namespace LightGBM {
 
@@ -381,8 +385,11 @@ void FeatureHistogram::FindBestThresholdCategoricalInner(double sum_gradient,
   }
 }
 
-template <bool USE_RAND, bool USE_MC, bool USE_L1, bool USE_MAX_OUTPUT, bool USE_SMOOTHING, typename PACKED_HIST_BIN_T, typename PACKED_HIST_ACC_T,
-          typename HIST_BIN_T, typename HIST_ACC_T, int HIST_BITS_BIN, int HIST_BITS_ACC>
+template <
+bool USE_RAND, bool USE_MC, bool USE_L1, bool USE_MAX_OUTPUT, bool USE_SMOOTHING,
+typename PACKED_HIST_BIN_T, typename PACKED_HIST_ACC_T, typename HIST_BIN_T, typename HIST_ACC_T,
+int HIST_BITS_BIN, int HIST_BITS_ACC
+>
 void FeatureHistogram::FindBestThresholdCategoricalIntInner(int64_t int_sum_gradient_and_hessian,
                                           const double grad_scale, const double hess_scale,
                                           data_size_t num_data,

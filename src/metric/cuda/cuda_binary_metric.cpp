@@ -1,5 +1,6 @@
 /*!
- * Copyright (c) 2022 Microsoft Corporation. All rights reserved.
+ * Copyright (c) 2022-2026 Microsoft Corporation. All rights reserved.
+ * Copyright (c) 2022-2026 The LightGBM developers. All rights reserved.
  * Licensed under the MIT License. See LICENSE file in the project root for
  * license information.
  */
@@ -8,10 +9,9 @@
 
 #include "cuda_binary_metric.hpp"
 
-namespace LightGBM {
+#include <vector>
 
-CUDABinaryLoglossMetric::CUDABinaryLoglossMetric(const Config& config):
-  CUDABinaryMetricInterface<BinaryLoglossMetric, CUDABinaryLoglossMetric>(config) {}
+namespace LightGBM {
 
 template <typename HOST_METRIC, typename CUDA_METRIC>
 std::vector<double> CUDABinaryMetricInterface<HOST_METRIC, CUDA_METRIC>::Eval(const double* score, const ObjectiveFunction* objective) const {
@@ -25,6 +25,10 @@ std::vector<double> CUDABinaryMetricInterface<HOST_METRIC, CUDA_METRIC>::Eval(co
   const double eval_score = sum_loss / sum_weight;
   return std::vector<double>{eval_score};
 }
+
+CUDABinaryLoglossMetric::CUDABinaryLoglossMetric(const Config& config):CUDABinaryMetricInterface<BinaryLoglossMetric, CUDABinaryLoglossMetric>(config) {}
+
+CUDABinaryErrorMetric::CUDABinaryErrorMetric(const Config& config):CUDABinaryMetricInterface<BinaryErrorMetric, CUDABinaryErrorMetric>(config) {}
 
 }  // namespace LightGBM
 

@@ -1,10 +1,11 @@
 /*!
- * Copyright (c) 2021 Microsoft Corporation. All rights reserved.
+ * Copyright (c) 2021-2026 Microsoft Corporation. All rights reserved.
+ * Copyright (c) 2021-2026 The LightGBM developers. All rights reserved.
  * Licensed under the MIT License. See LICENSE file in the project root for
  * license information.
  */
-#ifndef LIGHTGBM_TREELEARNER_CUDA_CUDA_HISTOGRAM_CONSTRUCTOR_HPP_
-#define LIGHTGBM_TREELEARNER_CUDA_CUDA_HISTOGRAM_CONSTRUCTOR_HPP_
+#ifndef LIGHTGBM_SRC_TREELEARNER_CUDA_CUDA_HISTOGRAM_CONSTRUCTOR_HPP_
+#define LIGHTGBM_SRC_TREELEARNER_CUDA_CUDA_HISTOGRAM_CONSTRUCTOR_HPP_
 
 #ifdef USE_CUDA
 
@@ -49,6 +50,8 @@ class CUDAHistogramConstructor {
   void ConstructHistogramForLeaf(
     const CUDALeafSplitsStruct* cuda_smaller_leaf_splits,
     const CUDALeafSplitsStruct* cuda_larger_leaf_splits,
+    const data_size_t global_num_data_in_smaller_leaf,
+    const data_size_t global_num_data_in_larger_leaf,
     const data_size_t num_data_in_smaller_leaf,
     const data_size_t num_data_in_larger_leaf,
     const double sum_hessians_in_smaller_leaf,
@@ -193,4 +196,4 @@ class CUDAHistogramConstructor {
 }  // namespace LightGBM
 
 #endif  // USE_CUDA
-#endif  // LIGHTGBM_TREELEARNER_CUDA_CUDA_HISTOGRAM_CONSTRUCTOR_HPP_
+#endif  // LIGHTGBM_SRC_TREELEARNER_CUDA_CUDA_HISTOGRAM_CONSTRUCTOR_HPP_

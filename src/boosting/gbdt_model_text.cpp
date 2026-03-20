@@ -1,5 +1,6 @@
 /*!
- * Copyright (c) 2017 Microsoft Corporation. All rights reserved.
+ * Copyright (c) 2017-2026 Microsoft Corporation. All rights reserved.
+ * Copyright (c) 2017-2026 The LightGBM developers. All rights reserved.
  * Licensed under the MIT License. See LICENSE file in the project root for license information.
  */
 #include <LightGBM/config.h>
@@ -8,8 +9,11 @@
 #include <LightGBM/utils/array_args.h>
 #include <LightGBM/utils/common.h>
 
+#include <algorithm>
 #include <string>
 #include <sstream>
+#include <unordered_map>
+#include <utility>
 #include <vector>
 
 #include "gbdt.h"

@@ -1,11 +1,12 @@
 /*!
- * Copyright (c) 2021 Microsoft Corporation. All rights reserved.
+ * Copyright (c) 2021-2026 Microsoft Corporation. All rights reserved.
+ * Copyright (c) 2021-2026 The LightGBM developers. All rights reserved.
  * Licensed under the MIT License. See LICENSE file in the project root for
  * license information.
  */
 
-#ifndef LIGHTGBM_CUDA_CUDA_METRIC_HPP_
-#define LIGHTGBM_CUDA_CUDA_METRIC_HPP_
+#ifndef LIGHTGBM_INCLUDE_LIGHTGBM_CUDA_CUDA_METRIC_HPP_
+#define LIGHTGBM_INCLUDE_LIGHTGBM_CUDA_CUDA_METRIC_HPP_
 
 #ifdef USE_CUDA
 
@@ -41,4 +42,4 @@ class CUDAMetricInterface: public HOST_METRIC {
 
 #endif  // USE_CUDA
 
-#endif  // LIGHTGBM_CUDA_CUDA_METRIC_HPP_
+#endif  // LIGHTGBM_INCLUDE_LIGHTGBM_CUDA_CUDA_METRIC_HPP_

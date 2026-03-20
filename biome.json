@@ -1,21 +1,38 @@
 {
+    "root": false,
+    "vcs": {
+        "enabled": true,
+        "clientKind": "git",
+        "useIgnoreFile": true
+    },
     "files": {
-        "ignore": [".mypy_cache/", ".pixi/"]
+        "includes": [
+            "**",
+            "!build",
+            "!external_libs",
+            "!lightgbm-python",
+            "!lightgbm_r"
+        ]
     },
     "formatter": {
         "enabled": true,
-        "useEditorconfig": true
+        "expand": "always",
+        "useEditorconfig": true,
+        "lineWidth": 120
     },
-    "organizeImports": {
-        "enabled": true
+    "assist": {
+        "enabled": true,
+        "actions": {
+            "recommended": true
+        }
     },
     "linter": {
         "enabled": true,
+        "domains": {
+            "project": "all"
+        },
         "rules": {
-            "all": true
+            "recommended": true
         }
-    },
-    "javascript": {
-        "globals": ["$"]
     }
 }

@@ -1,5 +1,6 @@
 /*!
- * Copyright (c) 2021 Microsoft Corporation. All rights reserved.
+ * Copyright (c) 2021-2026 Microsoft Corporation. All rights reserved.
+ * Copyright (c) 2021-2026 The LightGBM developers. All rights reserved.
  * Licensed under the MIT License. See LICENSE file in the project root for license information.
  * Modifications Copyright(C) 2023 Advanced Micro Devices, Inc. All rights reserved.
  */
@@ -8,6 +9,8 @@
 
 #include <LightGBM/cuda/cuda_algorithms.hpp>
 #include <LightGBM/cuda/cuda_rocm_interop.h>
+
+#include <algorithm>
 
 namespace LightGBM {
 

@@ -83,7 +83,7 @@ lgb.interprete <- function(model,
   tree_index_mat_list <- lapply(
     X = leaf_index_mat_list
     , FUN = function(x) {
-      matrix(seq_len(length(x)) - 1L, ncol = num_class, byrow = TRUE)
+      matrix(seq_along(x) - 1L, ncol = num_class, byrow = TRUE)
     }
   )
 

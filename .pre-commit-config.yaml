@@ -13,20 +13,48 @@ exclude: |
 
 repos:
   - repo: https://github.com/pre-commit/pre-commit-hooks
-    rev: v5.0.0
+    rev: v6.0.0
     hooks:
+      - id: check-toml
+      - id: check-xml
       - id: end-of-file-fixer
       - id: trailing-whitespace
   - repo: https://github.com/cmake-lint/cmake-lint
     rev: '1.4.3'
     hooks:
       - id: cmakelint
-        args: ["--linelength=120", "--filter=-convention/filename,-package/stdargs,-readability/wonkycase"]
+        args: ["--linelength=120"]
+  - repo: https://github.com/cpplint/cpplint
+    rev: '2.0.2'
+    hooks:
+      - id: cpplint
+        args:
+          - --root=..  # workaround to get correct header guard pattern
+          - --recursive
+          - --filter=-build/include_subdir,-whitespace/line_length
+  - repo: local
+    hooks:
+      - id: check-omp-pragmas
+        name: check-omp-pragmas
+        entry: sh
+        args:
+          - .ci/check-omp-pragmas.sh
+        language: system
+        pass_filenames: false
   - repo: https://github.com/adrienverge/yamllint
     rev: v1.37.1
     hooks:
       - id: yamllint
         args: ["--strict"]
+  - repo: local
+    hooks:
+      - id: regenerate-parameters
+        name: regenerate-parameters
+        entry: python
+        args:
+          - ./.ci/parameter-generator.py
+        language: python
+        pass_filenames: false
   - repo: https://github.com/rstcheck/rstcheck
     rev: v6.2.5
     hooks:
@@ -37,29 +65,46 @@ repos:
           - sphinx>=8.1.3
           - sphinx_rtd_theme>=3.0.1
   - repo: https://github.com/astral-sh/ruff-pre-commit
-    # Ruff version.
-    rev: v0.12.5
+    rev: v0.14.10
     hooks:
-      # Run the linter.
-      - id: ruff
+      - id: ruff-check
         args: ["--config", "python-package/pyproject.toml"]
         types_or: [python, jupyter]
-      # Run the formatter.
       - id: ruff-format
         args: ["--config", "python-package/pyproject.toml"]
         types_or: [python, jupyter]
+  - repo: https://github.com/biomejs/pre-commit
+    rev: v2.3.10
+    hooks:
+      - id: biome-ci
+        args:
+          - --config-path=./biome.json
+          - --diagnostic-level=info
+          - --error-on-warnings
   - repo: https://github.com/shellcheck-py/shellcheck-py
-    rev: v0.10.0.1
+    rev: v0.11.0.1
     hooks:
       - id: shellcheck
   - repo: https://github.com/crate-ci/typos
-    rev: v1.34.0
+    rev: v1.40.0
     hooks:
       - id: typos
         args: ["--force-exclude"]
         exclude: (\.gitignore$)|(^\.editorconfig$)
   - repo: https://github.com/henryiii/validate-pyproject-schema-store
-    rev: 2025.07.14
+    rev: 2025.11.21
     hooks:
       - id: validate-pyproject
         files: python-package/pyproject.toml$
+  - repo: https://github.com/pre-commit/mirrors-mypy
+    rev: v1.19.1
+    hooks:
+      - id: mypy
+        args: ["--config-file", "python-package/pyproject.toml", "python-package/"]
+        pass_filenames: false
+        verbose: true
+        additional_dependencies:
+          - matplotlib>=3.9.1
+          - pandas>=2.0
+          - pyarrow>=17.0
+          - scikit-learn>=1.5.2

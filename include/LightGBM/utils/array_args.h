@@ -1,9 +1,10 @@
 /*!
- * Copyright (c) 2016 Microsoft Corporation. All rights reserved.
+ * Copyright (c) 2016-2026 Microsoft Corporation. All rights reserved.
+ * Copyright (c) 2020-2026 The LightGBM developers. All rights reserved.
  * Licensed under the MIT License. See LICENSE file in the project root for license information.
  */
-#ifndef LIGHTGBM_UTILS_ARRAY_AGRS_H_
-#define LIGHTGBM_UTILS_ARRAY_AGRS_H_
+#ifndef LIGHTGBM_INCLUDE_LIGHTGBM_UTILS_ARRAY_ARGS_H_
+#define LIGHTGBM_INCLUDE_LIGHTGBM_UTILS_ARRAY_ARGS_H_
 
 #include <LightGBM/utils/openmp_wrapper.h>
 #include <LightGBM/utils/threading.h>
@@ -112,17 +113,33 @@ class ArrayArgs {
     VAL_T v = ref[end - 1];
     for (;;) {
       while (ref[++i] > v) {}
-      while (v > ref[--j]) { if (j == start) { break; } }
-      if (i >= j) { break; }
+      while (v > ref[--j]) {
+        if (j == start) {
+          break;
+        }
+      }
+      if (i >= j) {
+        break;
+      }
       std::swap(ref[i], ref[j]);
-      if (ref[i] == v) { p++; std::swap(ref[p], ref[i]); }
-      if (v == ref[j]) { q--; std::swap(ref[j], ref[q]); }
+      if (ref[i] == v) {
+        p++;
+        std::swap(ref[p], ref[i]);
+      }
+      if (v == ref[j]) {
+        q--;
+        std::swap(ref[j], ref[q]);
+      }
     }
     std::swap(ref[i], ref[end - 1]);
     j = i - 1;
     i = i + 1;
-    for (int k = start; k <= p; k++, j--) { std::swap(ref[k], ref[j]); }
-    for (int k = end - 2; k >= q; k--, i++) { std::swap(ref[i], ref[k]); }
+    for (int k = start; k <= p; k++, j--) {
+      std::swap(ref[k], ref[j]);
+    }
+    for (int k = end - 2; k >= q; k--, i++) {
+      std::swap(ref[i], ref[k]);
+    }
     *l = j;
     *r = i;
   }
@@ -189,4 +206,4 @@ class ArrayArgs {
 
 }  // namespace LightGBM
 
-#endif   // LightGBM_UTILS_ARRAY_AGRS_H_
+#endif  // LIGHTGBM_INCLUDE_LIGHTGBM_UTILS_ARRAY_ARGS_H_

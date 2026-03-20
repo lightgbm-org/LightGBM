@@ -489,13 +489,15 @@ Example
 Ray
 ^^^
 
-`Ray`_ is a Python-based framework for distributed computing. The `lightgbm_ray`_ project, maintained within the official Ray GitHub organization, can be used to perform distributed LightGBM training using ``ray``.
+`Ray`_ is a Python-based framework for distributed computing. Ray provides LightGBM support through the Ray Train API with ``LightGBMTrainer`` and the `lightgbm_ray`_ project maintained within the official Ray GitHub organization.
 
-See `the lightgbm_ray documentation`_ for usage examples.
+For the Ray Train API, see `the Ray documentation`_ for usage examples.
+
+For the lightgbm_ray project, see `the lightgbm_ray documentation`_ for usage examples.
 
 .. note::
 
-  ``lightgbm_ray`` is not maintained by LightGBM's maintainers. Bug reports or feature requests should be directed to https://github.com/ray-project/lightgbm_ray/issues.
+  ``lightgbm_ray`` and ``ray`` are not maintained by LightGBM's maintainers. Bug reports or feature requests should be directed to https://github.com/ray-project/lightgbm_ray/issues and https://github.com/ray-project/ray/issues respectively.
 
 Mars
 ^^^^
@@ -518,13 +520,13 @@ See `the mars documentation`_ for usage examples.
 
 .. _the Dask DataFrame documentation: https://docs.dask.org/en/latest/dataframe.html
 
-.. _the Dask prediction example: https://github.com/microsoft/LightGBM/blob/master/examples/python-guide/dask/prediction.py
+.. _the Dask prediction example: https://github.com/lightgbm-org/LightGBM/blob/master/examples/python-guide/dask/prediction.py
 
 .. _the Dask worker documentation: https://distributed.dask.org/en/stable/worker-memory.html
 
 .. _the metrics functions from dask-ml: https://ml.dask.org/modules/api.html#dask-ml-metrics-metrics
 
-.. _these Dask examples: https://github.com/microsoft/lightgbm/tree/master/examples/python-guide/dask
+.. _these Dask examples: https://github.com/lightgbm-org/LightGBM/tree/master/examples/python-guide/dask
 
 .. _Kubeflow XGBoost Operator: https://github.com/kubeflow/xgboost-operator
 
@@ -532,13 +534,15 @@ See `the mars documentation`_ for usage examples.
 
 .. _here: https://www.youtube.com/watch?v=iqzXhp5TxUY
 
-.. _A simple distributed learning example: https://github.com/microsoft/lightgbm/tree/master/examples/parallel_learning
+.. _A simple distributed learning example: https://github.com/lightgbm-org/LightGBM/tree/master/examples/parallel_learning
 
 .. _lightgbm_ray: https://github.com/ray-project/lightgbm_ray
 
 .. _Ray: https://www.ray.io/
 
 .. _the lightgbm_ray documentation: https://docs.ray.io/en/latest/tune/api_docs/integration.html#lightgbm-tune-integration-lightgbm
+
+.. _the Ray documentation: https://docs.ray.io/en/latest/train/api/api.html#lightgbm
 
 .. _Mars: https://mars-project.readthedocs.io/en/latest/
 

@@ -1,5 +1,6 @@
 /*!
- * Copyright (c) 2022 Microsoft Corporation. All rights reserved.
+ * Copyright (c) 2022-2026 Microsoft Corporation. All rights reserved.
+ * Copyright (c) 2022-2026 The LightGBM developers. All rights reserved.
  * Licensed under the MIT License. See LICENSE file in the project root for
  * license information.
  */
@@ -29,10 +30,10 @@ void CUDAPointwiseMetricInterface<HOST_METRIC, CUDA_METRIC>::Init(const Metadata
   }
 }
 
+// Regression metrics
 template void CUDAPointwiseMetricInterface<RMSEMetric, CUDARMSEMetric>::Init(const Metadata& metadata, data_size_t num_data);
 template void CUDAPointwiseMetricInterface<L2Metric, CUDAL2Metric>::Init(const Metadata& metadata, data_size_t num_data);
 template void CUDAPointwiseMetricInterface<QuantileMetric, CUDAQuantileMetric>::Init(const Metadata& metadata, data_size_t num_data);
-template void CUDAPointwiseMetricInterface<BinaryLoglossMetric, CUDABinaryLoglossMetric>::Init(const Metadata& metadata, data_size_t num_data);
 template void CUDAPointwiseMetricInterface<L1Metric, CUDAL1Metric>::Init(const Metadata& metadata, data_size_t num_data);
 template void CUDAPointwiseMetricInterface<HuberLossMetric, CUDAHuberLossMetric>::Init(const Metadata& metadata, data_size_t num_data);
 template void CUDAPointwiseMetricInterface<FairLossMetric, CUDAFairLossMetric>::Init(const Metadata& metadata, data_size_t num_data);
@@ -41,6 +42,10 @@ template void CUDAPointwiseMetricInterface<MAPEMetric, CUDAMAPEMetric>::Init(con
 template void CUDAPointwiseMetricInterface<GammaMetric, CUDAGammaMetric>::Init(const Metadata& metadata, data_size_t num_data);
 template void CUDAPointwiseMetricInterface<GammaDevianceMetric, CUDAGammaDevianceMetric>::Init(const Metadata& metadata, data_size_t num_data);
 template void CUDAPointwiseMetricInterface<TweedieMetric, CUDATweedieMetric>::Init(const Metadata& metadata, data_size_t num_data);
+
+// Binary metrics
+template void CUDAPointwiseMetricInterface<BinaryLoglossMetric, CUDABinaryLoglossMetric>::Init(const Metadata& metadata, data_size_t num_data);
+template void CUDAPointwiseMetricInterface<BinaryErrorMetric, CUDABinaryErrorMetric>::Init(const Metadata& metadata, data_size_t num_data);
 
 }  // namespace LightGBM
 

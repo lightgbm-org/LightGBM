@@ -1,4 +1,4 @@
-CXX_STD = @CXX_STD@
+CXX_STD = CXX17
 
 PKGROOT=.
 

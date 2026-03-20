@@ -1,9 +1,10 @@
 /*!
- * Copyright (c) 2017 Microsoft Corporation. All rights reserved.
+ * Copyright (c) 2017-2026 Microsoft Corporation. All rights reserved.
+ * Copyright (c) 2017-2026 The LightGBM developers. All rights reserved.
  * Licensed under the MIT License. See LICENSE file in the project root for license information.
  */
-#ifndef LIGHTGBM_METRIC_XENTROPY_METRIC_HPP_
-#define LIGHTGBM_METRIC_XENTROPY_METRIC_HPP_
+#ifndef LIGHTGBM_SRC_METRIC_XENTROPY_METRIC_HPP_
+#define LIGHTGBM_SRC_METRIC_XENTROPY_METRIC_HPP_
 
 #include <LightGBM/meta.h>
 #include <LightGBM/metric.h>
@@ -30,40 +31,40 @@
 
 namespace LightGBM {
 
-  // label should be in interval [0, 1];
-  // prob should be in interval (0, 1); prob is clipped if needed
-  inline static double XentLoss(label_t label, double prob) {
-    const double log_arg_epsilon = 1.0e-12;
-    double a = label;
-    if (prob > log_arg_epsilon) {
-      a *= std::log(prob);
-    } else {
-      a *= std::log(log_arg_epsilon);
-    }
-    double b = 1.0f - label;
-    if (1.0f - prob > log_arg_epsilon) {
-      b *= std::log(1.0f - prob);
-    } else {
-      b *= std::log(log_arg_epsilon);
-    }
-    return - (a + b);
+// label should be in interval [0, 1];
+// prob should be in interval (0, 1); prob is clipped if needed
+inline static double XentLoss(label_t label, double prob) {
+  const double log_arg_epsilon = 1.0e-12;
+  double a = label;
+  if (prob > log_arg_epsilon) {
+    a *= std::log(prob);
+  } else {
+    a *= std::log(log_arg_epsilon);
   }
+  double b = 1.0f - label;
+  if (1.0f - prob > log_arg_epsilon) {
+    b *= std::log(1.0f - prob);
+  } else {
+    b *= std::log(log_arg_epsilon);
+  }
+  return - (a + b);
+}
 
-  // hhat >(=) 0 assumed; and weight > 0 required; but not checked here
-  inline static double XentLambdaLoss(label_t label, label_t weight, double hhat) {
-    return XentLoss(label, 1.0f - std::exp(-weight * hhat));
-  }
+// hhat >(=) 0 assumed; and weight > 0 required; but not checked here
+inline static double XentLambdaLoss(label_t label, label_t weight, double hhat) {
+  return XentLoss(label, 1.0f - std::exp(-weight * hhat));
+}
 
-  // Computes the (negative) entropy for label p; p should be in interval [0, 1];
-  // This is used to presum the KL-divergence offset term (to be _added_ to the cross-entropy loss).
-  // NOTE: x*log(x) = 0 for x=0,1; so only add when in (0, 1); avoid log(0)*0
-  inline static double YentLoss(double p) {
-    double hp = 0.0;
-    if (p > 0) hp += p * std::log(p);
-    double q = 1.0f - p;
-    if (q > 0) hp += q * std::log(q);
-    return hp;
-  }
+// Computes the (negative) entropy for label p; p should be in interval [0, 1];
+// This is used to presum the KL-divergence offset term (to be _added_ to the cross-entropy loss).
+// NOTE: x*log(x) = 0 for x=0,1; so only add when in (0, 1); avoid log(0)*0
+inline static double YentLoss(double p) {
+  double hp = 0.0;
+  if (p > 0) hp += p * std::log(p);
+  double q = 1.0f - p;
+  if (q > 0) hp += q * std::log(q);
+  return hp;
+}
 
 //
 // CrossEntropyMetric : "xentropy" : (optional) weights are used linearly
@@ -355,4 +356,4 @@ class KullbackLeiblerDivergence : public Metric {
 
 }  // end namespace LightGBM
 
-#endif  // end #ifndef LIGHTGBM_METRIC_XENTROPY_METRIC_HPP_
+#endif  // LIGHTGBM_SRC_METRIC_XENTROPY_METRIC_HPP_

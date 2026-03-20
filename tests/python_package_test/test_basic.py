@@ -69,13 +69,13 @@ def test_basic(tmp_path):
     assert bst.feature_name() == feature_names
     pred_from_model_file = bst.predict(X_test)
     # we need to check the consistency of model file here, so test for exact equal
-    np.testing.assert_array_equal(pred_from_matr, pred_from_model_file)
+    np_assert_array_equal(pred_from_matr, pred_from_model_file, strict=True)
 
     # check early stopping is working. Make it stop very early, so the scores should be very close to zero
     pred_parameter = {"pred_early_stop": True, "pred_early_stop_freq": 5, "pred_early_stop_margin": 1.5}
     pred_early_stopping = bst.predict(X_test, **pred_parameter)
     # scores likely to be different, but prediction should still be the same
-    np.testing.assert_array_equal(np.sign(pred_from_matr), np.sign(pred_early_stopping))
+    np_assert_array_equal(np.sign(pred_from_matr), np.sign(pred_early_stopping), strict=True)
 
     # test that shape is checked during prediction
     bad_X_test = X_test[:, 1:]
@@ -93,6 +93,49 @@ def test_basic(tmp_path):
     with open(tname, "w+b") as f:
         dump_svmlight_file(X_test, y_test, f, zero_based=False)
     np.testing.assert_raises_regex(lgb.basic.LightGBMError, bad_shape_error_msg, bst.predict, tname)
+
+
+def test_booster_rollback_one_iter(rng):
+    """Test that Booster.rollback_one_iter() correctly rolls back one boosting iteration."""
+    X = rng.uniform(size=(100, 5))
+    y = rng.integers(0, 2, size=(100,))
+    X_test = rng.uniform(size=(10, 5))
+
+    train_data = lgb.Dataset(X, label=y)
+    params = {
+        "objective": "binary",
+        "verbose": -1,
+    }
+    bst = lgb.Booster(params, train_data)
+
+    # Train for 10 iterations
+    num_iterations = 10
+    for _ in range(num_iterations):
+        bst.update()
+
+    assert bst.current_iteration() == num_iterations
+    assert bst.num_trees() == num_iterations
+
+    # Get predictions before rollback
+    pred_before = bst.predict(X_test)
+
+    # Rollback one iteration
+    result = bst.rollback_one_iter()
+
+    # Verify rollback decremented both iteration count and tree count
+    assert bst.current_iteration() == num_iterations - 1
+    assert bst.num_trees() == num_iterations - 1
+    # Verify it returns self for method chaining
+    assert result is bst
+
+    # Verify predictions actually changed (proves tree was removed, not just counter)
+    pred_after = bst.predict(X_test)
+    assert not np.allclose(pred_before, pred_after)
+
+    # Verify multiple rollbacks work
+    bst.rollback_one_iter()
+    assert bst.current_iteration() == num_iterations - 2
+    assert bst.num_trees() == num_iterations - 2
 
 
 class NumpySequence(lgb.Sequence):
@@ -213,7 +256,7 @@ def test_sequence_get_data(num_seq, rng):
 
     used_indices = rng.choice(a=np.arange(nrow), size=nrow // 3, replace=False)
     subset_data = seq_ds.subset(used_indices).construct()
-    np.testing.assert_array_equal(subset_data.get_data(), X[sorted(used_indices)])
+    np_assert_array_equal(subset_data.get_data(), X[sorted(used_indices)], strict=True)
 
 
 def test_chunked_dataset():
@@ -685,18 +728,18 @@ def test_list_to_1d_numpy(collection, dtype, rng):
                 ValueError,
                 match=r"pandas dtypes must be int, float or bool\.\nFields with bad pandas dtypes: 0: object",
             ):
-                lgb.basic._list_to_1d_numpy(y, dtype=np.float32, name=custom_name)
+                lgb.basic._list_to_1d_numpy(data=y, dtype=np.float32, name=custom_name)
             return
         elif pd.api.types.is_string_dtype(y):
             with pytest.raises(
                 ValueError, match=r"pandas dtypes must be int, float or bool\.\nFields with bad pandas dtypes: 0: str"
             ):
-                lgb.basic._list_to_1d_numpy(y, dtype=np.float32, name=custom_name)
+                lgb.basic._list_to_1d_numpy(data=y, dtype=np.float32, name=custom_name)
             return
 
     if isinstance(y, np.ndarray) and len(y.shape) == 2:
         with pytest.warns(UserWarning, match="column-vector"):
-            lgb.basic._list_to_1d_numpy(y, dtype=np.float32, name=custom_name)
+            lgb.basic._list_to_1d_numpy(data=y, dtype=np.float32, name=custom_name)
         return
     elif isinstance(y, list) and isinstance(y[0], list):
         err_msg = (
@@ -704,10 +747,10 @@ def test_list_to_1d_numpy(collection, dtype, rng):
             r"It should be list, numpy 1-D array or pandas Series"
         )
         with pytest.raises(TypeError, match=err_msg):
-            lgb.basic._list_to_1d_numpy(y, dtype=np.float32, name=custom_name)
+            lgb.basic._list_to_1d_numpy(data=y, dtype=np.float32, name=custom_name)
         return
 
-    result = lgb.basic._list_to_1d_numpy(y, dtype=dtype, name=custom_name)
+    result = lgb.basic._list_to_1d_numpy(data=y, dtype=dtype, name=custom_name)
     assert result.size == 10
     assert result.dtype == dtype
 
@@ -1017,3 +1060,41 @@ def test_equal_datasets_from_one_and_several_matrices_w_different_layouts(rng, t
     lgb.Dataset(mat)._dump_text(one_path)
 
     assert filecmp.cmp(one_path, several_path)
+
+
+@pytest.mark.parametrize(
+    "field_name",
+    [
+        "group",
+        "init_score",
+        pytest.param(
+            "position",
+            marks=pytest.mark.skipif(
+                getenv("TASK", "") == "cuda",
+                reason="Positions in learning to rank is not supported in CUDA version yet",
+            ),
+        ),
+        "weight",
+    ],
+)
+def test_set_field_none_removes_field(rng, field_name):
+    X = rng.uniform(size=(10, 1))
+    d = lgb.Dataset(X).construct()
+
+    if field_name == "group":
+        field = [5, 5]
+        expected = np.array([0, 5, 10], dtype=np.int32)
+    elif field_name == "position":
+        field = [100, 20, 100, 10, 30, 10, 30, 10, 30, 30]
+        expected = np.array([0, 1, 0, 2, 3, 2, 3, 2, 3, 3], dtype=np.int32)
+    else:
+        field = rng.uniform(size=10)
+        expected = field.astype(np.float64 if field_name == "init_score" else np.float32)
+
+    out = d.set_field(field_name, field)
+    assert out is d
+
+    np_assert_array_equal(d.get_field(field_name), expected, strict=True)
+
+    d.set_field(field_name, None)
+    assert d.get_field(field_name) is None

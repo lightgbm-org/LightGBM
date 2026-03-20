@@ -1,3 +1,5 @@
+$ErrorActionPreference = 'Stop'
+
 $settings = @{
     Severity = @(
         'Information',

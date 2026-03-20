@@ -7,27 +7,24 @@ on:
 
 jobs:
   all-optional-checks-successful:
-    timeout-minutes: 120
+    timeout-minutes: 30
     runs-on: ubuntu-latest
+    env:
+      GITHUB_TOKEN: ${{ github.token }}
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
         with:
           fetch-depth: 5
+          persist-credentials: false
           submodules: false
-      - name: Check that all tests succeeded
+      - name: Check valgrind workflow
         shell: bash
         run: |
-            workflows=(
-                "R valgrind tests;r-valgrind"
-            )
-            for i in "${workflows[@]}"; do
-                workflow_name=${i%;*}
-                comment="The last reported status from workflow \"$workflow_name\" is failure."
-                comment="${comment} Commit fixes and rerun the workflow."
-                trigger_phrase=${i#*;}
-                python \
-                    "$GITHUB_WORKSPACE/.ci/get-workflow-status.py" \
-                    "$trigger_phrase" \
-                || { echo "${comment}"; exit 1; }
-            done
+            # ref: https://docs.github.com/en/actions/reference/workflows-and-actions/contexts#github-context
+            PR_BRANCH="${GITHUB_HEAD_REF:-${GITHUB_REF#refs/heads/}}"
+            echo "checking status for branch '${PR_BRANCH}'"
+            ./.ci/check-workflow-status.sh \
+                "${PR_BRANCH}" \
+                'r_valgrind.yml' \
+                ${{ github.event.number }}

@@ -874,6 +874,7 @@ Booster <- R6::R6Class(
 )
 
 #' @name lgb_predict_shared_params
+#' @title Shared prediction parameter docs
 #' @param type Type of prediction to output. Allowed types are:\itemize{
 #'             \item \code{"response"}: will output the predicted score according to the objective function being
 #'                   optimized (depending on the link function that the objective uses), after applying any necessary
@@ -915,6 +916,8 @@ Booster <- R6::R6Class(
 #'               the "Predict Parameters" section of the documentation} for a list of parameters and
 #'               valid values. Where these conflict with the values of keyword arguments to this function,
 #'               the values in \code{params} take precedence.
+#' @details This page contains shared documentation for prediction-related parameters used throughout the package.
+#' @keywords internal
 NULL
 
 #' @name predict.lgb.Booster

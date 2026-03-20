@@ -1,5 +1,6 @@
 /*!
- * Copyright (c) 2016 Microsoft Corporation. All rights reserved.
+ * Copyright (c) 2016-2026 Microsoft Corporation. All rights reserved.
+ * Copyright (c) 2016-2026 The LightGBM developers. All rights reserved.
  * Licensed under the MIT License. See LICENSE file in the project root for license information.
  */
 #include <cstring>
@@ -11,8 +12,7 @@ namespace LightGBM {
 
 
 template <typename TREELEARNER_T>
-FeatureParallelTreeLearner<TREELEARNER_T>::FeatureParallelTreeLearner(const Config* config)
-  :TREELEARNER_T(config) {
+FeatureParallelTreeLearner<TREELEARNER_T>::FeatureParallelTreeLearner(const Config* config):TREELEARNER_T(config) {
 }
 
 template <typename TREELEARNER_T>
@@ -42,7 +42,9 @@ void FeatureParallelTreeLearner<TREELEARNER_T>::BeforeTrain() {
   std::vector<int> num_bins_distributed(num_machines_, 0);
   for (int i = 0; i < this->train_data_->num_total_features(); ++i) {
     int inner_feature_index = this->train_data_->InnerFeatureIndex(i);
-    if (inner_feature_index == -1) { continue; }
+    if (inner_feature_index == -1) {
+      continue;
+    }
     if (this->col_sampler_.is_feature_used_bytree()[inner_feature_index]) {
       int cur_min_machine = static_cast<int>(ArrayArgs<int>::ArgMin(num_bins_distributed));
       feature_distribution[cur_min_machine].push_back(inner_feature_index);

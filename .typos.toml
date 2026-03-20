@@ -8,6 +8,7 @@ default.extend-ignore-re = [
 [default.extend-words]
 MAPE = "MAPE"
 datas = "datas"
+indx = "indx"
 interprete = "interprete"
 mape = "mape"
 splitted = "splitted"

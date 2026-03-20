@@ -35,11 +35,12 @@ data.table::setDTthreads(1L)
   Sys.getenv("LIGHTGBM_TEST_VERBOSITY", "-1")
 )
 
+
 # [description]
 #    test that every element of 'x' is in 'y'
 #
-#    testthat::expect_in() is not available in version of {testthat}
-#    built for R 3.6, this is here to support a similar interface on R 3.6
+#    testthat::expect_in() was added in {testthat} v3.1.19.
+#    This is here to support a similar interface on older {testthat} versions.
 .expect_in <- function(x, y) {
   if (exists("expect_in")) {
     expect_in(x, y)

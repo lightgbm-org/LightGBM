@@ -1,10 +1,18 @@
 [
     {
         "feature": 0,
-        "bin_upper_bound": [0.3, 0.35, 0.4]
+        "bin_upper_bound": [
+            0.3,
+            0.35,
+            0.4
+        ]
     },
     {
         "feature": 1,
-        "bin_upper_bound": [-0.1, -0.15, -0.2]
+        "bin_upper_bound": [
+            -0.1,
+            -0.15,
+            -0.2
+        ]
     }
 ]

@@ -1,5 +1,6 @@
 /*!
- * Copyright (c) 2016 Microsoft Corporation. All rights reserved.
+ * Copyright (c) 2016-2026 Microsoft Corporation. All rights reserved.
+ * Copyright (c) 2016-2026 The LightGBM developers. All rights reserved.
  * Licensed under the MIT License. See LICENSE file in the project root for license information.
  */
 #include "serial_tree_learner.h"
@@ -10,10 +11,13 @@
 #include <LightGBM/utils/common.h>
 
 #include <algorithm>
+#include <memory>
 #include <queue>
 #include <set>
+#include <string>
 #include <unordered_map>
 #include <utility>
+#include <vector>
 
 #include "cost_effective_gradient_boosting.hpp"
 
@@ -368,12 +372,16 @@ bool SerialTreeLearner::BeforeFindBestSplit(const Tree* tree, int left_leaf, int
     larger_leaf_histogram_array_ = nullptr;
   } else if (num_data_in_left_child < num_data_in_right_child) {
     // put parent(left) leaf's histograms into larger leaf's histograms
-    if (histogram_pool_.Get(left_leaf, &larger_leaf_histogram_array_)) { parent_leaf_histogram_array_ = larger_leaf_histogram_array_; }
+    if (histogram_pool_.Get(left_leaf, &larger_leaf_histogram_array_)) {
+      parent_leaf_histogram_array_ = larger_leaf_histogram_array_;
+    }
     histogram_pool_.Move(left_leaf, right_leaf);
     histogram_pool_.Get(left_leaf, &smaller_leaf_histogram_array_);
   } else {
     // put parent(left) leaf's histograms to larger leaf's histograms
-    if (histogram_pool_.Get(left_leaf, &larger_leaf_histogram_array_)) { parent_leaf_histogram_array_ = larger_leaf_histogram_array_; }
+    if (histogram_pool_.Get(left_leaf, &larger_leaf_histogram_array_)) {
+      parent_leaf_histogram_array_ = larger_leaf_histogram_array_;
+    }
     histogram_pool_.Get(right_leaf, &smaller_leaf_histogram_array_);
   }
   return true;

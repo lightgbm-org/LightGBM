@@ -32,7 +32,14 @@ than all previous releases, and "older" than all future releases.
 
 .. _nightly-builds:
 
-You can find such artifacts from the latest successful build on the ``master`` branch (nightly builds) here: |download artifacts|.
+To download such artifacts, run the following from the root of this repository.
+
+.. code:: sh
+
+   bash .ci/download-artifacts.sh ${COMMIT_ID}
+
+Where `COMMIT_ID` is the full commit SHA pointing to a commit on ``master``.
+The artifacts can then be found in the ``release-artifacts/`` directory.
 
 For more details on why LightGBM uses EffVer instead of other schemes like semantic versioning,
 see https://jacobtomlinson.dev/effver/.
@@ -102,13 +109,15 @@ With GUI
 
 1. Install `Visual Studio`_.
 
-2. Navigate to one of the releases at https://github.com/microsoft/LightGBM/releases, download ``LightGBM-complete_source_code_zip.zip``, and unzip it.
+2. Navigate to one of the releases at https://github.com/lightgbm-org/LightGBM/releases, download ``LightGBM-complete_source_code_zip.zip``, and unzip it.
 
 3. Go to ``LightGBM-complete_source_code_zip/windows`` folder.
 
 4. Open ``LightGBM.sln`` file with **Visual Studio**, choose ``Release`` configuration if you need executable file or ``DLL`` configuration if you need shared library and click ``Build`` -> ``Build Solution (Ctrl+Shift+B)``.
 
    If you have errors about **Platform Toolset**, go to ``Project`` -> ``Properties`` -> ``Configuration Properties`` -> ``General`` and select the toolset installed on your machine.
+
+   If you have errors about **Windows SDK Version**, go to ``Project`` -> ``Properties`` -> ``Configuration Properties`` -> ``General`` and select the SDK installed on your machine.
 
 The ``.exe`` file will be in ``LightGBM-complete_source_code_zip/windows/x64/Release`` folder.
 The ``.dll`` file will be in ``LightGBM-complete_source_code_zip/windows/x64/DLL`` folder.
@@ -122,7 +131,7 @@ From Command Line
 
    .. code:: console
 
-     git clone --recursive https://github.com/microsoft/LightGBM
+     git clone --recursive https://github.com/lightgbm-org/LightGBM
      cd LightGBM
      cmake -B build -S . -A x64
      cmake --build build --target ALL_BUILD --config Release
@@ -138,7 +147,7 @@ MinGW-w64
 
    .. code:: console
 
-     git clone --recursive https://github.com/microsoft/LightGBM
+     git clone --recursive https://github.com/lightgbm-org/LightGBM
      cd LightGBM
      cmake -B build -S . -G "MinGW Makefiles"
      cmake --build build -j4
@@ -169,7 +178,7 @@ gcc
 
    .. code:: sh
 
-     git clone --recursive https://github.com/microsoft/LightGBM
+     git clone --recursive https://github.com/lightgbm-org/LightGBM
      cd LightGBM
      cmake -B build -S .
      cmake --build build -j4
@@ -183,7 +192,7 @@ Clang
 
    .. code:: sh
 
-     git clone --recursive https://github.com/microsoft/LightGBM
+     git clone --recursive https://github.com/lightgbm-org/LightGBM
      cd LightGBM
      export CXX=clang++-14 CC=clang-14  # replace "14" with version of Clang installed on your machine
      cmake -B build -S .
@@ -240,7 +249,7 @@ Apple Clang
 
    .. code:: sh
 
-     git clone --recursive https://github.com/microsoft/LightGBM
+     git clone --recursive https://github.com/lightgbm-org/LightGBM
      cd LightGBM
      cmake -B build -S .
      cmake --build build -j4
@@ -258,7 +267,7 @@ gcc
 
    .. code:: sh
 
-     git clone --recursive https://github.com/microsoft/LightGBM
+     git clone --recursive https://github.com/lightgbm-org/LightGBM
      cd LightGBM
      export CXX=g++-7 CC=gcc-7  # replace "7" with version of gcc installed on your machine
      cmake -B build -S .
@@ -267,7 +276,7 @@ gcc
 Docker
 ~~~~~~
 
-Refer to `Docker folder <https://github.com/microsoft/LightGBM/tree/master/docker>`__.
+Refer to `Docker folder <https://github.com/lightgbm-org/LightGBM/tree/master/docker>`__.
 
 Build Threadless Version (not Recommended)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -292,7 +301,7 @@ With GUI
 
 1. Install `Visual Studio`_.
 
-2. Navigate to one of the releases at https://github.com/microsoft/LightGBM/releases, download ``LightGBM-complete_source_code_zip.zip``, and unzip it.
+2. Navigate to one of the releases at https://github.com/lightgbm-org/LightGBM/releases, download ``LightGBM-complete_source_code_zip.zip``, and unzip it.
 
 3. Go to ``LightGBM-complete_source_code_zip/windows`` folder.
 
@@ -303,6 +312,8 @@ With GUI
 6. Get back to the project's main screen and click ``Build`` -> ``Build Solution (Ctrl+Shift+B)``.
 
    If you have errors about **Platform Toolset**, go to ``Project`` -> ``Properties`` -> ``Configuration Properties`` -> ``General`` and select the toolset installed on your machine.
+
+   If you have errors about **Windows SDK Version**, go to ``Project`` -> ``Properties`` -> ``Configuration Properties`` -> ``General`` and select the SDK installed on your machine.
 
 The ``.exe`` file will be in ``LightGBM-complete_source_code_zip/windows/x64/Release`` folder.
 The ``.dll`` file will be in ``LightGBM-complete_source_code_zip/windows/x64/DLL`` folder.
@@ -316,7 +327,7 @@ From Command Line
 
    .. code:: console
 
-     git clone --recursive https://github.com/microsoft/LightGBM
+     git clone --recursive https://github.com/lightgbm-org/LightGBM
      cd LightGBM
      cmake -B build -S . -A x64 -DUSE_OPENMP=OFF
      cmake --build build --target ALL_BUILD --config Release
@@ -332,7 +343,7 @@ MinGW-w64
 
    .. code:: console
 
-     git clone --recursive https://github.com/microsoft/LightGBM
+     git clone --recursive https://github.com/lightgbm-org/LightGBM
      cd LightGBM
      cmake -B build -S . -G "MinGW Makefiles" -DUSE_OPENMP=OFF
      cmake --build build -j4
@@ -360,7 +371,7 @@ gcc
 
    .. code:: sh
 
-     git clone --recursive https://github.com/microsoft/LightGBM
+     git clone --recursive https://github.com/lightgbm-org/LightGBM
      cd LightGBM
      cmake -B build -S . -DUSE_OPENMP=OFF
      cmake --build build -j4
@@ -374,7 +385,7 @@ Clang
 
    .. code:: sh
 
-     git clone --recursive https://github.com/microsoft/LightGBM
+     git clone --recursive https://github.com/lightgbm-org/LightGBM
      cd LightGBM
      export CXX=clang++-14 CC=clang-14  # replace "14" with version of Clang installed on your machine
      cmake -B build -S . -DUSE_OPENMP=OFF
@@ -403,7 +414,7 @@ Apple Clang
 
    .. code:: sh
 
-     git clone --recursive https://github.com/microsoft/LightGBM
+     git clone --recursive https://github.com/lightgbm-org/LightGBM
      cd LightGBM
      cmake -B build -S . -DUSE_OPENMP=OFF
      cmake --build build -j4
@@ -421,7 +432,7 @@ gcc
 
    .. code:: sh
 
-     git clone --recursive https://github.com/microsoft/LightGBM
+     git clone --recursive https://github.com/lightgbm-org/LightGBM
      cd LightGBM
      export CXX=g++-7 CC=gcc-7  # replace "7" with version of gcc installed on your machine
      cmake -B build -S . -DUSE_OPENMP=OFF
@@ -452,13 +463,15 @@ With GUI
 
 2. Install `Visual Studio`_.
 
-3. Navigate to one of the releases at https://github.com/microsoft/LightGBM/releases, download ``LightGBM-complete_source_code_zip.zip``, and unzip it.
+3. Navigate to one of the releases at https://github.com/lightgbm-org/LightGBM/releases, download ``LightGBM-complete_source_code_zip.zip``, and unzip it.
 
 4. Go to ``LightGBM-complete_source_code_zip/windows`` folder.
 
 5. Open ``LightGBM.sln`` file with **Visual Studio**, choose ``Release_mpi`` configuration and click ``Build`` -> ``Build Solution (Ctrl+Shift+B)``.
 
    If you have errors about **Platform Toolset**, go to ``Project`` -> ``Properties`` -> ``Configuration Properties`` -> ``General`` and select the toolset installed on your machine.
+
+   If you have errors about **Windows SDK Version**, go to ``Project`` -> ``Properties`` -> ``Configuration Properties`` -> ``General`` and select the SDK installed on your machine.
 
 The ``.exe`` file will be in ``LightGBM-complete_source_code_zip/windows/x64/Release_mpi`` folder.
 
@@ -473,7 +486,7 @@ From Command Line
 
    .. code:: console
 
-     git clone --recursive https://github.com/microsoft/LightGBM
+     git clone --recursive https://github.com/lightgbm-org/LightGBM
      cd LightGBM
      cmake -B build -S . -A x64 -DUSE_MPI=ON
      cmake --build build --target ALL_BUILD --config Release
@@ -499,7 +512,7 @@ gcc
 
    .. code:: sh
 
-     git clone --recursive https://github.com/microsoft/LightGBM
+     git clone --recursive https://github.com/lightgbm-org/LightGBM
      cd LightGBM
      cmake -B build -S . -DUSE_MPI=ON
      cmake --build build -j4
@@ -513,7 +526,7 @@ Clang
 
    .. code:: sh
 
-     git clone --recursive https://github.com/microsoft/LightGBM
+     git clone --recursive https://github.com/lightgbm-org/LightGBM
      cd LightGBM
      export CXX=clang++-14 CC=clang-14  # replace "14" with version of Clang installed on your machine
      cmake -B build -S . -DUSE_MPI=ON
@@ -542,7 +555,7 @@ Apple Clang
 
    .. code:: sh
 
-     git clone --recursive https://github.com/microsoft/LightGBM
+     git clone --recursive https://github.com/lightgbm-org/LightGBM
      cd LightGBM
      cmake -B build -S . -DUSE_MPI=ON
      cmake --build build -j4
@@ -560,7 +573,7 @@ gcc
 
    .. code:: sh
 
-     git clone --recursive https://github.com/microsoft/LightGBM
+     git clone --recursive https://github.com/lightgbm-org/LightGBM
      cd LightGBM
      export CXX=g++-7 CC=gcc-7  # replace "7" with version of gcc installed on your machine
      cmake -B build -S . -DUSE_MPI=ON
@@ -597,8 +610,6 @@ Following procedure is for the **MSVC** (Microsoft Visual C++) build.
 
    **Note**: Match your Visual C++ version:
 
-   Visual Studio 2015 -> ``msvc-14.0-64.exe``,
-
    Visual Studio 2017 -> ``msvc-14.1-64.exe``,
 
    Visual Studio 2019 -> ``msvc-14.2-64.exe``,
@@ -609,14 +620,14 @@ Following procedure is for the **MSVC** (Microsoft Visual C++) build.
 
    .. code:: console
 
-     git clone --recursive https://github.com/microsoft/LightGBM
+     git clone --recursive https://github.com/lightgbm-org/LightGBM
      cd LightGBM
-     cmake -B build -S . -A x64 -DUSE_GPU=ON -DBOOST_ROOT=C:/local/boost_1_63_0 -DBOOST_LIBRARYDIR=C:/local/boost_1_63_0/lib64-msvc-14.0
+     cmake -B build -S . -A x64 -DUSE_GPU=ON -DBOOST_ROOT=C:/local/boost_1_63_0 -DBOOST_LIBRARYDIR=C:/local/boost_1_63_0/lib64-msvc-14.3
      # if you have installed NVIDIA CUDA to a customized location, you should specify paths to OpenCL headers and library like the following:
-     # cmake -B build -S . -A x64 -DUSE_GPU=ON -DBOOST_ROOT=C:/local/boost_1_63_0 -DBOOST_LIBRARYDIR=C:/local/boost_1_63_0/lib64-msvc-14.0 -DOpenCL_LIBRARY="C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v10.0/lib/x64/OpenCL.lib" -DOpenCL_INCLUDE_DIR="C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v10.0/include"
+     # cmake -B build -S . -A x64 -DUSE_GPU=ON -DBOOST_ROOT=C:/local/boost_1_63_0 -DBOOST_LIBRARYDIR=C:/local/boost_1_63_0/lib64-msvc-14.3 -DOpenCL_LIBRARY="C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v10.0/lib/x64/OpenCL.lib" -DOpenCL_INCLUDE_DIR="C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v10.0/include"
      cmake --build build --target ALL_BUILD --config Release
 
-   **Note**: ``C:/local/boost_1_63_0`` and ``C:/local/boost_1_63_0/lib64-msvc-14.0`` are locations of your **Boost** binaries (assuming you've downloaded 1.63.0 version for Visual Studio 2015).
+   **Note**: ``C:/local/boost_1_63_0`` and ``C:/local/boost_1_63_0/lib64-msvc-14.3`` are locations of your **Boost** binaries (assuming you've downloaded 1.63.0 version for Visual Studio 2022).
 
 The ``.exe`` and ``.dll`` files will be in ``LightGBM/Release`` folder.
 
@@ -644,7 +655,7 @@ gcc
 
    .. code:: sh
 
-     git clone --recursive https://github.com/microsoft/LightGBM
+     git clone --recursive https://github.com/lightgbm-org/LightGBM
      cd LightGBM
      cmake -B build -S . -DUSE_GPU=ON
      # if you have installed NVIDIA CUDA to a customized location, you should specify paths to OpenCL headers and library like the following:
@@ -660,7 +671,7 @@ Clang
 
    .. code:: sh
 
-     git clone --recursive https://github.com/microsoft/LightGBM
+     git clone --recursive https://github.com/lightgbm-org/LightGBM
      cd LightGBM
      export CXX=clang++-14 CC=clang-14  # replace "14" with version of Clang installed on your machine
      cmake -B build -S . -DUSE_GPU=ON
@@ -676,14 +687,14 @@ The GPU version is not supported on macOS.
 Docker
 ^^^^^^
 
-Refer to `GPU Docker folder <https://github.com/microsoft/LightGBM/tree/master/docker/gpu>`__.
+Refer to `GPU Docker folder <https://github.com/lightgbm-org/LightGBM/tree/master/docker/gpu>`__.
 
 Build CUDA Version
 ~~~~~~~~~~~~~~~~~~
 
-The `original GPU version <#build-gpu-version>`__ of LightGBM (``device_type=gpu``) is based on OpenCL.
+The `original GPU version <#build-gpu-version>`__ of LightGBM (``device_type=gpu``) is based on OpenCL, and only computes histograms on GPUs, with other parts of training in CPUs.
 
-The CUDA-based version (``device_type=cuda``) is a separate implementation.
+The CUDA-based version (``device_type=cuda``) is a separate implementation that runs significantly faster by putting all the training process on GPUs. It also supports multi-GPU, and multi-node multi-GPU training.
 Use this version in Linux environments with an NVIDIA GPU with compute capability 6.0 or higher.
 
 Windows
@@ -713,7 +724,7 @@ gcc
 
    .. code:: sh
 
-     git clone --recursive https://github.com/microsoft/LightGBM
+     git clone --recursive https://github.com/lightgbm-org/LightGBM
      cd LightGBM
      cmake -B build -S . -DUSE_CUDA=ON
      cmake --build build -j4
@@ -727,7 +738,7 @@ Clang
 
    .. code:: sh
 
-     git clone --recursive https://github.com/microsoft/LightGBM
+     git clone --recursive https://github.com/lightgbm-org/LightGBM
      cd LightGBM
      export CXX=clang++-14 CC=clang-14  # replace "14" with version of Clang installed on your machine
      cmake -B build -S . -DUSE_CUDA=ON
@@ -737,6 +748,65 @@ macOS
 ^^^^^
 
 The CUDA version is not supported on macOS.
+
+Build ROCm Version
+~~~~~~~~~~~~~~~~~~
+
+The `original GPU version <#build-gpu-version>`__ of LightGBM (``device_type=gpu``) is based on OpenCL.
+
+The ROCm-based version (``device_type=cuda``) is a separate implementation. Yes, the ROCm version reuses the ``device_type=cuda`` as a convenience for users.  Use this version in Linux environments with an AMD GPU.
+
+Windows
+^^^^^^^
+
+The ROCm version is not supported on Windows.
+Use the `GPU version <#build-gpu-version>`__ (``device_type=gpu``) for GPU acceleration on Windows.
+
+Linux
+^^^^^
+
+On Linux, a ROCm version of LightGBM can be built using
+
+- **CMake**, **gcc** and **ROCm**;
+- **CMake**, **Clang** and **ROCm**.
+
+Please refer to `the ROCm docs`_ for **ROCm** libraries installation.
+
+After compilation the executable and ``.so`` files will be in ``LightGBM/`` folder.
+
+gcc
+***
+
+1. Install `CMake`_, **gcc** and **ROCm**.
+
+2. Run the following commands:
+
+   .. code:: sh
+
+     git clone --recursive https://github.com/lightgbm-org/LightGBM
+     cd LightGBM
+     cmake -B build -S . -DUSE_ROCM=ON
+     cmake --build build -j4
+
+Clang
+*****
+
+1. Install `CMake`_, **Clang**, **OpenMP** and **ROCm**.
+
+2. Run the following commands:
+
+   .. code:: sh
+
+     git clone --recursive https://github.com/lightgbm-org/LightGBM
+     cd LightGBM
+     export CXX=clang++-14 CC=clang-14  # replace "14" with version of Clang installed on your machine
+     cmake -B build -S . -DUSE_ROCM=ON
+     cmake --build build -j4
+
+macOS
+^^^^^
+
+The ROCm version is not supported on macOS.
 
 Build Java Wrapper
 ~~~~~~~~~~~~~~~~~~
@@ -764,7 +834,7 @@ VS Build Tools
 
    .. code:: console
 
-     git clone --recursive https://github.com/microsoft/LightGBM
+     git clone --recursive https://github.com/lightgbm-org/LightGBM
      cd LightGBM
      cmake -B build -S . -A x64 -DUSE_SWIG=ON
      cmake --build build --target ALL_BUILD --config Release
@@ -780,7 +850,7 @@ MinGW-w64
 
    .. code:: console
 
-     git clone --recursive https://github.com/microsoft/LightGBM
+     git clone --recursive https://github.com/lightgbm-org/LightGBM
      cd LightGBM
      cmake -B build -S . -G "MinGW Makefiles" -DUSE_SWIG=ON
      cmake --build build -j4
@@ -807,7 +877,7 @@ gcc
 
    .. code:: sh
 
-     git clone --recursive https://github.com/microsoft/LightGBM
+     git clone --recursive https://github.com/lightgbm-org/LightGBM
      cd LightGBM
      cmake -B build -S . -DUSE_SWIG=ON
      cmake --build build -j4
@@ -821,7 +891,7 @@ Clang
 
    .. code:: sh
 
-     git clone --recursive https://github.com/microsoft/LightGBM
+     git clone --recursive https://github.com/lightgbm-org/LightGBM
      cd LightGBM
      export CXX=clang++-14 CC=clang-14  # replace "14" with version of Clang installed on your machine
      cmake -B build -S . -DUSE_SWIG=ON
@@ -849,7 +919,7 @@ Apple Clang
 
    .. code:: sh
 
-     git clone --recursive https://github.com/microsoft/LightGBM
+     git clone --recursive https://github.com/lightgbm-org/LightGBM
      cd LightGBM
      cmake -B build -S . -DUSE_SWIG=ON
      cmake --build build -j4
@@ -868,7 +938,7 @@ gcc
 
    .. code:: sh
 
-     git clone --recursive https://github.com/microsoft/LightGBM
+     git clone --recursive https://github.com/lightgbm-org/LightGBM
      cd LightGBM
      export CXX=g++-7 CC=gcc-7  # replace "7" with version of gcc installed on your machine
      cmake -B build -S . -DUSE_SWIG=ON
@@ -877,12 +947,12 @@ gcc
 Build Python-package
 ~~~~~~~~~~~~~~~~~~~~
 
-Refer to `Python-package folder <https://github.com/microsoft/LightGBM/tree/master/python-package>`__.
+Refer to `Python-package folder <https://github.com/lightgbm-org/LightGBM/tree/master/python-package>`__.
 
 Build R-package
 ~~~~~~~~~~~~~~~
 
-Refer to `R-package folder <https://github.com/microsoft/LightGBM/tree/master/R-package>`__.
+Refer to `R-package folder <https://github.com/lightgbm-org/LightGBM/tree/master/R-package>`__.
 
 Build C++ Unit Tests
 ~~~~~~~~~~~~~~~~~~~~
@@ -904,7 +974,7 @@ VS Build Tools
 
    .. code:: console
 
-     git clone --recursive https://github.com/microsoft/LightGBM
+     git clone --recursive https://github.com/lightgbm-org/LightGBM
      cd LightGBM
      cmake -B build -S . -A x64 -DBUILD_CPP_TEST=ON
      cmake --build build --target testlightgbm --config Debug
@@ -920,7 +990,7 @@ MinGW-w64
 
    .. code:: console
 
-     git clone --recursive https://github.com/microsoft/LightGBM
+     git clone --recursive https://github.com/lightgbm-org/LightGBM
      cd LightGBM
      cmake -B build -S . -G "MinGW Makefiles" -DBUILD_CPP_TEST=ON
      cmake --build build --target testlightgbm -j4
@@ -948,7 +1018,7 @@ gcc
 
    .. code:: sh
 
-     git clone --recursive https://github.com/microsoft/LightGBM
+     git clone --recursive https://github.com/lightgbm-org/LightGBM
      cd LightGBM
      cmake -B build -S . -DBUILD_CPP_TEST=ON
      cmake --build build --target testlightgbm -j4
@@ -962,7 +1032,7 @@ Clang
 
    .. code:: sh
 
-     git clone --recursive https://github.com/microsoft/LightGBM
+     git clone --recursive https://github.com/lightgbm-org/LightGBM
      cd LightGBM
      export CXX=clang++-14 CC=clang-14  # replace "14" with version of Clang installed on your machine
      cmake -B build -S . -DBUILD_CPP_TEST=ON
@@ -991,7 +1061,7 @@ Apple Clang
 
    .. code:: sh
 
-     git clone --recursive https://github.com/microsoft/LightGBM
+     git clone --recursive https://github.com/lightgbm-org/LightGBM
      cd LightGBM
      cmake -B build -S . -DBUILD_CPP_TEST=ON
      cmake --build build --target testlightgbm -j4
@@ -1009,15 +1079,11 @@ gcc
 
    .. code:: sh
 
-     git clone --recursive https://github.com/microsoft/LightGBM
+     git clone --recursive https://github.com/lightgbm-org/LightGBM
      cd LightGBM
      export CXX=g++-7 CC=gcc-7  # replace "7" with version of gcc installed on your machine
      cmake -B build -S . -DBUILD_CPP_TEST=ON
      cmake --build build --target testlightgbm -j4
-
-
-.. |download artifacts| image:: ./_static/images/artifacts-not-available.svg
-   :target: https://lightgbm.readthedocs.io/en/latest/Installation-Guide.html
 
 .. _Visual Studio: https://visualstudio.microsoft.com/downloads/
 
@@ -1046,6 +1112,8 @@ gcc
 .. _SWIG: https://www.swig.org/download.html
 
 .. _this detailed guide: https://docs.nvidia.com/cuda/cuda-installation-guide-linux/index.html
+
+.. _the ROCm docs: https://rocm.docs.amd.com/projects/install-on-linux/en/latest/
 
 .. _following docs: https://github.com/google/sanitizers/wiki
 

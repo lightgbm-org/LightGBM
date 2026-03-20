@@ -129,6 +129,11 @@ def plot_importance(
         tuples = [x for x in tuples if x[1] > 0]
     if max_num_features is not None and max_num_features > 0:
         tuples = tuples[-max_num_features:]
+    if not tuples:
+        raise ValueError(
+            "No non-zero feature importances found. The model may have no splits. "
+            "Use ignore_zero=False to show all features."
+        )
     labels, values = zip(*tuples)
 
     if ax is None:
@@ -140,7 +145,7 @@ def plot_importance(
     ax.barh(ylocs, values, align="center", height=height, **kwargs)
 
     for x, y in zip(values, ylocs):
-        ax.text(x + 1, y, _float2str(x, precision) if importance_type == "gain" else x, va="center")
+        ax.text(x + 1, float(y), _float2str(x, precision) if importance_type == "gain" else x, va="center")
 
     ax.set_yticks(ylocs)
     ax.set_yticklabels(labels)

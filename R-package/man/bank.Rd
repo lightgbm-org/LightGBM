@@ -18,7 +18,7 @@ This data set is originally from the Bank Marketing data set,
              randomly selected from 3 (older version of this dataset with less inputs).
 }
 \references{
-http://archive.ics.uci.edu/ml/datasets/Bank+Marketing
+https://archive.ics.uci.edu/ml/datasets/Bank+Marketing
 
 S. Moro, P. Cortez and P. Rita. (2014)
 A Data-Driven Approach to Predict the Success of Bank Telemarketing. Decision Support Systems

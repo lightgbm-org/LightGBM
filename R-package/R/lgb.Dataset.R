@@ -10,6 +10,7 @@
 #'              \code{group = c(10, 20, 40, 10, 10, 10)}, that means that you have 6 groups,
 #'              where the first 10 records are in the first group, records 11-30 are in the
 #'              second group, etc.
+#' @details This page contains shared documentation for dataset-related parameters used throughout the package.
 #' @keywords internal
 NULL
 
@@ -149,7 +150,7 @@ Dataset <- R6::R6Class(
             cate_indices <- as.list(match(private$categorical_feature, private$colnames) - 1L)
 
             # Provided indices, but some indices are missing?
-            if (sum(is.na(cate_indices)) > 0L) {
+            if (anyNA(cate_indices)) {
               stop(
                 "lgb.Dataset.construct: supplied an unknown feature in categorical_feature: "
                 , sQuote(private$categorical_feature[is.na(cate_indices)], q = FALSE)
@@ -266,7 +267,7 @@ Dataset <- R6::R6Class(
         handle <- .Call(
           LGBM_DatasetGetSubset_R
           , ref_handle
-          , c(private$used_indices) # Adding c() fixes issue in R v3.5
+          , c(private$used_indices)
           , length(private$used_indices)
           , params_str
         )

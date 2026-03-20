@@ -27,7 +27,7 @@ Authors@R: c(
     person("Michael", "Mayer", role = c("ctb"))
     )
 Description: Tree based algorithms can be improved by introducing boosting frameworks.
-    'LightGBM' is one such framework, based on Ke, Guolin et al. (2017) <https://papers.nips.cc/paper/6907-lightgbm-a-highly-efficient-gradient-boosting-decision>.
+    'LightGBM' is one such framework, based on Ke, Guolin et al. (2017) <https://proceedings.neurips.cc/paper/2017/hash/6449f44a102fde848669bdd9eb6b76fa-Abstract.html>.
     This package offers an R interface to work with it.
     It is designed to be distributed and efficient with the following advantages:
         1. Faster training speed and higher efficiency.
@@ -39,8 +39,8 @@ Description: Tree based algorithms can be improved by introducing boosting frame
     Comparison experiments on public datasets suggest that 'LightGBM' can outperform existing boosting frameworks on both efficiency and accuracy, with significantly lower memory consumption. In addition, parallel experiments suggest that in certain circumstances, 'LightGBM' can achieve a linear speed-up in training time by using multiple machines.
 Encoding: UTF-8
 License: MIT + file LICENSE
-URL: https://github.com/Microsoft/LightGBM
-BugReports: https://github.com/Microsoft/LightGBM/issues
+URL: https://github.com/lightgbm-org/LightGBM
+BugReports: https://github.com/lightgbm-org/LightGBM/issues
 NeedsCompilation: yes
 Biarch: true
 VignetteBuilder: knitr
@@ -51,7 +51,7 @@ Suggests:
     RhpcBLASctl,
     testthat
 Depends:
-    R (>= 3.5)
+    R (>= 4.0)
 Imports:
     R6 (>= 2.4.0),
     data.table (>= 1.9.6),
@@ -62,5 +62,5 @@ Imports:
     parallel,
     utils
 SystemRequirements:
-    ~~CXXSTD~~
-RoxygenNote: 7.3.2
+    C++17
+RoxygenNote: 7.3.3

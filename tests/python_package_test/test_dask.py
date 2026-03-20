@@ -14,7 +14,7 @@ from sklearn.metrics import accuracy_score, r2_score
 
 import lightgbm as lgb
 
-from .utils import sklearn_multiclass_custom_objective
+from .utils import np_assert_array_equal, sklearn_multiclass_custom_objective
 
 if platform in {"cygwin", "win32"}:
     pytest.skip("lightgbm.dask is not currently supported on Windows", allow_module_level=True)
@@ -283,7 +283,7 @@ def test_classifier(output, task, boosting_type, tree_learner, cluster):
         s2 = local_classifier.score(X, y)
 
         if boosting_type == "rf":
-            # https://github.com/microsoft/LightGBM/issues/4118
+            # https://github.com/lightgbm-org/LightGBM/issues/4118
             assert_eq(s1, s2, atol=0.01)
             assert_eq(p1_proba, p2_proba, atol=0.8)
         else:
@@ -370,7 +370,7 @@ def test_classifier_pred_contrib(output, task, cluster):
                 # raw scores will probably be different, but at least check that all predicted classes are the same
                 pred_classes = np.argmax(computed_preds.toarray(), axis=1)
                 local_pred_classes = np.argmax(local_preds_with_contrib[i].toarray(), axis=1)
-                np.testing.assert_array_equal(pred_classes, local_pred_classes)
+                np_assert_array_equal(pred_classes, local_pred_classes, strict=True)
             return
 
         preds_with_contrib = preds_with_contrib.compute()
@@ -672,7 +672,7 @@ def test_regressor_custom_objective(output, cluster):
     platform.lower().startswith("darwin"),
     reason=(
         "learning-to-rank Dask tests are unreliable on macOS. "
-        "See https://github.com/microsoft/LightGBM/issues/4074#issuecomment-3124996317"
+        "See https://github.com/lightgbm-org/LightGBM/issues/4074#issuecomment-3124996317"
     ),
 )
 @pytest.mark.parametrize("output", ["array", "dataframe", "dataframe-with-categorical"])
@@ -698,7 +698,7 @@ def test_ranker(output, group, boosting_type, tree_learner, cluster):
             client.rebalance()
 
         # use many trees + leaves to overfit, help ensure that Dask data-parallel strategy matches that of
-        # serial learner. See https://github.com/microsoft/LightGBM/issues/3292#issuecomment-671288210.
+        # serial learner. See https://github.com/lightgbm-org/LightGBM/issues/3292#issuecomment-671288210.
         params = {
             "boosting_type": boosting_type,
             "random_state": 42,
@@ -1324,7 +1324,10 @@ def test_network_params_not_required_but_respected_if_given(task, listen_port, c
         # model 2 - machines given
         workers = list(client.scheduler_info()["workers"])
         workers_hostname = _get_workers_hostname(cluster)
-        remote_sockets, open_ports = lgb.dask._assign_open_ports_to_workers(client, workers)
+        remote_sockets, open_ports = lgb.dask._assign_open_ports_to_workers(
+            client=client,
+            workers=workers,
+        )
         for s in remote_sockets.values():
             s.release()
         dask_model2 = dask_model_factory(
@@ -1350,7 +1353,7 @@ def test_network_params_not_required_but_respected_if_given(task, listen_port, c
 
 @pytest.mark.parametrize("task", tasks)
 def test_machines_should_be_used_if_provided(task, cluster):
-    pytest.skip("skipping due to timeout issues discussed in https://github.com/microsoft/LightGBM/issues/5390")
+    pytest.skip("skipping due to timeout issues discussed in https://github.com/lightgbm-org/LightGBM/issues/5390")
     with Client(cluster) as client:
         _, _, _, _, dX, dy, _, dg = _create_data(objective=task, output="array", chunk_size=10, group=None)
 
@@ -1571,6 +1574,66 @@ def test_predict_with_raw_score(task, output, cluster):
         if task.endswith("classification"):
             pred_proba_raw = model.predict_proba(dX, raw_score=True).compute()
             assert_eq(raw_predictions, pred_proba_raw)
+
+
+@pytest.mark.parametrize("output", data_output)
+@pytest.mark.parametrize("task", tasks)
+def test_predict_returns_expected_dtypes(task, output, cluster):
+    if task == "ranking" and output == "scipy_csr_matrix":
+        pytest.skip("LGBMRanker is not currently tested on sparse matrices")
+
+    with Client(cluster) as client:
+        _, _, _, _, dX, dy, _, dg = _create_data(objective=task, output=output, group=None)
+
+        model_factory = task_to_dask_factory[task]
+        params = {
+            "client": client,
+            "n_estimators": 1,
+            "num_leaves": 2,
+            "time_out": 5,
+            "verbose": -1,
+        }
+        model = model_factory(**params)
+        model.fit(dX, dy, group=dg)
+
+        # use a small sub-sample (to keep the tests fast)
+        if output.startswith("dataframe"):
+            dX_sample = dX.sample(frac=0.001)
+        else:
+            dX_sample = dX[:1,]
+            dX_sample.persist()
+
+        # default predictions:
+        #
+        #  * classification: int64
+        #  * ranking: float64
+        #  * regression: float64
+        #
+        preds = model.predict(dX_sample).compute()
+        if task.endswith("classification"):
+            # preds go through LabelEncoder.inverse_transform() and have the same
+            # dtype as model.classes_ (expected to be an integer type, but exact size
+            # varies across numpy versions and operating systems)
+            assert preds.dtype == model.classes_.dtype
+            assert preds.dtype in (np.int32, np.int64)
+        else:
+            assert preds.dtype == np.float64
+
+        # raw predictions: always float64
+        preds_raw = model.predict(dX_sample, raw_score=True).compute()
+        assert preds_raw.dtype == np.float64
+
+        # pred_contrib: always float64
+        if output.startswith("scipy"):
+            preds_contrib = [arr.compute() for arr in model.predict(dX_sample, pred_contrib=True)]
+            assert all(arr.dtype == np.float64 for arr in preds_contrib)
+        else:
+            preds_contrib = model.predict(dX_sample, pred_contrib=True).compute()
+            assert preds_contrib.dtype == np.float64
+
+        # pred_leavs: always int32
+        preds_leaves = model.predict(dX_sample, pred_leaf=True).compute()
+        assert preds_leaves.dtype == np.int32
 
 
 @pytest.mark.parametrize("output", data_output)

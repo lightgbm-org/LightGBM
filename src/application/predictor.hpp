@@ -1,9 +1,10 @@
 /*!
- * Copyright (c) 2016 Microsoft Corporation. All rights reserved.
+ * Copyright (c) 2016-2026 Microsoft Corporation. All rights reserved.
+ * Copyright (c) 2016-2026 The LightGBM developers. All rights reserved.
  * Licensed under the MIT License. See LICENSE file in the project root for license information.
  */
-#ifndef LIGHTGBM_PREDICTOR_HPP_
-#define LIGHTGBM_PREDICTOR_HPP_
+#ifndef LIGHTGBM_SRC_APPLICATION_PREDICTOR_HPP_
+#define LIGHTGBM_SRC_APPLICATION_PREDICTOR_HPP_
 
 #include <LightGBM/boosting.h>
 #include <LightGBM/dataset.h>
@@ -299,4 +300,4 @@ class Predictor {
 
 }  // namespace LightGBM
 
-#endif   // LightGBM_PREDICTOR_HPP_
+#endif  // LIGHTGBM_SRC_APPLICATION_PREDICTOR_HPP_

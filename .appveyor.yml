@@ -1,6 +1,6 @@
 version: 4.6.0.99.{build}
 
-image: Visual Studio 2015
+image: Visual Studio 2017
 platform: x64
 configuration:
   - '3.9'
@@ -24,12 +24,14 @@ install:
   - set PATH=C:\mingw-w64\x86_64-8.1.0-posix-seh-rt_v6-rev0\mingw64\bin;%PATH%
   - set PYTHON_VERSION=%CONFIGURATION%
   - ps: |
-      $env:ALLOW_SKIP_ARROW_TESTS = "1"
       $env:APPVEYOR = "true"
       $env:CMAKE_BUILD_PARALLEL_LEVEL = 4
       $env:MINICONDA = "C:\Miniconda3-x64"
       $env:PATH = "$env:MINICONDA;$env:MINICONDA\Scripts;$env:PATH"
       $env:BUILD_SOURCESDIRECTORY = "$env:APPVEYOR_BUILD_FOLDER"
+      # tell scripts where to put artifacts
+      # (this variable name is left over from when jobs ran on Azure DevOps)
+      $env:BUILD_ARTIFACTSTAGINGDIRECTORY = "$env:APPVEYOR_BUILD_FOLDER/artifacts"
 
 build: false
 

@@ -1,11 +1,12 @@
 /*!
- * Copyright (c) 2021 Microsoft Corporation. All rights reserved.
+ * Copyright (c) 2021-2026 Microsoft Corporation. All rights reserved.
+ * Copyright (c) 2021-2026 The LightGBM developers. All rights reserved.
  * Licensed under the MIT License. See LICENSE file in the project root for
  * license information.
  */
 
-#ifndef LIGHTGBM_OBJECTIVE_CUDA_CUDA_BINARY_OBJECTIVE_HPP_
-#define LIGHTGBM_OBJECTIVE_CUDA_CUDA_BINARY_OBJECTIVE_HPP_
+#ifndef LIGHTGBM_SRC_OBJECTIVE_CUDA_CUDA_BINARY_OBJECTIVE_HPP_
+#define LIGHTGBM_SRC_OBJECTIVE_CUDA_CUDA_BINARY_OBJECTIVE_HPP_
 
 #ifdef USE_CUDA
 
@@ -46,13 +47,13 @@ class CUDABinaryLogloss : public CUDAObjectiveInterface<BinaryLogloss> {
 
   // CUDA memory, held by other objects
   const label_t* cuda_label_;
-  label_t* cuda_ova_label_;
+  CUDAVector<label_t> cuda_ova_label_;
   const label_t* cuda_weights_;
 
   // CUDA memory, held by this object
-  double* cuda_boost_from_score_;
-  double* cuda_sum_weights_;
-  double* cuda_label_weights_;
+  CUDAVector<double> cuda_boost_from_score_;
+  CUDAVector<double> cuda_sum_weights_;
+  CUDAVector<double> cuda_label_weights_;
   const int ova_class_id_ = -1;
 };
 
@@ -60,4 +61,4 @@ class CUDABinaryLogloss : public CUDAObjectiveInterface<BinaryLogloss> {
 
 #endif  // USE_CUDA
 
-#endif  // LIGHTGBM_OBJECTIVE_CUDA_CUDA_BINARY_OBJECTIVE_HPP_
+#endif  // LIGHTGBM_SRC_OBJECTIVE_CUDA_CUDA_BINARY_OBJECTIVE_HPP_

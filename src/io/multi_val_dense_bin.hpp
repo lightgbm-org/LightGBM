@@ -1,9 +1,10 @@
 /*!
- * Copyright (c) 2020 Microsoft Corporation. All rights reserved.
+ * Copyright (c) 2020-2026 Microsoft Corporation. All rights reserved.
+ * Copyright (c) 2020-2026 The LightGBM developers. All rights reserved.
  * Licensed under the MIT License. See LICENSE file in the project root for license information.
  */
-#ifndef LIGHTGBM_IO_MULTI_VAL_DENSE_BIN_HPP_
-#define LIGHTGBM_IO_MULTI_VAL_DENSE_BIN_HPP_
+#ifndef LIGHTGBM_SRC_IO_MULTI_VAL_DENSE_BIN_HPP_
+#define LIGHTGBM_SRC_IO_MULTI_VAL_DENSE_BIN_HPP_
 
 #include <LightGBM/bin.h>
 #include <LightGBM/utils/openmp_wrapper.h>
@@ -356,4 +357,4 @@ MultiValDenseBin<VAL_T>* MultiValDenseBin<VAL_T>::Clone() {
 
 }  // namespace LightGBM
 
-#endif   // LIGHTGBM_IO_MULTI_VAL_DENSE_BIN_HPP_
+#endif   // LIGHTGBM_SRC_IO_MULTI_VAL_DENSE_BIN_HPP_

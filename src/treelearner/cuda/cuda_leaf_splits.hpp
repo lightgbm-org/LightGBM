@@ -1,10 +1,11 @@
 /*!
- * Copyright (c) 2021 Microsoft Corporation. All rights reserved.
+ * Copyright (c) 2021-2026 Microsoft Corporation. All rights reserved.
+ * Copyright (c) 2021-2026 The LightGBM developers. All rights reserved.
  * Licensed under the MIT License. See LICENSE file in the project root for
  * license information.
  */
-#ifndef LIGHTGBM_TREELEARNER_CUDA_CUDA_LEAF_SPLITS_HPP_
-#define LIGHTGBM_TREELEARNER_CUDA_CUDA_LEAF_SPLITS_HPP_
+#ifndef LIGHTGBM_SRC_TREELEARNER_CUDA_CUDA_LEAF_SPLITS_HPP_
+#define LIGHTGBM_SRC_TREELEARNER_CUDA_CUDA_LEAF_SPLITS_HPP_
 
 #ifdef USE_CUDA
 
@@ -31,7 +32,7 @@ struct CUDALeafSplitsStruct {
   hist_t* hist_in_leaf;
 };
 
-class CUDALeafSplits {
+class CUDALeafSplits: public NCCLInfo {
  public:
   explicit CUDALeafSplits(const data_size_t num_data);
 
@@ -176,4 +177,4 @@ class CUDALeafSplits {
 }  // namespace LightGBM
 
 #endif  // USE_CUDA
-#endif  // LIGHTGBM_TREELEARNER_CUDA_CUDA_LEAF_SPLITS_HPP_
+#endif  // LIGHTGBM_SRC_TREELEARNER_CUDA_CUDA_LEAF_SPLITS_HPP_

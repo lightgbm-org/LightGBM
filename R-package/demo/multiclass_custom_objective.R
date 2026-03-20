@@ -19,7 +19,7 @@ valids <- list(train = dtrain, test = dtest)
 
 # Method 1 of training with built-in multiclass objective
 # Note: need to turn off boost from average to match custom objective
-# (https://github.com/microsoft/LightGBM/issues/1846)
+# (https://github.com/lightgbm-org/LightGBM/issues/1846)
 params <- list(
     min_data = 1L
     , learning_rate = 1.0
@@ -56,7 +56,7 @@ custom_multiclass_obj <- function(preds, dtrain) {
     grad <- prob
     subset_index <- as.matrix(
         data.frame(
-            seq_len(length(labels))
+            seq_along(labels)
             , labels + 1L
             , fix.empty.names = FALSE
         )
@@ -80,7 +80,7 @@ custom_multiclass_metric <- function(preds, dtrain) {
 
     subset_index <- as.matrix(
         data.frame(
-            seq_len(length(labels))
+            seq_along(labels)
             , labels + 1L
             , fix.empty.names = FALSE
         )

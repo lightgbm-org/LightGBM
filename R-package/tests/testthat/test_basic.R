@@ -2571,7 +2571,7 @@ test_that("lgb.train() works with linear learners even if Dataset has missing va
   set.seed(708L)
   .new_dataset <- function() {
     values <- rnorm(100L)
-    values[sample(seq_len(length(values)), size = 10L)] <- NA_real_
+    values[sample(seq_along(values), size = 10L)] <- NA_real_
     X <- matrix(
       data = sample(values, size = 100L)
       , ncol = 1L
@@ -2619,7 +2619,7 @@ test_that("lgb.train() works with linear learners, bagging, and a Dataset that h
   set.seed(708L)
   .new_dataset <- function() {
     values <- rnorm(100L)
-    values[sample(seq_len(length(values)), size = 10L)] <- NA_real_
+    values[sample(seq_along(values), size = 10L)] <- NA_real_
     X <- matrix(
       data = sample(values, size = 100L)
       , ncol = 1L

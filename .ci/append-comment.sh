@@ -1,14 +1,14 @@
 #!/bin/bash
 #
 # [description]
-#     Update comment appending a given body to the specified original comment.
+#     Post a comment to a pull request.
 #
 # [usage]
-#     append-comment.sh <COMMENT_ID> <BODY>
+#     append-comment.sh <PULL_REQUEST_ID> <BODY>
 #
-# COMMENT_ID: ID of comment that should be modified.
+# PULL_REQUEST_ID: ID of PR to post the comment on.
 #
-# BODY: Text that will be appended to the original comment body.
+# BODY: Text of the comment to be posted.
 
 set -e -E -u -o pipefail
 
@@ -18,20 +18,13 @@ if [ -z "$GITHUB_ACTIONS" ]; then
 fi
 
 if [ $# -ne 2 ]; then
-  echo "Usage: $0 <COMMENT_ID> <BODY>"
+  echo "Usage: $0 <PULL_REQUEST_ID> <BODY>"
   exit 1
 fi
 
-comment_id=$1
+pr_id=$1
 body=$2
 
-old_comment_body=$(
-  curl -sL \
-    -H "Accept: application/vnd.github.v3+json" \
-    -H "Authorization: token $SECRETS_WORKFLOW" \
-    "${GITHUB_API_URL}/repos/microsoft/LightGBM/issues/comments/$comment_id" | \
-  jq '.body'
-)
 body=${body/failure/failure ❌}
 body=${body/error/failure ❌}
 body=${body/cancelled/failure ❌}
@@ -39,12 +32,13 @@ body=${body/timed_out/failure ❌}
 body=${body/success/success ✔️}
 data=$(
   jq -n \
-    --argjson body "${old_comment_body%?}\r\n\r\n$body\"" \
-    '{"body":$body}'
+    --argjson body "\"$body\"" \
+    '{"body": $body}'
 )
 curl -sL \
-  -X PATCH \
+  --fail \
+  -X POST \
   -H "Accept: application/vnd.github.v3+json" \
-  -H "Authorization: token $SECRETS_WORKFLOW" \
+  -H "Authorization: token ${GITHUB_TOKEN}" \
   -d "$data" \
-  "${GITHUB_API_URL}/repos/microsoft/LightGBM/issues/comments/$comment_id"
+  "${GITHUB_API_URL}/repos/lightgbm-org/LightGBM/issues/${pr_id}/comments"

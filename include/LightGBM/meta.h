@@ -1,9 +1,10 @@
 /*!
- * Copyright (c) 2016 Microsoft Corporation. All rights reserved.
+ * Copyright (c) 2016-2026 Microsoft Corporation. All rights reserved.
+ * Copyright (c) 2016-2026 The LightGBM developers. All rights reserved.
  * Licensed under the MIT License. See LICENSE file in the project root for license information.
  */
-#ifndef LIGHTGBM_META_H_
-#define LIGHTGBM_META_H_
+#ifndef LIGHTGBM_INCLUDE_LIGHTGBM_META_H_
+#define LIGHTGBM_INCLUDE_LIGHTGBM_META_H_
 
 #include <cstdint>
 #include <functional>
@@ -83,9 +84,9 @@ const int kAlignedSize = 32;
 
 // Refer to https://docs.microsoft.com/en-us/cpp/error-messages/compiler-warnings/compiler-warning-level-4-c4127?view=vs-2019
 #ifdef _MSC_VER
-  #pragma warning(disable : 4127)
+#pragma warning(disable : 4127)
 #endif
 
 }  // namespace LightGBM
 
-#endif  // LightGBM_META_H_
+#endif  // LIGHTGBM_INCLUDE_LIGHTGBM_META_H_

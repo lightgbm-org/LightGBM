@@ -18,7 +18,7 @@ VALGRIND_LOGS_FILE="valgrind-logs.log"
 RDvalgrind \
   --no-readline \
   --vanilla \
-  -d "valgrind --tool=memcheck --leak-check=full --track-origins=yes" \
+  -d "valgrind --tool=memcheck --leak-check=full --track-origins=yes --gen-suppressions=all" \
   -f testthat.R \
   > ${ALL_LOGS_FILE} 2>&1 || exit 1
 

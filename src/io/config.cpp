@@ -1,5 +1,6 @@
 /*!
- * Copyright (c) 2016 Microsoft Corporation. All rights reserved.
+ * Copyright (c) 2016-2026 Microsoft Corporation. All rights reserved.
+ * Copyright (c) 2016-2026 The LightGBM developers. All rights reserved.
  * Licensed under the MIT License. See LICENSE file in the project root for license information.
  */
 #include <LightGBM/config.h>
@@ -9,7 +10,13 @@
 #include <LightGBM/utils/log.h>
 #include <LightGBM/utils/random.h>
 
+#include <algorithm>
+#include <cctype>
 #include <limits>
+#include <string>
+#include <unordered_map>
+#include <unordered_set>
+#include <vector>
 
 namespace LightGBM {
 
@@ -99,7 +106,7 @@ std::unordered_map<std::string, std::string> Config::Str2Map(const char* paramet
 void GetBoostingType(const std::unordered_map<std::string, std::string>& params, std::string* boosting) {
   std::string value;
   if (Config::GetString(params, "boosting", &value)) {
-    std::transform(value.begin(), value.end(), value.begin(), Common::tolower);
+    std::transform(value.begin(), value.end(), value.begin(), [](unsigned char c){ return std::tolower(c); });
     if (value == std::string("gbdt") || value == std::string("gbrt")) {
       *boosting = "gbdt";
     } else if (value == std::string("dart")) {
@@ -117,7 +124,7 @@ void GetBoostingType(const std::unordered_map<std::string, std::string>& params,
 void GetDataSampleStrategy(const std::unordered_map<std::string, std::string>& params, std::string* strategy) {
   std::string value;
   if (Config::GetString(params, "data_sample_strategy", &value)) {
-    std::transform(value.begin(), value.end(), value.begin(), Common::tolower);
+    std::transform(value.begin(), value.end(), value.begin(), [](unsigned char c){ return std::tolower(c); });
     if (value == std::string("goss")) {
       *strategy = "goss";
     } else if (value == std::string("bagging")) {
@@ -144,7 +151,7 @@ void ParseMetrics(const std::string& value, std::vector<std::string>* out_metric
 void GetObjectiveType(const std::unordered_map<std::string, std::string>& params, std::string* objective) {
   std::string value;
   if (Config::GetString(params, "objective", &value)) {
-    std::transform(value.begin(), value.end(), value.begin(), Common::tolower);
+    std::transform(value.begin(), value.end(), value.begin(), [](unsigned char c){ return std::tolower(c); });
     *objective = ParseObjectiveAlias(value);
   }
 }
@@ -152,7 +159,7 @@ void GetObjectiveType(const std::unordered_map<std::string, std::string>& params
 void GetMetricType(const std::unordered_map<std::string, std::string>& params, const std::string& objective, std::vector<std::string>* metric) {
   std::string value;
   if (Config::GetString(params, "metric", &value)) {
-    std::transform(value.begin(), value.end(), value.begin(), Common::tolower);
+    std::transform(value.begin(), value.end(), value.begin(), [](unsigned char c){ return std::tolower(c); });
     ParseMetrics(value, metric);
   }
   // add names of objective function if not providing metric
@@ -164,7 +171,7 @@ void GetMetricType(const std::unordered_map<std::string, std::string>& params, c
 void GetTaskType(const std::unordered_map<std::string, std::string>& params, TaskType* task) {
   std::string value;
   if (Config::GetString(params, "task", &value)) {
-    std::transform(value.begin(), value.end(), value.begin(), Common::tolower);
+    std::transform(value.begin(), value.end(), value.begin(), [](unsigned char c){ return std::tolower(c); });
     if (value == std::string("train") || value == std::string("training")) {
       *task = TaskType::kTrain;
     } else if (value == std::string("predict") || value == std::string("prediction")
@@ -185,7 +192,7 @@ void GetTaskType(const std::unordered_map<std::string, std::string>& params, Tas
 void GetDeviceType(const std::unordered_map<std::string, std::string>& params, std::string* device_type) {
   std::string value;
   if (Config::GetString(params, "device_type", &value)) {
-    std::transform(value.begin(), value.end(), value.begin(), Common::tolower);
+    std::transform(value.begin(), value.end(), value.begin(), [](unsigned char c){ return std::tolower(c); });
     if (value == std::string("cpu")) {
       *device_type = "cpu";
     } else if (value == std::string("gpu")) {
@@ -201,7 +208,7 @@ void GetDeviceType(const std::unordered_map<std::string, std::string>& params, s
 void GetTreeLearnerType(const std::unordered_map<std::string, std::string>& params, std::string* tree_learner) {
   std::string value;
   if (Config::GetString(params, "tree_learner", &value)) {
-    std::transform(value.begin(), value.end(), value.begin(), Common::tolower);
+    std::transform(value.begin(), value.end(), value.begin(), [](unsigned char c){ return std::tolower(c); });
     if (value == std::string("serial")) {
       *tree_learner = "serial";
     } else if (value == std::string("feature") || value == std::string("feature_parallel")) {
@@ -380,7 +387,7 @@ void Config::CheckParamConflict(const std::unordered_map<std::string, std::strin
   //     - this block reduces num_leaves to 2^max_depth
   //   * (max_depth > 4) 31 leaves is less than a full depth-wise tree, which might lead to underfitting
   //     - this block warns about that
-  // ref: https://github.com/microsoft/LightGBM/issues/2898#issuecomment-1002860601
+  // ref: https://github.com/lightgbm-org/LightGBM/issues/2898#issuecomment-1002860601
   if (max_depth > 0 && (params.count("num_leaves") == 0 || params.at("num_leaves").empty())) {
     double full_num_leaves = std::pow(2, max_depth);
     if (full_num_leaves > num_leaves) {

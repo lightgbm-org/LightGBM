@@ -1,5 +1,6 @@
 /*!
- * Copyright (c) 2016 Microsoft Corporation. All rights reserved.
+ * Copyright (c) 2016-2026 Microsoft Corporation. All rights reserved.
+ * Copyright (c) 2016-2026 The LightGBM developers. All rights reserved.
  * Licensed under the MIT License. See LICENSE file in the project root for license information.
  */
 #include "gbdt.h"
@@ -12,10 +13,16 @@
 #include <LightGBM/utils/openmp_wrapper.h>
 #include <LightGBM/sample_strategy.h>
 
+#include <algorithm>
 #include <chrono>
 #include <ctime>
+#include <memory>
 #include <queue>
 #include <sstream>
+#include <string>
+#include <unordered_map>
+#include <utility>
+#include <vector>
 
 namespace LightGBM {
 
@@ -210,7 +217,9 @@ void GBDT::AddValidDataset(const Dataset* valid_data,
 
   if (early_stopping_round_ > 0) {
     auto num_metrics = valid_metrics.size();
-    if (es_first_metric_only_) { num_metrics = 1; }
+    if (es_first_metric_only_) {
+      num_metrics = 1;
+    }
     best_iter_.emplace_back(num_metrics, 0);
     best_score_.emplace_back(num_metrics, kMinScore);
     best_msg_.emplace_back(num_metrics);
@@ -227,7 +236,7 @@ void GBDT::Boosting() {
   if (config_->bagging_by_query) {
     data_sample_strategy_->Bagging(iter_, tree_learner_.get(), gradients_.data(), hessians_.data());
     objective_function_->
-      GetGradients(GetTrainingScore(&num_score), data_sample_strategy_->num_sampled_queries(), data_sample_strategy_->sampled_query_indices(), gradients_pointer_, hessians_pointer_);
+      GetGradientsWithSampledQueries(GetTrainingScore(&num_score), data_sample_strategy_->num_sampled_queries(), data_sample_strategy_->sampled_query_indices(), gradients_pointer_, hessians_pointer_);
   } else {
     objective_function_->
       GetGradients(GetTrainingScore(&num_score), gradients_pointer_, hessians_pointer_);
@@ -452,7 +461,9 @@ bool GBDT::TrainOneIter(const score_t* gradients, const score_t* hessians) {
 }
 
 void GBDT::RollbackOneIter() {
-  if (iter_ <= 0) { return; }
+  if (iter_ <= 0) {
+    return;
+  }
   // reset score
   for (int cur_tree_id = 0; cur_tree_id < num_tree_per_iteration_; ++cur_tree_id) {
     auto curr_tree = models_.size() - num_tree_per_iteration_ + cur_tree_id;
@@ -588,7 +599,9 @@ std::string GBDT::OutputMetric(int iter) {
             msg_buf << tmp_buf.str() << '\n';
           }
         }
-        if (es_first_metric_only_ && j > 0) { continue; }
+        if (es_first_metric_only_ && j > 0) {
+          continue;
+        }
         if (ret.empty() && early_stopping_round_ > 0) {
           auto cur_score = valid_metrics_[i][j]->factor_to_bigger_better() * test_scores.back();
           if (cur_score - best_score_[i][j] > early_stopping_min_delta_) {
@@ -596,7 +609,9 @@ std::string GBDT::OutputMetric(int iter) {
             best_iter_[i][j] = iter;
             meet_early_stopping_pairs.emplace_back(i, j);
           } else {
-            if (iter - best_iter_[i][j] >= early_stopping_round_) { ret = best_msg_[i][j]; }
+            if (iter - best_iter_[i][j] >= early_stopping_round_) {
+              ret = best_msg_[i][j];
+            }
           }
         }
       }

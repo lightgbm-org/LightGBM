@@ -22,7 +22,7 @@ X_test = df_test.drop(0, axis=1)
 print("Starting training...")
 # train
 gbm = lgb.LGBMRegressor(num_leaves=31, learning_rate=0.05, n_estimators=20)
-gbm.fit(X_train, y_train, eval_set=[(X_test, y_test)], eval_metric="l1", callbacks=[lgb.early_stopping(5)])
+gbm.fit(X_train, y_train, eval_X=(X_test,), eval_y=(y_test,), eval_metric="l1", callbacks=[lgb.early_stopping(5)])
 
 print("Starting predicting...")
 # predict
@@ -44,7 +44,7 @@ def rmsle(y_true, y_pred):
 
 print("Starting training with custom eval function...")
 # train
-gbm.fit(X_train, y_train, eval_set=[(X_test, y_test)], eval_metric=rmsle, callbacks=[lgb.early_stopping(5)])
+gbm.fit(X_train, y_train, eval_X=(X_test,), eval_y=(y_test,), eval_metric=rmsle, callbacks=[lgb.early_stopping(5)])
 
 
 # another self-defined eval metric
@@ -56,7 +56,9 @@ def rae(y_true, y_pred):
 
 print("Starting training with multiple custom eval functions...")
 # train
-gbm.fit(X_train, y_train, eval_set=[(X_test, y_test)], eval_metric=[rmsle, rae], callbacks=[lgb.early_stopping(5)])
+gbm.fit(
+    X_train, y_train, eval_X=(X_test,), eval_y=(y_test,), eval_metric=[rmsle, rae], callbacks=[lgb.early_stopping(5)]
+)
 
 print("Starting predicting...")
 # predict

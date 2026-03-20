@@ -1,5 +1,6 @@
 /*!
- * Copyright (c) 2016 Microsoft Corporation. All rights reserved.
+ * Copyright (c) 2016-2026 Microsoft Corporation. All rights reserved.
+ * Copyright (c) 2016-2026 The LightGBM developers. All rights reserved.
  * Licensed under the MIT License. See LICENSE file in the project root for license information.
  */
 #include <LightGBM/dataset.h>
@@ -7,6 +8,7 @@
 
 #include <set>
 #include <string>
+#include <unordered_map>
 #include <vector>
 
 namespace LightGBM {
@@ -56,7 +58,9 @@ void Metadata::Init(data_size_t num_data, int weight_idx, int query_idx) {
       Log::Info("Using query id in data file, ignoring the additional query file");
       query_boundaries_.clear();
     }
-    if (!query_weights_.empty()) { query_weights_.clear(); }
+    if (!query_weights_.empty()) {
+      query_weights_.clear();
+    }
     queries_ = std::vector<data_size_t>(num_data_, 0);
     query_load_from_file_ = false;
   }
@@ -100,7 +104,7 @@ void Metadata::Init(data_size_t num_data, int32_t has_weights, int32_t has_init_
 void Metadata::Init(const Metadata& fullset, const data_size_t* used_indices, data_size_t num_used_indices) {
   num_data_ = num_used_indices;
 
-  label_ = std::vector<label_t>(num_used_indices);
+  label_.resize(num_used_indices);
 #pragma omp parallel for num_threads(OMP_NUM_THREADS()) schedule(static, 512) if (num_used_indices >= 1024)
   for (data_size_t i = 0; i < num_used_indices; ++i) {
     label_[i] = fullset.label_[used_indices[i]];
@@ -401,7 +405,9 @@ void Metadata::InsertInitScores(const double* init_scores, data_size_t start_ind
     // Note that len here is row count, not num_init_score, so we compare against num_data
     Log::Fatal("Inserted initial score data is too large for dataset");
   }
-  if (init_score_.empty()) { init_score_.resize(num_init_score_); }
+  if (init_score_.empty()) {
+    init_score_.resize(num_init_score_);
+  }
 
   int nclasses = num_init_score_classes();
 
@@ -455,7 +461,9 @@ void Metadata::InsertLabels(const label_t* labels, data_size_t start_index, data
   if (start_index + len > num_data_) {
     Log::Fatal("Inserted label data is too large for dataset");
   }
-  if (label_.empty()) { label_.resize(num_data_); }
+  if (label_.empty()) {
+    label_.resize(num_data_);
+  }
 
   memcpy(label_.data() + start_index, labels, sizeof(label_t) * len);
 
@@ -511,7 +519,9 @@ void Metadata::InsertWeights(const label_t* weights, data_size_t start_index, da
   if (start_index + len > num_weights_) {
     Log::Fatal("Inserted weight data is too large for dataset");
   }
-  if (weights_.empty()) { weights_.resize(num_weights_); }
+  if (weights_.empty()) {
+    weights_.resize(num_weights_);
+  }
 
   memcpy(weights_.data() + start_index, weights, sizeof(label_t) * len);
 
@@ -797,20 +807,26 @@ void Metadata::LoadFromMemory(const void* memory) {
   num_queries_ = *(reinterpret_cast<const data_size_t*>(mem_ptr));
   mem_ptr += VirtualFileWriter::AlignedSize(sizeof(num_queries_));
 
-  if (!label_.empty()) { label_.clear(); }
+  if (!label_.empty()) {
+    label_.clear();
+  }
   label_ = std::vector<label_t>(num_data_);
   std::memcpy(label_.data(), mem_ptr, sizeof(label_t) * num_data_);
   mem_ptr += VirtualFileWriter::AlignedSize(sizeof(label_t) * num_data_);
 
   if (num_weights_ > 0) {
-    if (!weights_.empty()) { weights_.clear(); }
+    if (!weights_.empty()) {
+      weights_.clear();
+    }
     weights_ = std::vector<label_t>(num_weights_);
     std::memcpy(weights_.data(), mem_ptr, sizeof(label_t) * num_weights_);
     mem_ptr += VirtualFileWriter::AlignedSize(sizeof(label_t) * num_weights_);
     weight_load_from_file_ = true;
   }
   if (num_queries_ > 0) {
-    if (!query_boundaries_.empty()) { query_boundaries_.clear(); }
+    if (!query_boundaries_.empty()) {
+      query_boundaries_.clear();
+    }
     query_boundaries_ = std::vector<data_size_t>(num_queries_ + 1);
     std::memcpy(query_boundaries_.data(), mem_ptr, sizeof(data_size_t) * (num_queries_ + 1));
     mem_ptr += VirtualFileWriter::AlignedSize(sizeof(data_size_t) *

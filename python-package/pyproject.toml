@@ -3,7 +3,6 @@
 classifiers = [
     "Development Status :: 5 - Production/Stable",
     "Intended Audience :: Science/Research",
-    "License :: OSI Approved :: MIT License",
     "Natural Language :: English",
     "Operating System :: MacOS",
     "Operating System :: Microsoft :: Windows",
@@ -22,7 +21,10 @@ dependencies = [
     "scipy"
 ]
 description = "LightGBM Python-package"
-license = {file = "LICENSE"}
+license = "MIT"
+license-files = [
+    "LICENSE"
+]
 maintainers = [
   {name = "Yu Shi", email = "yushi@microsoft.com"}
 ]
@@ -52,15 +54,15 @@ scikit-learn = [
 ]
 
 [project.urls]
-homepage = "https://github.com/microsoft/LightGBM"
+homepage = "https://github.com/lightgbm-org/LightGBM"
 documentation = "https://lightgbm.readthedocs.io/en/latest/"
-repository = "https://github.com/microsoft/LightGBM.git"
-changelog = "https://github.com/microsoft/LightGBM/releases"
+repository = "https://github.com/lightgbm-org/LightGBM.git"
+changelog = "https://github.com/lightgbm-org/LightGBM/releases"
 
 # start:build-system
 [build-system]
 
-requires = ["scikit-build-core>=0.10.1"]
+requires = ["scikit-build-core>=0.11.0"]
 build-backend = "scikit_build_core.build"
 
 # based on https://github.com/scikit-build/scikit-build-core#configuration
@@ -182,6 +184,10 @@ select = [
 raises-extend-require-match-for = ["*Exception", "*Error"]
 
 [tool.ruff.lint.per-file-ignores]
+".ci/create-nuget.py" = [
+    # (flake8-print) flake8-print
+    "T201"
+]
 "docs/conf.py" = [
     # (flake8-bugbear) raise exceptions with "raise ... from err"
     "B904",

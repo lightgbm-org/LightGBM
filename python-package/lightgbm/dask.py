@@ -49,6 +49,7 @@ from .sklearn import (
     _lgbmmodel_doc_custom_eval_note,
     _lgbmmodel_doc_fit,
     _lgbmmodel_doc_predict,
+    _validate_eval_set_Xy,
 )
 
 __all__ = [
@@ -61,7 +62,6 @@ _DaskCollection = Union[dask_Array, dask_DataFrame, dask_Series]
 _DaskMatrixLike = Union[dask_Array, dask_DataFrame]
 _DaskVectorLike = Union[dask_Array, dask_Series]
 _DaskPart = Union[np.ndarray, pd_DataFrame, pd_Series, ss.spmatrix]
-_PredictionDtype = Union[Type[np.float32], Type[np.float64], Type[np.int32], Type[np.int64]]
 
 
 class _RemoteSocket:
@@ -113,6 +113,7 @@ def _get_dask_client(client: Optional[Client]) -> Client:
 
 
 def _assign_open_ports_to_workers(
+    *,
     client: Client,
     workers: List[str],
 ) -> Tuple[Dict[str, Future], Dict[str, int]]:
@@ -165,7 +166,11 @@ def _remove_list_padding(*args: Any) -> List[List[Any]]:
     return [[z for z in arg if z is not None] for arg in args]
 
 
-def _pad_eval_names(lgbm_model: LGBMModel, required_names: List[str]) -> LGBMModel:
+def _pad_eval_names(
+    *,
+    lgbm_model: LGBMModel,
+    required_names: List[str],
+) -> LGBMModel:
     """Append missing (key, value) pairs to a LightGBM model's evals_result_ and best_score_ OrderedDict attrs based on a set of required eval_set names.
 
     Allows users to rely on expected eval_set names being present when fitting DaskLGBM estimators with ``eval_set``.
@@ -319,6 +324,13 @@ def _train_part(
         if eval_class_weight:
             kwargs["eval_class_weight"] = [eval_class_weight[i] for i in eval_component_idx]
 
+    if local_eval_set is None:
+        local_eval_X = None
+        local_eval_y = None
+    else:
+        local_eval_X = tuple(X for X, _ in local_eval_set)
+        local_eval_y = tuple(y for _, y in local_eval_set)
+
     model = model_factory(**params)
     if remote_socket is not None:
         remote_socket.release()
@@ -330,7 +342,8 @@ def _train_part(
                 sample_weight=weight,
                 init_score=init_score,
                 group=group,
-                eval_set=local_eval_set,
+                eval_X=local_eval_X,
+                eval_y=local_eval_y,
                 eval_sample_weight=local_eval_sample_weight,
                 eval_init_score=local_eval_init_score,
                 eval_group=local_eval_group,
@@ -343,7 +356,8 @@ def _train_part(
                 label,
                 sample_weight=weight,
                 init_score=init_score,
-                eval_set=local_eval_set,
+                eval_X=local_eval_X,
+                eval_y=local_eval_y,
                 eval_sample_weight=local_eval_sample_weight,
                 eval_init_score=local_eval_init_score,
                 eval_names=local_eval_names,
@@ -356,12 +370,12 @@ def _train_part(
 
     if n_evals:
         # ensure that expected keys for evals_result_ and best_score_ exist regardless of padding.
-        model = _pad_eval_names(model, required_names=evals_result_names)
+        model = _pad_eval_names(lgbm_model=model, required_names=evals_result_names)
 
     return model if return_model else None
 
 
-def _split_to_parts(data: _DaskCollection, is_matrix: bool) -> List[_DaskPart]:
+def _split_to_parts(*, data: _DaskCollection, is_matrix: bool) -> List[_DaskPart]:
     parts = data.to_delayed()
     if isinstance(parts, np.ndarray):
         if is_matrix:
@@ -372,7 +386,11 @@ def _split_to_parts(data: _DaskCollection, is_matrix: bool) -> List[_DaskPart]:
     return parts
 
 
-def _machines_to_worker_map(machines: str, worker_addresses: Iterable[str]) -> Dict[str, int]:
+def _machines_to_worker_map(
+    *,
+    machines: str,
+    worker_addresses: Iterable[str],
+) -> Dict[str, int]:
     """Create a worker_map from machines list.
 
     Given ``machines`` and a list of Dask worker addresses, return a mapping where the keys are
@@ -424,6 +442,8 @@ def _train(
     group: Optional[_DaskVectorLike] = None,
     eval_set: Optional[List[Tuple[_DaskMatrixLike, _DaskCollection]]] = None,
     eval_names: Optional[List[str]] = None,
+    eval_X: Optional[Union[_DaskMatrixLike, Tuple[_DaskMatrixLike]]] = None,
+    eval_y: Optional[Union[_DaskCollection, Tuple[_DaskCollection]]] = None,
     eval_sample_weight: Optional[List[_DaskVectorLike]] = None,
     eval_class_weight: Optional[List[Union[dict, str]]] = None,
     eval_init_score: Optional[List[_DaskCollection]] = None,
@@ -463,6 +483,10 @@ def _train(
         of ``evals_result_`` and ``best_score_`` will be empty dictionaries.
     eval_names : list of str, or None, optional (default=None)
         Names of eval_set.
+    eval_X : Dask Array or Dask DataFrame, tuple thereof or None, optional (default=None)
+        Feature matrix or tuple thereof, e.g. ``(X_val0, X_val1)``, to use as validation sets.
+    eval_y : Dask Array or Dask DataFrame or Dask Series, tuple thereof or None, optional (default=None)
+        Target values or tuple thereof, e.g. ``(y_val0, y_val1)``, to use as validation sets.
     eval_sample_weight : list of Dask Array or Dask Series, or None, optional (default=None)
         Weights for each validation set in eval_set. Weights should be non-negative.
     eval_class_weight : list of dict or str, or None, optional (default=None)
@@ -572,6 +596,7 @@ def _train(
         for i in range(n_parts):
             parts[i]["init_score"] = init_score_parts[i]
 
+    eval_set = _validate_eval_set_Xy(eval_set=eval_set, eval_X=eval_X, eval_y=eval_y)
     # evals_set will to be re-constructed into smaller lists of (X, y) tuples, where
     # X and y are each delayed sub-lists of original eval dask Collections.
     if eval_set:
@@ -773,7 +798,8 @@ def _train(
         else:
             _log_info("Finding random open ports for workers")
             worker_to_socket_future, worker_address_to_port = _assign_open_ports_to_workers(
-                client, list(worker_map.keys())
+                client=client,
+                workers=list(worker_map.keys()),
             )
 
         machines = ",".join(
@@ -864,6 +890,15 @@ def _predict_part(
 
     # dask.DataFrame.map_partitions() expects each call to return a pandas DataFrame or Series
     if isinstance(part, pd_DataFrame):
+        # assert that 'result' is an array, only necessary because predict(..., pred_contrib=True) on
+        # sparse matrices returns a list.
+        #
+        # This can be removed when https://github.com/lightgbm-org/LightGBM/pull/6348 is resolved.
+        error_msg = (
+            f"predict(X) for lightgbm.dask estimators should always return an array, not '{type(result)}', when X is a pandas Dataframe. "
+            "If you're seeing this message, it's a bug in lightgbm. Please report it at https://github.com/lightgbm-org/LightGBM/issues."
+        )
+        assert hasattr(result, "shape"), error_msg
         if len(result.shape) == 2:
             result = pd_DataFrame(result, index=part.index)
         else:
@@ -881,7 +916,6 @@ def _predict(
     pred_proba: bool = False,
     pred_leaf: bool = False,
     pred_contrib: bool = False,
-    dtype: _PredictionDtype = np.float32,
     **kwargs: Any,
 ) -> Union[dask_Array, List[dask_Array]]:
     """Inner predict routine.
@@ -900,8 +934,6 @@ def _predict(
         Whether to predict leaf index.
     pred_contrib : bool, optional (default=False)
         Whether to predict feature contributions.
-    dtype : np.dtype, optional (default=np.float32)
-        Dtype of the output.
     **kwargs
         Other parameters passed to ``predict`` or ``predict_proba`` method.
 
@@ -1003,7 +1035,7 @@ def _predict(
             pred_contrib=pred_contrib,
             **kwargs,
         )
-        pred_row = predict_fn(data_row)
+        pred_row = predict_fn(data_row)  # type: ignore[misc]
         chunks: Tuple[int, ...] = (data.chunks[0],)
         map_blocks_kwargs = {}
         if len(pred_row.shape) > 1:
@@ -1014,7 +1046,6 @@ def _predict(
             predict_fn,
             chunks=chunks,
             meta=pred_row,
-            dtype=dtype,
             **map_blocks_kwargs,
         )
     else:
@@ -1054,6 +1085,8 @@ class _DaskLGBMModel:
         group: Optional[_DaskVectorLike] = None,
         eval_set: Optional[List[Tuple[_DaskMatrixLike, _DaskCollection]]] = None,
         eval_names: Optional[List[str]] = None,
+        eval_X: Optional[Union[_DaskMatrixLike, Tuple[_DaskMatrixLike]]] = None,
+        eval_y: Optional[Union[_DaskCollection, Tuple[_DaskCollection]]] = None,
         eval_sample_weight: Optional[List[_DaskVectorLike]] = None,
         eval_class_weight: Optional[List[Union[dict, str]]] = None,
         eval_init_score: Optional[List[_DaskCollection]] = None,
@@ -1081,6 +1114,8 @@ class _DaskLGBMModel:
             group=group,
             eval_set=eval_set,
             eval_names=eval_names,
+            eval_X=eval_X,
+            eval_y=eval_y,
             eval_sample_weight=eval_sample_weight,
             eval_class_weight=eval_class_weight,
             eval_init_score=eval_init_score,
@@ -1091,7 +1126,7 @@ class _DaskLGBMModel:
         )
 
         self.set_params(**model.get_params())  # type: ignore[attr-defined]
-        self._lgb_dask_copy_extra_params(model, self)  # type: ignore[attr-defined]
+        self._lgb_dask_copy_extra_params(source=model, dest=self)  # type: ignore[attr-defined]
 
         return self
 
@@ -1099,12 +1134,13 @@ class _DaskLGBMModel:
         params = self.get_params()  # type: ignore[attr-defined]
         params.pop("client", None)
         model = model_factory(**params)
-        self._lgb_dask_copy_extra_params(self, model)
+        self._lgb_dask_copy_extra_params(source=self, dest=model)
         model._other_params.pop("client", None)
         return model
 
     @staticmethod
     def _lgb_dask_copy_extra_params(
+        *,
         source: Union["_DaskLGBMModel", LGBMModel],
         dest: Union["_DaskLGBMModel", LGBMModel],
     ) -> None:
@@ -1191,6 +1227,9 @@ class DaskLGBMClassifier(LGBMClassifier, _DaskLGBMModel):
         eval_class_weight: Optional[List[Union[dict, str]]] = None,
         eval_init_score: Optional[List[_DaskCollection]] = None,
         eval_metric: Optional[_LGBM_ScikitEvalMetricType] = None,
+        *,
+        eval_X: Optional[Union[_DaskMatrixLike, Tuple[_DaskMatrixLike]]] = None,
+        eval_y: Optional[Union[_DaskCollection, Tuple[_DaskCollection]]] = None,
         **kwargs: Any,
     ) -> "DaskLGBMClassifier":
         """Docstring is inherited from the lightgbm.LGBMClassifier.fit."""
@@ -1202,6 +1241,8 @@ class DaskLGBMClassifier(LGBMClassifier, _DaskLGBMModel):
             init_score=init_score,
             eval_set=eval_set,
             eval_names=eval_names,
+            eval_X=eval_X,
+            eval_y=eval_y,
             eval_sample_weight=eval_sample_weight,
             eval_class_weight=eval_class_weight,
             eval_init_score=eval_init_score,
@@ -1253,7 +1294,6 @@ class DaskLGBMClassifier(LGBMClassifier, _DaskLGBMModel):
         return _predict(
             model=self.to_local(),
             data=X,
-            dtype=self.classes_.dtype,
             client=_get_dask_client(self.client),
             raw_score=raw_score,
             start_iteration=start_iteration,
@@ -1394,6 +1434,9 @@ class DaskLGBMRegressor(LGBMRegressor, _DaskLGBMModel):
         eval_sample_weight: Optional[List[_DaskVectorLike]] = None,
         eval_init_score: Optional[List[_DaskVectorLike]] = None,
         eval_metric: Optional[_LGBM_ScikitEvalMetricType] = None,
+        *,
+        eval_X: Optional[Union[_DaskMatrixLike, Tuple[_DaskMatrixLike]]] = None,
+        eval_y: Optional[Union[_DaskCollection, Tuple[_DaskCollection]]] = None,
         **kwargs: Any,
     ) -> "DaskLGBMRegressor":
         """Docstring is inherited from the lightgbm.LGBMRegressor.fit."""
@@ -1405,6 +1448,8 @@ class DaskLGBMRegressor(LGBMRegressor, _DaskLGBMModel):
             init_score=init_score,
             eval_set=eval_set,
             eval_names=eval_names,
+            eval_X=eval_X,
+            eval_y=eval_y,
             eval_sample_weight=eval_sample_weight,
             eval_init_score=eval_init_score,
             eval_metric=eval_metric,
@@ -1565,6 +1610,9 @@ class DaskLGBMRanker(LGBMRanker, _DaskLGBMModel):
         eval_group: Optional[List[_DaskVectorLike]] = None,
         eval_metric: Optional[_LGBM_ScikitEvalMetricType] = None,
         eval_at: Union[List[int], Tuple[int, ...]] = (1, 2, 3, 4, 5),
+        *,
+        eval_X: Optional[Union[_DaskMatrixLike, Tuple[_DaskMatrixLike]]] = None,
+        eval_y: Optional[Union[_DaskCollection, Tuple[_DaskCollection]]] = None,
         **kwargs: Any,
     ) -> "DaskLGBMRanker":
         """Docstring is inherited from the lightgbm.LGBMRanker.fit."""
@@ -1577,6 +1625,8 @@ class DaskLGBMRanker(LGBMRanker, _DaskLGBMModel):
             group=group,
             eval_set=eval_set,
             eval_names=eval_names,
+            eval_X=eval_X,
+            eval_y=eval_y,
             eval_sample_weight=eval_sample_weight,
             eval_init_score=eval_init_score,
             eval_group=eval_group,

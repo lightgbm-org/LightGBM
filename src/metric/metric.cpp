@@ -1,8 +1,11 @@
 /*!
- * Copyright (c) 2016 Microsoft Corporation. All rights reserved.
+ * Copyright (c) 2016-2026 Microsoft Corporation. All rights reserved.
+ * Copyright (c) 2016-2026 The LightGBM developers. All rights reserved.
  * Licensed under the MIT License. See LICENSE file in the project root for license information.
  */
 #include <LightGBM/metric.h>
+
+#include <string>
 
 #include "binary_metric.hpp"
 #include "map_metric.hpp"
@@ -36,8 +39,7 @@ Metric* Metric::CreateMetric(const std::string& type, const Config& config) {
     } else if (type == std::string("binary_logloss")) {
       return new CUDABinaryLoglossMetric(config);
     } else if (type == std::string("binary_error")) {
-      Log::Warning("Metric binary_error is not implemented in cuda version. Fall back to evaluation on CPU.");
-      return new BinaryErrorMetric(config);
+      return new CUDABinaryErrorMetric(config);
     } else if (type == std::string("auc")) {
       Log::Warning("Metric auc is not implemented in cuda version. Fall back to evaluation on CPU.");
       return new AUCMetric(config);
@@ -76,6 +78,9 @@ Metric* Metric::CreateMetric(const std::string& type, const Config& config) {
       return new CUDAGammaDevianceMetric(config);
     } else if (type == std::string("tweedie")) {
       return new CUDATweedieMetric(config);
+    } else if (type == std::string("r2")) {
+      Log::Warning("Metric r2 is not implemented in cuda version. Fall back to evaluation on CPU.");
+      return new R2Metric(config);
     }
   } else {
   #endif  // USE_CUDA
@@ -125,6 +130,8 @@ Metric* Metric::CreateMetric(const std::string& type, const Config& config) {
       return new GammaDevianceMetric(config);
     } else if (type == std::string("tweedie")) {
       return new TweedieMetric(config);
+    } else if (type == std::string("r2")) {
+      return new R2Metric(config);
     }
   #ifdef USE_CUDA
   }

@@ -1,6 +1,7 @@
 /*!
  * \file c_api.h
- * \copyright Copyright (c) 2016 Microsoft Corporation. All rights reserved.
+ * \copyright Copyright (c) 2016-2026 Microsoft Corporation. All rights reserved.
+ *            Copyright (c) 2016-2026 The LightGBM developers. All rights reserved.
  *            Licensed under the MIT License. See LICENSE file in the project root for license information.
  * \note
  * To avoid type conversion on large data, the most of our exposed interface supports both float32 and float64,
@@ -10,8 +11,8 @@
  * .
  * The reason is that they are called frequently, and the type conversion on them may be time-cost.
  */
-#ifndef LIGHTGBM_C_API_H_
-#define LIGHTGBM_C_API_H_
+#ifndef LIGHTGBM_INCLUDE_LIGHTGBM_C_API_H_
+#define LIGHTGBM_INCLUDE_LIGHTGBM_C_API_H_
 
 #include <LightGBM/arrow.h>
 #include <LightGBM/export.h>
@@ -449,8 +450,8 @@ LIGHTGBM_C_EXPORT int LGBM_DatasetCreateFromMats(int32_t nmat,
  * \return 0 when succeed, -1 when failure happens
  */
 LIGHTGBM_C_EXPORT int LGBM_DatasetCreateFromArrow(int64_t n_chunks,
-                                                  const ArrowArray* chunks,
-                                                  const ArrowSchema* schema,
+                                                  const struct ArrowArray* chunks,
+                                                  const struct ArrowSchema* schema,
                                                   const char* parameters,
                                                   const DatasetHandle reference,
                                                   DatasetHandle *out);
@@ -571,8 +572,8 @@ LIGHTGBM_C_EXPORT int LGBM_DatasetSetField(DatasetHandle handle,
 LIGHTGBM_C_EXPORT int LGBM_DatasetSetFieldFromArrow(DatasetHandle handle,
                                                     const char* field_name,
                                                     int64_t n_chunks,
-                                                    const ArrowArray* chunks,
-                                                    const ArrowSchema* schema);
+                                                    const struct ArrowArray* chunks,
+                                                    const struct ArrowSchema* schema);
 
 /*!
  * \brief Get info vector from dataset.
@@ -1450,8 +1451,8 @@ LIGHTGBM_C_EXPORT int LGBM_BoosterPredictForMats(BoosterHandle handle,
  */
 LIGHTGBM_C_EXPORT int LGBM_BoosterPredictForArrow(BoosterHandle handle,
                                                   int64_t n_chunks,
-                                                  const ArrowArray* chunks,
-                                                  const ArrowSchema* schema,
+                                                  const struct ArrowArray* chunks,
+                                                  const struct ArrowSchema* schema,
                                                   int predict_type,
                                                   int start_iteration,
                                                   int num_iteration,
@@ -1663,4 +1664,4 @@ INLINE_FUNCTION void LGBM_SetLastError(const char* msg) {
 #endif
 }
 
-#endif  /* LIGHTGBM_C_API_H_ */
+#endif  /* LIGHTGBM_INCLUDE_LIGHTGBM_C_API_H_ */

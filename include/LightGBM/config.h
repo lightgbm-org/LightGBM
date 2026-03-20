@@ -1,5 +1,6 @@
 /*!
- * Copyright (c) 2016 Microsoft Corporation. All rights reserved.
+ * Copyright (c) 2016-2026 Microsoft Corporation. All rights reserved.
+ * Copyright (c) 2016-2026 The LightGBM developers. All rights reserved.
  * Licensed under the MIT License. See LICENSE file in the project root for license information.
  *
  * \note
@@ -13,8 +14,8 @@
  *           - param is only used by the CLI (especially the "predict" and "convert_model" tasks)
  *           - param is related to LightGBM writing files (e.g. "output_model", "save_binary")
  */
-#ifndef LIGHTGBM_CONFIG_H_
-#define LIGHTGBM_CONFIG_H_
+#ifndef LIGHTGBM_INCLUDE_LIGHTGBM_CONFIG_H_
+#define LIGHTGBM_INCLUDE_LIGHTGBM_CONFIG_H_
 
 #include <LightGBM/export.h>
 #include <LightGBM/meta.h>
@@ -23,6 +24,7 @@
 
 #include <string>
 #include <algorithm>
+#include <cctype>
 #include <memory>
 #include <unordered_map>
 #include <unordered_set>
@@ -154,7 +156,7 @@ struct Config {
   // descl2 = ``cross_entropy_lambda``, alternative parameterization of cross-entropy, aliases: ``xentlambda``
   // descl2 = label is anything in interval [0, 1]
   // desc = ranking application
-  // descl2 = ``lambdarank``, `lambdarank <https://proceedings.neurips.cc/paper_files/paper/2006/file/af44c4c56f385c43f2529f9b1b018f6a-Paper.pdf>`__ objective. `label_gain <#label_gain>`__ can be used to set the gain (weight) of ``int`` label and all values in ``label`` must be smaller than number of elements in ``label_gain``
+  // descl2 = ``lambdarank``, `lambdarank <https://proceedings.neurips.cc/paper/2006/hash/af44c4c56f385c43f2529f9b1b018f6a-Abstract.html>`__ objective. `label_gain <#label_gain>`__ can be used to set the gain (weight) of ``int`` label and all values in ``label`` must be smaller than number of elements in ``label_gain``
   // descl2 = ``rank_xendcg``, `XE_NDCG_MART <https://arxiv.org/abs/1911.09798>`__ ranking objective function, aliases: ``xendcg``, ``xe_ndcg``, ``xe_ndcg_mart``, ``xendcg_mart``
   // descl2 = ``rank_xendcg`` is faster than and achieves the similar performance as ``lambdarank``
   // descl2 = label should be ``int`` type, and larger number represents the higher relevance (e.g. 0:bad, 1:fair, 2:good, 3:perfect)
@@ -245,11 +247,11 @@ struct Config {
   // alias = device
   // desc = device for the tree learning
   // desc = ``cpu`` supports all LightGBM functionality and is portable across the widest range of operating systems and hardware
-  // desc = ``cuda`` offers faster training than ``gpu`` or ``cpu``, but only works on GPUs supporting CUDA
+  // desc = ``cuda`` offers faster training than ``gpu`` or ``cpu``, but only works on GPUs supporting CUDA or ROCm
   // desc = ``gpu`` can be faster than ``cpu`` and works on a wider range of GPUs than CUDA
   // desc = **Note**: it is recommended to use the smaller ``max_bin`` (e.g. 63) to get the better speed up
   // desc = **Note**: for the faster speed, GPU uses 32-bit float point to sum up by default, so this may affect the accuracy for some tasks. You can set ``gpu_use_dp=true`` to enable 64-bit float point, but it will slow down the training
-  // desc = **Note**: refer to `Installation Guide <./Installation-Guide.rst>`__ to build LightGBM with GPU or CUDA support
+  // desc = **Note**: refer to `Installation Guide <./Installation-Guide.rst>`__ to build LightGBM with GPU, CUDA, or ROCm support
   std::string device_type = "cpu";
 
   // [no-automatically-extract]
@@ -263,7 +265,7 @@ struct Config {
   // desc = used only with ``cpu`` device type
   // desc = setting this to ``true`` should ensure the stable results when using the same data and the same parameters (and different ``num_threads``)
   // desc = when you use the different seeds, different LightGBM versions, the binaries compiled by different compilers, or in different systems, the results are expected to be different
-  // desc = you can `raise issues <https://github.com/microsoft/LightGBM/issues>`__ in LightGBM GitHub repo when you meet the unstable results
+  // desc = you can `raise issues <https://github.com/lightgbm-org/LightGBM/issues>`__ in LightGBM GitHub repo when you meet the unstable results
   // desc = **Note**: setting this to ``true`` may slow down the training
   // desc = **Note**: to avoid potential instability due to numerical issues, please set ``force_col_wise=true`` or ``force_row_wise=true`` when setting ``deterministic=true``
   bool deterministic = false;
@@ -423,7 +425,7 @@ struct Config {
   double lambda_l2 = 0.0;
 
   // check = >=0.0
-  // desc = linear tree regularization, corresponds to the parameter ``lambda`` in Eq. 3 of `Gradient Boosting with Piece-Wise Linear Regression Trees <https://arxiv.org/pdf/1802.05640.pdf>`__
+  // desc = linear tree regularization, corresponds to the parameter ``lambda`` in Eq. 3 of `Gradient Boosting with Piece-Wise Linear Regression Trees <https://arxiv.org/abs/1802.05640>`__
   double linear_lambda = 0.0;
 
   // alias = min_split_gain
@@ -543,7 +545,7 @@ struct Config {
   // desc = ``.json`` file can be arbitrarily nested, and each split contains ``feature``, ``threshold`` fields, as well as ``left`` and ``right`` fields representing subsplits
   // desc = categorical splits are forced in a one-hot fashion, with ``left`` representing the split containing the feature value and ``right`` representing other values
   // desc = **Note**: the forced split logic will be ignored, if the split makes gain worse
-  // desc = see `this file <https://github.com/microsoft/LightGBM/blob/master/examples/binary_classification/forced_splits.json>`__ as an example
+  // desc = see `this file <https://github.com/lightgbm-org/LightGBM/blob/master/examples/binary_classification/forced_splits.json>`__ as an example
   std::string forcedsplits_filename = "";
 
   // check = >=0.0
@@ -706,7 +708,7 @@ struct Config {
   bool is_enable_sparse = true;
 
   // alias = is_enable_bundle, bundle
-  // desc = set this to ``false`` to disable Exclusive Feature Bundling (EFB), which is described in `LightGBM: A Highly Efficient Gradient Boosting Decision Tree <https://papers.nips.cc/paper_files/paper/2017/hash/6449f44a102fde848669bdd9eb6b76fa-Abstract.html>`__
+  // desc = set this to ``false`` to disable Exclusive Feature Bundling (EFB), which is described in `LightGBM: A Highly Efficient Gradient Boosting Decision Tree <https://proceedings.neurips.cc/paper/2017/hash/6449f44a102fde848669bdd9eb6b76fa-Abstract.html>`__
   // desc = **Note**: disabling this may cause the slow training speed for sparse datasets
   bool enable_bundle = true;
 
@@ -793,7 +795,7 @@ struct Config {
 
   // desc = path to a ``.json`` file that specifies bin upper bounds for some or all features
   // desc = ``.json`` file should contain an array of objects, each containing the word ``feature`` (integer feature index) and ``bin_upper_bound`` (array of thresholds for binning)
-  // desc = see `this file <https://github.com/microsoft/LightGBM/blob/master/examples/regression/forced_bins.json>`__ as an example
+  // desc = see `this file <https://github.com/lightgbm-org/LightGBM/blob/master/examples/regression/forced_bins.json>`__ as an example
   std::string forcedbins_filename = "";
 
   // [no-save]
@@ -808,8 +810,8 @@ struct Config {
   bool precise_float_parser = false;
 
   // desc = path to a ``.json`` file that specifies customized parser initialized configuration
-  // desc = see `lightgbm-transform <https://github.com/microsoft/lightgbm-transform>`__ for usage examples
-  // desc = **Note**: ``lightgbm-transform`` is not maintained by LightGBM's maintainers. Bug reports or feature requests should go to `issues page <https://github.com/microsoft/lightgbm-transform/issues>`__
+  // desc = see `lightgbm-transform <https://github.com/lightgbm-org/LightGBM-transform>`__ for usage examples
+  // desc = **Note**: ``lightgbm-transform`` is not maintained by LightGBM's maintainers. Bug reports or feature requests should go to `issues page <https://github.com/lightgbm-org/LightGBM-transform/issues>`__
   // desc = *New in version 4.0.0*
   std::string parser_config_file = "";
 
@@ -977,7 +979,7 @@ struct Config {
 
   // check = >0
   // desc = used only in ``lambdarank`` application
-  // desc = controls the number of top-results to focus on during training, refer to "truncation level" in the Sec. 3 of `LambdaMART paper <https://www.microsoft.com/en-us/research/wp-content/uploads/2016/02/MSR-TR-2010-82.pdf>`__
+  // desc = controls the number of top-results to focus on during training, refer to "truncation level" in the Sec. 3 of `LambdaMART paper <https://www.microsoft.com/en-us/research/publication/from-ranknet-to-lambdarank-to-lambdamart-an-overview/>`__
   // desc = this parameter is closely related to the desirable cutoff ``k`` in the metric **NDCG@k** that we aim at optimizing the ranker for. The optimal setting for this parameter is likely to be slightly higher than ``k`` (e.g., ``k + 3``) to include more pairs of documents to train on, but perhaps not too high to avoid deviating too much from the desired target metric **NDCG@k**
   int lambdarank_truncation_level = 30;
 
@@ -1028,9 +1030,10 @@ struct Config {
   // descl2 = ``map``, `MAP <https://makarandtapaswi.wordpress.com/2012/07/02/intuition-behind-average-precision-and-map/>`__, aliases: ``mean_average_precision``
   // descl2 = ``auc``, `AUC <https://en.wikipedia.org/wiki/Receiver_operating_characteristic#Area_under_the_curve>`__
   // descl2 = ``average_precision``, `average precision score <https://scikit-learn.org/stable/modules/generated/sklearn.metrics.average_precision_score.html>`__
+  // descl2 = ``r2``, `R-squared <https://scikit-learn.org/stable/modules/generated/sklearn.metrics.r2_score.html>`__
   // descl2 = ``binary_logloss``, `log loss <https://en.wikipedia.org/wiki/Cross_entropy>`__, aliases: ``binary``
   // descl2 = ``binary_error``, for one sample: ``0`` for correct classification, ``1`` for error classification
-  // descl2 = ``auc_mu``, `AUC-mu <http://proceedings.mlr.press/v97/kleiman19a/kleiman19a.pdf>`__
+  // descl2 = ``auc_mu``, `AUC-mu <https://proceedings.mlr.press/v97/kleiman19a.html>`__
   // descl2 = ``multi_logloss``, log loss for multi-class classification, aliases: ``multiclass``, ``softmax``, ``multiclassova``, ``multiclass_ova``, ``ova``, ``ovr``
   // descl2 = ``multi_error``, error rate for multi-class classification
   // descl2 = ``cross_entropy``, cross-entropy (with optional linear weights), aliases: ``xentropy``
@@ -1123,16 +1126,25 @@ struct Config {
 
   // desc = OpenCL device ID in the specified platform or CUDA device ID. Each GPU in the selected platform has a unique device ID
   // desc = ``-1`` means the default device in the selected platform
+  // desc = in multi-GPU case (``num_gpu>1``) means ID of the master GPU
   // desc = **Note**: refer to `GPU Targets <./GPU-Targets.rst#query-opencl-devices-in-your-system>`__ for more details
   int gpu_device_id = -1;
+
+  // desc = list of CUDA device IDs
+  // desc = **Note**: can be used only in CUDA implementation (``device_type="cuda"``) and when ``num_gpu>1``
+  // desc = if empty, the devices with the smallest IDs will be used
+  std::string gpu_device_id_list = "";
 
   // desc = set this to ``true`` to use double precision math on GPU (by default single precision is used)
   // desc = **Note**: can be used only in OpenCL implementation (``device_type="gpu"``), in CUDA implementation only double precision is currently supported
   bool gpu_use_dp = false;
 
   // check = >0
-  // desc = number of GPUs
+  // desc = number of GPUs used for training in this node
   // desc = **Note**: can be used only in CUDA implementation (``device_type="cuda"``)
+  // desc = if ``0``, only 1 GPU will be used
+  // desc = used in both single-machine and distributed learning applications
+  // desc = in distributed learning application, each machine can use different number of GPUs
   int num_gpu = 1;
 
   #ifndef __NVCC__
@@ -1203,7 +1215,7 @@ inline bool Config::GetBool(
   const std::string& name, bool* out) {
   if (params.count(name) > 0 && !params.at(name).empty()) {
     std::string value = params.at(name);
-    std::transform(value.begin(), value.end(), value.begin(), Common::tolower);
+    std::transform(value.begin(), value.end(), value.begin(), [](unsigned char c){ return std::tolower(c); });
     if (value == std::string("false") || value == std::string("-")) {
       *out = false;
     } else if (value == std::string("true") || value == std::string("+")) {
@@ -1319,4 +1331,4 @@ inline std::string ParseMetricAlias(const std::string& type) {
 
 }   // namespace LightGBM
 
-#endif   // LightGBM_CONFIG_H_
+#endif   // LIGHTGBM_INCLUDE_LIGHTGBM_CONFIG_H_

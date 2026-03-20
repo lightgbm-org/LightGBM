@@ -1,8 +1,40 @@
 name: R valgrind tests
 
+# 'run-name' is used here to distinguish in the API between different runs from forks.
+#
+# When this was added, it was the only way to feed workflow inputs into something that
+# would show up in the output of 'gh run list'.
+#
+# See https://github.com/orgs/community/discussions/73223#discussioncomment-11862624
+run-name: R valgrind tests (pr=${{ inputs.pr-number }})
+
 on:
-  repository_dispatch:
-    types: [gha_run_r_valgrind]
+  workflow_dispatch:
+    inputs:
+      pr-branch:
+        type: string
+        description: |
+          Branch the PR was submitted from.
+          Branches from forks should be prefixed with the user/org they originate from,
+          like '{user}:{branch}'.
+      pr-number:
+        type: string
+        description: Pull request ID, found in the PR URL.
+
+permissions:
+  actions: write
+  checks: write
+  contents: read
+  deployments: none
+  discussions: none
+  id-token: write
+  issues: none
+  packages: none
+  pages: none
+  pull-requests: write
+  repository-projects: none
+  security-events: none
+  statuses: write
 
 jobs:
   test-r-valgrind:
@@ -11,7 +43,7 @@ jobs:
     runs-on: ubuntu-latest
     container: wch1/r-debug
     env:
-      SECRETS_WORKFLOW: ${{ secrets.WORKFLOW }}
+      GITHUB_TOKEN: ${{ github.token }}
     steps:
       - name: Install essential software before checkout
         shell: bash
@@ -20,29 +52,27 @@ jobs:
           apt-get install --no-install-recommends -y \
             curl \
             jq
+      - name: Install GitHub CLI
+        run: |
+          GH_CLI_VERSION="2.83.0"
+          curl \
+            --fail \
+            -O \
+            -L \
+            https://github.com/cli/cli/releases/download/v${GH_CLI_VERSION}/gh_${GH_CLI_VERSION}_linux_amd64.tar.gz
+          tar -xvf ./gh_${GH_CLI_VERSION}_linux_amd64.tar.gz
+          mv ./gh_${GH_CLI_VERSION}_linux_amd64/bin/gh /usr/local/bin/
       - name: Trust git cloning LightGBM
         run: |
           git config --global --add safe.directory "${GITHUB_WORKSPACE}"
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
         with:
           fetch-depth: 5
           submodules: true
-          repository: microsoft/LightGBM
-          ref: "refs/pull/${{ github.event.client_payload.pr_number }}/merge"
-      - name: Send init status
-        if: ${{ always() }}
-        shell: bash
-        run: |
-          $GITHUB_WORKSPACE/.ci/set-commit-status.sh \
-            "${{ github.workflow }}" \
-            "pending" \
-            "${{ github.event.client_payload.pr_sha }}"
-          comment="Workflow **${{ github.workflow }}** has been triggered! 🚀\r\n"
-          comment="${comment}${GITHUB_SERVER_URL}/microsoft/LightGBM/actions/runs/${GITHUB_RUN_ID}"
-          $GITHUB_WORKSPACE/.ci/append-comment.sh \
-            "${{ github.event.client_payload.comment_number }}" \
-            "${comment}"
+          persist-credentials: false
+          repository: lightgbm-org/LightGBM
+          ref: "refs/pull/${{ inputs.pr-number }}/merge"
       - name: Run tests with valgrind
         shell: bash
         run: ./.ci/test-r-package-valgrind.sh
@@ -52,15 +82,17 @@ jobs:
           $GITHUB_WORKSPACE/.ci/set-commit-status.sh \
             "${{ github.workflow }}" \
             "${{ job.status }}" \
-            "${{ github.event.client_payload.pr_sha }}"
+            "${{ github.sha }}"
+          comment="Workflow **${{ github.workflow }}** has been triggered! 🚀\r\n"
+          comment="${comment}\r\n${GITHUB_SERVER_URL}/lightgbm-org/LightGBM/actions/runs/${GITHUB_RUN_ID} \r\n"
+          comment="${comment}\r\nStatus: ${{ job.status }}"
           $GITHUB_WORKSPACE/.ci/append-comment.sh \
-            "${{ github.event.client_payload.comment_number }}" \
-            "Status: ${{ job.status }}."
+            "${{ inputs.pr-number }}" \
+            "${comment}"
       - name: Rerun workflow-indicator
         if: ${{ always() }}
         run: |
           bash $GITHUB_WORKSPACE/.ci/rerun-workflow.sh \
             "optional_checks.yml" \
-            "${{ github.event.client_payload.pr_number }}" \
-            "${{ github.event.client_payload.pr_branch }}" \
+            "${{ inputs.pr-branch }}" \
             || true

@@ -1,5 +1,6 @@
 /*!
- * Copyright (c) 2016 Microsoft Corporation. All rights reserved.
+ * Copyright (c) 2016-2026 Microsoft Corporation. All rights reserved.
+ * Copyright (c) 2016-2026 The LightGBM developers. All rights reserved.
  * Licensed under the MIT License. See LICENSE file in the project root for license information.
  */
 #include <LightGBM/network.h>
@@ -68,7 +69,9 @@ RecursiveHalvingMap::RecursiveHalvingMap(int in_k, RecursiveHalvingNodeType _typ
 RecursiveHalvingMap RecursiveHalvingMap::Construct(int rank, int num_machines) {
   // construct all recursive halving map for all machines
   int k = 0;
-  while ((1 << k) <= num_machines) { ++k; }
+  while ((1 << k) <= num_machines) {
+    ++k;
+  }
   // let 1 << k <= num_machines
   --k;
   // distance of each communication

@@ -1,9 +1,10 @@
 /*!
- * Copyright (c) 2016 Microsoft Corporation. All rights reserved.
+ * Copyright (c) 2016-2026 Microsoft Corporation. All rights reserved.
+ * Copyright (c) 2016-2026 The LightGBM developers. All rights reserved.
  * Licensed under the MIT License. See LICENSE file in the project root for license information.
  */
-#ifndef LIGHTGBM_UTILS_COMMON_H_
-#define LIGHTGBM_UTILS_COMMON_H_
+#ifndef LIGHTGBM_INCLUDE_LIGHTGBM_UTILS_COMMON_H_
+#define LIGHTGBM_INCLUDE_LIGHTGBM_UTILS_COMMON_H_
 
 #include <LightGBM/utils/json11.h>
 #include <LightGBM/utils/log.h>
@@ -12,6 +13,7 @@
 #include <limits>
 #include <string>
 #include <algorithm>
+#include <cctype>
 #include <chrono>
 #include <cmath>
 #include <cstdint>
@@ -65,12 +67,6 @@ using json11_internal_lightgbm::Json;
 */
 static void C_stringstream(std::stringstream &ss) {
   ss.imbue(std::locale::classic());
-}
-
-inline static char tolower(char in) {
-  if (in <= 'Z' && in >= 'A')
-    return in - ('Z' - 'z');
-  return in;
 }
 
 inline static std::string Trim(std::string str) {
@@ -315,9 +311,18 @@ inline static const char* Atof(const char* p, double* out) {
       }
       if (expon > 308) expon = 308;
       // Calculate scaling factor.
-      while (expon >= 50) { scale *= 1E50; expon -= 50; }
-      while (expon >= 8) { scale *= 1E8;  expon -= 8; }
-      while (expon > 0) { scale *= 10.0; expon -= 1; }
+      while (expon >= 50) {
+        scale *= 1E50;
+        expon -= 50;
+      }
+      while (expon >= 8) {
+        scale *= 1E8;
+        expon -= 8;
+      }
+      while (expon > 0) {
+        scale *= 10.0;
+        expon -= 1;
+      }
     }
     // Return signed and scaled floating point result.
     *out = sign * (frac ? (value / scale) : (value * scale));
@@ -331,7 +336,7 @@ inline static const char* Atof(const char* p, double* out) {
     }
     if (cnt > 0) {
       std::string tmp_str(p, cnt);
-      std::transform(tmp_str.begin(), tmp_str.end(), tmp_str.begin(), Common::tolower);
+      std::transform(tmp_str.begin(), tmp_str.end(), tmp_str.begin(), [](unsigned char c){ return std::tolower(c); });
       if (tmp_str == std::string("na") || tmp_str == std::string("nan") ||
           tmp_str == std::string("null")) {
         *out = NAN;
@@ -718,7 +723,9 @@ static void ParallelSort(_RanIt _First, _RanIt _Last, _Pr _Pred, _VTRanIt*) {
       size_t mid = left + s;
       size_t right = mid + s;
       right = std::min(len, right);
-      if (mid >= right) { continue; }
+      if (mid >= right) {
+        continue;
+      }
       std::copy(_First + left, _First + mid, buf + left);
       std::merge(buf + left, buf + mid, _First + mid, _First + right, _First + left, _Pred);
     }
@@ -1266,4 +1273,4 @@ inline static std::string ArrayToString(const std::vector<T>& arr, size_t n) {
 
 }  // namespace LightGBM
 
-#endif  // LIGHTGBM_UTILS_COMMON_H_
+#endif  // LIGHTGBM_INCLUDE_LIGHTGBM_UTILS_COMMON_H_

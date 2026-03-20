@@ -1,9 +1,10 @@
 /*!
- * Copyright (c) 2016 Microsoft Corporation. All rights reserved.
+ * Copyright (c) 2017-2026 Microsoft Corporation. All rights reserved.
+ * Copyright (c) 2017-2026 The LightGBM developers. All rights reserved.
  * Licensed under the MIT License. See LICENSE file in the project root for license information.
  */
-#ifndef LIGHTGBM_BOOSTING_SCORE_UPDATER_HPP_
-#define LIGHTGBM_BOOSTING_SCORE_UPDATER_HPP_
+#ifndef LIGHTGBM_SRC_BOOSTING_SCORE_UPDATER_HPP_
+#define LIGHTGBM_SRC_BOOSTING_SCORE_UPDATER_HPP_
 
 #include <LightGBM/dataset.h>
 #include <LightGBM/meta.h>
@@ -125,4 +126,4 @@ class ScoreUpdater {
 };
 
 }  // namespace LightGBM
-#endif   // LightGBM_BOOSTING_SCORE_UPDATER_HPP_
+#endif  // LIGHTGBM_SRC_BOOSTING_SCORE_UPDATER_HPP_

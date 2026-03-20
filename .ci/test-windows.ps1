@@ -16,6 +16,9 @@ $env:TMPDIR = "$env:USERPROFILE\tmp"
 Remove-Item $env:TMPDIR -Force -Recurse -ErrorAction Ignore
 [Void][System.IO.Directory]::CreateDirectory($env:TMPDIR)
 
+# create the artifact upload directory if it doesn't exist yet
+[Void][System.IO.Directory]::CreateDirectory($env:BUILD_ARTIFACTSTAGINGDIRECTORY)
+
 if ($env:TASK -eq "r-package") {
     & .\.ci\test-r-package-windows.ps1 ; Assert-Output $?
     exit 0
@@ -56,17 +59,20 @@ if ($env:TASK -eq "swig") {
         Assert-Output $False
     }
     cmake --build build --target ALL_BUILD --config Release ; Assert-Output $?
-    if ($env:AZURE -eq "true") {
+    if ($env:PRODUCES_ARTIFACTS -eq "true") {
         cp ./build/lightgbmlib.jar $env:BUILD_ARTIFACTSTAGINGDIRECTORY/lightgbmlib_win.jar ; Assert-Output $?
     }
     exit 0
 }
 
 # setup for Python
-conda init powershell
-conda activate
-conda config --set always_yes yes --set changeps1 no
-conda update -q -y conda "python=$env:PYTHON_VERSION[build=*_cp*]"
+conda activate ; Assert-Output $?
+conda config --set always_yes yes --set changeps1 no ; Assert-Output $?
+conda config --remove channels defaults ; Assert-Output $?
+conda config --add channels nodefaults ; Assert-Output $?
+conda config --add channels conda-forge ; Assert-Output $?
+conda config --set channel_priority strict ; Assert-Output $?
+conda install -q -y conda "python=$env:PYTHON_VERSION[build=*_cp*]" ; Assert-Output $?
 
 # print output of 'conda info', to help in submitting bug reports
 Write-Output "conda info:"
@@ -116,7 +122,7 @@ if ($env:TASK -eq "regular") {
     Get-ItemProperty -Path Registry::HKEY_LOCAL_MACHINE\SOFTWARE\Khronos\OpenCL\Vendors
 
     conda activate $env:CONDA_ENV
-    # TODO: restore --integrated-opencl as part of https://github.com/microsoft/LightGBM/issues/6968
+    # TODO: restore --integrated-opencl as part of https://github.com/lightgbm-org/LightGBM/issues/6968
     sh "build-python.sh" bdist_wheel ; Assert-Output $?
     sh ./.ci/check-python-dists.sh ./dist ; Assert-Output $?
     Set-Location dist; pip install @(Get-ChildItem *py3-none-win_amd64.whl) ; Assert-Output $?
@@ -137,8 +143,8 @@ if (($env:TASK -eq "sdist") -or (($env:APPVEYOR -eq "true") -and ($env:TASK -eq 
 }
 if ($env:TASK -eq "bdist") {
     # Make sure we can do both CPU and GPU; see tests/python_package_test/test_dual.py
-    # TODO: set LIGHTGBM_TEST_DUAL_CPU_GPU back to "1" as part of https://github.com/microsoft/LightGBM/issues/6968
-    env:LIGHTGBM_TEST_DUAL_CPU_GPU = "0"
+    # TODO: set LIGHTGBM_TEST_DUAL_CPU_GPU back to "1" as part of https://github.com/lightgbm-org/LightGBM/issues/6968
+    $env:LIGHTGBM_TEST_DUAL_CPU_GPU = "0"
 }
 
 pytest $tests ; Assert-Output $?

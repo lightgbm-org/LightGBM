@@ -16,7 +16,7 @@ Categorical Feature Support
 ---------------------------
 
 -  LightGBM offers good accuracy with integer-encoded categorical features. LightGBM applies
-   `Fisher (1958) <https://www.tandfonline.com/doi/abs/10.1080/01621459.1958.10501479>`_
+   `Fisher (1958) <https://www.jstor.org/stable/2281952>`_
    to find the optimal split over categories as
    `described here <./Features.rst#optimal-split-for-categorical-features>`_. This often performs better than one-hot encoding.
 
@@ -46,7 +46,7 @@ LambdaRank
 Cost Efficient Gradient Boosting
 --------------------------------
 
-`Cost Efficient Gradient Boosting <https://papers.nips.cc/paper/6753-cost-efficient-gradient-boosting.pdf>`_ (CEGB)  makes it possible to penalise boosting based on the cost of obtaining feature values.
+`Cost Efficient Gradient Boosting <https://proceedings.neurips.cc/paper/2017/hash/4fac9ba115140ac4f1c22da82aa0bc7f-Abstract.html>`_ (CEGB)  makes it possible to penalise boosting based on the cost of obtaining feature values.
 CEGB penalises learning in the following ways:
 
 - Each time a tree is split, a penalty of ``cegb_penalty_split`` is applied.
@@ -112,4 +112,4 @@ Currently, implemented is an approach to model position bias by using an idea of
 During the training, the compound scoring function ``s(x, pos)`` is fit with a standard ranking algorithm (e.g., LambdaMART) which boils down to jointly learning the relevance component ``f(x)`` (it is later returned as an unbiased model) and the position factors ``g(pos)`` that help better explain the observed (biased) labels.
 Similar score decomposition ideas have previously been applied for classification & pointwise ranking tasks with assumptions of binary labels and binary relevance (a.k.a. "two-tower" models, refer to the papers: `Towards Disentangling Relevance and Bias in Unbiased Learning to Rank <https://arxiv.org/abs/2212.13937>`_, `PAL: a position-bias aware learning framework for CTR prediction in live recommender systems <https://dl.acm.org/doi/10.1145/3298689.3347033>`_, `A General Framework for Debiasing in CTR Prediction <https://arxiv.org/abs/2112.02767>`_).
 In LightGBM, we adapt this idea to general pairwise Lerarning-to-Rank with arbitrary ordinal relevance labels.
-Besides, GAMs have been used in the context of explainable ML (`Accurate Intelligible Models with Pairwise Interactions <https://www.cs.cornell.edu/~yinlou/papers/lou-kdd13.pdf>`_) to linearly decompose the contribution of each feature (and possibly their pairwise interactions) to the overall score, for subsequent analysis and interpretation of their effects in the trained models.
+Besides, GAMs have been used in the context of explainable ML (`Accurate Intelligible Models with Pairwise Interactions <https://www.cs.cornell.edu/~yinlou/projects/gam/>`_) to linearly decompose the contribution of each feature (and possibly their pairwise interactions) to the overall score, for subsequent analysis and interpretation of their effects in the trained models.
