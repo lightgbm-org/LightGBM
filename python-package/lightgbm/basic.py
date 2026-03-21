@@ -4892,6 +4892,9 @@ class Booster:
             pred_leaf=True,
             validate_features=validate_features,
         )
+        # Handle 1D array case when there's only one tree (issue #7156)
+        if leaf_preds.ndim == 1:
+            leaf_preds = leaf_preds.reshape(-1, 1)
         nrow, ncol = leaf_preds.shape
         out_is_linear = ctypes.c_int(0)
         _safe_call(
