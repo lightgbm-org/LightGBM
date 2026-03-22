@@ -293,7 +293,7 @@ def test_create_tree_digraph(tmp_path, breast_cancer_split):
     # test internal_count
     graph = lgb.create_tree_digraph(gbm, tree_index=0, show_info=["internal_count"])
     graph_body = "".join(graph.body)
-    assert "count: 200" in graph_body
+    assert "count: 200" in graph_body, graph_body
     assert "count: 512" in graph_body
 
     # test data_percentage for internal and leaf nodes
