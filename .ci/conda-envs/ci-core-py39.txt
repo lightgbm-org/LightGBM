@@ -4,7 +4,7 @@
 #
 #   Unlike ci-core.txt, this includes a Python version and uses
 #   `=` and `<=` pins to make solves faster and prevent against
-#   issues like https://github.com/microsoft/LightGBM/pull/6370.
+#   issues like https://github.com/lightgbm-org/LightGBM/pull/6370.
 #
 # [usage]
 #
@@ -37,7 +37,7 @@ pluggy=1.0.*
 psutil=5.9.3
 pytest=7.4.*
 
-# https://github.com/microsoft/LightGBM/issues/6990
+# https://github.com/lightgbm-org/LightGBM/issues/6990
 graphite2=1.3.14=*_0
 
 # other recursive dependencies, just

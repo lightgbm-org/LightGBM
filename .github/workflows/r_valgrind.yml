@@ -66,12 +66,12 @@ jobs:
         run: |
           git config --global --add safe.directory "${GITHUB_WORKSPACE}"
       - name: Checkout repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
         with:
           fetch-depth: 5
           submodules: true
           persist-credentials: false
-          repository: microsoft/LightGBM
+          repository: lightgbm-org/LightGBM
           ref: "refs/pull/${{ inputs.pr-number }}/merge"
       - name: Run tests with valgrind
         shell: bash
@@ -84,7 +84,7 @@ jobs:
             "${{ job.status }}" \
             "${{ github.sha }}"
           comment="Workflow **${{ github.workflow }}** has been triggered! 🚀\r\n"
-          comment="${comment}\r\n${GITHUB_SERVER_URL}/microsoft/LightGBM/actions/runs/${GITHUB_RUN_ID} \r\n"
+          comment="${comment}\r\n${GITHUB_SERVER_URL}/lightgbm-org/LightGBM/actions/runs/${GITHUB_RUN_ID} \r\n"
           comment="${comment}\r\nStatus: ${{ job.status }}"
           $GITHUB_WORKSPACE/.ci/append-comment.sh \
             "${{ inputs.pr-number }}" \
