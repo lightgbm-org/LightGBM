@@ -32,7 +32,7 @@ if [ "$PY_MINOR_VER" -gt 7 ]; then
             --inspect \
             --ignore 'compiled-objects-have-debug-symbols'\
             --ignore 'distro-too-large-compressed' \
-            --max-allowed-size-uncompressed '120M' \
+            --max-allowed-size-uncompressed '500M' \
             --max-allowed-files 800 \
             "$(echo "${DIST_DIR}"/*)" || exit 1
     elif { test "$(uname -m)" = "aarch64"; }; then

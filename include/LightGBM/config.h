@@ -1,5 +1,6 @@
 /*!
- * Copyright (c) 2016 Microsoft Corporation. All rights reserved.
+ * Copyright (c) 2016-2026 Microsoft Corporation. All rights reserved.
+ * Copyright (c) 2016-2026 The LightGBM developers. All rights reserved.
  * Licensed under the MIT License. See LICENSE file in the project root for license information.
  *
  * \note
@@ -246,11 +247,11 @@ struct Config {
   // alias = device
   // desc = device for the tree learning
   // desc = ``cpu`` supports all LightGBM functionality and is portable across the widest range of operating systems and hardware
-  // desc = ``cuda`` offers faster training than ``gpu`` or ``cpu``, but only works on GPUs supporting CUDA
+  // desc = ``cuda`` offers faster training than ``gpu`` or ``cpu``, but only works on GPUs supporting CUDA or ROCm
   // desc = ``gpu`` can be faster than ``cpu`` and works on a wider range of GPUs than CUDA
   // desc = **Note**: it is recommended to use the smaller ``max_bin`` (e.g. 63) to get the better speed up
   // desc = **Note**: for the faster speed, GPU uses 32-bit float point to sum up by default, so this may affect the accuracy for some tasks. You can set ``gpu_use_dp=true`` to enable 64-bit float point, but it will slow down the training
-  // desc = **Note**: refer to `Installation Guide <./Installation-Guide.rst>`__ to build LightGBM with GPU or CUDA support
+  // desc = **Note**: refer to `Installation Guide <./Installation-Guide.rst>`__ to build LightGBM with GPU, CUDA, or ROCm support
   std::string device_type = "cpu";
 
   // [no-automatically-extract]
@@ -264,7 +265,7 @@ struct Config {
   // desc = used only with ``cpu`` device type
   // desc = setting this to ``true`` should ensure the stable results when using the same data and the same parameters (and different ``num_threads``)
   // desc = when you use the different seeds, different LightGBM versions, the binaries compiled by different compilers, or in different systems, the results are expected to be different
-  // desc = you can `raise issues <https://github.com/microsoft/LightGBM/issues>`__ in LightGBM GitHub repo when you meet the unstable results
+  // desc = you can `raise issues <https://github.com/lightgbm-org/LightGBM/issues>`__ in LightGBM GitHub repo when you meet the unstable results
   // desc = **Note**: setting this to ``true`` may slow down the training
   // desc = **Note**: to avoid potential instability due to numerical issues, please set ``force_col_wise=true`` or ``force_row_wise=true`` when setting ``deterministic=true``
   bool deterministic = false;
@@ -544,7 +545,7 @@ struct Config {
   // desc = ``.json`` file can be arbitrarily nested, and each split contains ``feature``, ``threshold`` fields, as well as ``left`` and ``right`` fields representing subsplits
   // desc = categorical splits are forced in a one-hot fashion, with ``left`` representing the split containing the feature value and ``right`` representing other values
   // desc = **Note**: the forced split logic will be ignored, if the split makes gain worse
-  // desc = see `this file <https://github.com/microsoft/LightGBM/blob/master/examples/binary_classification/forced_splits.json>`__ as an example
+  // desc = see `this file <https://github.com/lightgbm-org/LightGBM/blob/master/examples/binary_classification/forced_splits.json>`__ as an example
   std::string forcedsplits_filename = "";
 
   // check = >=0.0
@@ -794,7 +795,7 @@ struct Config {
 
   // desc = path to a ``.json`` file that specifies bin upper bounds for some or all features
   // desc = ``.json`` file should contain an array of objects, each containing the word ``feature`` (integer feature index) and ``bin_upper_bound`` (array of thresholds for binning)
-  // desc = see `this file <https://github.com/microsoft/LightGBM/blob/master/examples/regression/forced_bins.json>`__ as an example
+  // desc = see `this file <https://github.com/lightgbm-org/LightGBM/blob/master/examples/regression/forced_bins.json>`__ as an example
   std::string forcedbins_filename = "";
 
   // [no-save]
@@ -809,8 +810,8 @@ struct Config {
   bool precise_float_parser = false;
 
   // desc = path to a ``.json`` file that specifies customized parser initialized configuration
-  // desc = see `lightgbm-transform <https://github.com/microsoft/lightgbm-transform>`__ for usage examples
-  // desc = **Note**: ``lightgbm-transform`` is not maintained by LightGBM's maintainers. Bug reports or feature requests should go to `issues page <https://github.com/microsoft/lightgbm-transform/issues>`__
+  // desc = see `lightgbm-transform <https://github.com/lightgbm-org/LightGBM-transform>`__ for usage examples
+  // desc = **Note**: ``lightgbm-transform`` is not maintained by LightGBM's maintainers. Bug reports or feature requests should go to `issues page <https://github.com/lightgbm-org/LightGBM-transform/issues>`__
   // desc = *New in version 4.0.0*
   std::string parser_config_file = "";
 
@@ -1125,16 +1126,25 @@ struct Config {
 
   // desc = OpenCL device ID in the specified platform or CUDA device ID. Each GPU in the selected platform has a unique device ID
   // desc = ``-1`` means the default device in the selected platform
+  // desc = in multi-GPU case (``num_gpu>1``) means ID of the master GPU
   // desc = **Note**: refer to `GPU Targets <./GPU-Targets.rst#query-opencl-devices-in-your-system>`__ for more details
   int gpu_device_id = -1;
+
+  // desc = list of CUDA device IDs
+  // desc = **Note**: can be used only in CUDA implementation (``device_type="cuda"``) and when ``num_gpu>1``
+  // desc = if empty, the devices with the smallest IDs will be used
+  std::string gpu_device_id_list = "";
 
   // desc = set this to ``true`` to use double precision math on GPU (by default single precision is used)
   // desc = **Note**: can be used only in OpenCL implementation (``device_type="gpu"``), in CUDA implementation only double precision is currently supported
   bool gpu_use_dp = false;
 
   // check = >0
-  // desc = number of GPUs
+  // desc = number of GPUs used for training in this node
   // desc = **Note**: can be used only in CUDA implementation (``device_type="cuda"``)
+  // desc = if ``0``, only 1 GPU will be used
+  // desc = used in both single-machine and distributed learning applications
+  // desc = in distributed learning application, each machine can use different number of GPUs
   int num_gpu = 1;
 
   #ifndef __NVCC__
