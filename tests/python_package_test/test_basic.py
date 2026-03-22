@@ -1109,12 +1109,39 @@ def test_booster_eval_adds_new_valid_dataset() -> None:
     train_set = lgb.Dataset(X_train, label=y_train)
     valid_set = lgb.Dataset(X_test, label=y_test, reference=train_set)
     booster = lgb.Booster(
-        params={"objective": "binary", "verbose": -1},
+        params={
+            "deterministic": True,
+            "force_row_wise": True,
+            "objective": "binary",
+            "metric": ["auc", "binary_error"],
+            "num_iterations": 2,
+            "num_leaves": 3,
+            "num_threads": 1,
+            "seed": 708,
+            "verbose": -1,
+        },
         train_set=train_set,
     )
-    num_datasets_before = booster._Booster__num_dataset
+    assert booster.__num_dataset == 1
+    assert booster.valid_sets == []
+
     result = booster.eval(valid_set, name="test")
 
-    assert booster._Booster__num_dataset == num_datasets_before + 1
-    assert len(result) > 0
-    assert result[0][0] == "test"
+    assert booster._Booster__num_dataset == 2
+    assert booster.valid_sets == [valid_set]
+    assert len(result) == 2
+    assert isinstance(result, list)
+
+    # first metric - AUC
+    dataset_name, metric_name, metric_value, maximize = result[0]
+    assert dataset_name == "test"
+    assert metric_name == "auc"
+    assert metric_value >= 0.50
+    assert maximize = True
+
+    # second metric - binary error
+    dataset_name, metric_name, metric_value, maximize = result[1]
+    assert dataset_name == "test"
+    assert metric_name == "binary_error"
+    assert metric_value >= 0.40
+    assert maximize = True
