@@ -1122,7 +1122,7 @@ def test_booster_eval_adds_new_valid_dataset() -> None:
         },
         train_set=train_set,
     )
-    assert booster.__num_dataset == 1
+    assert booster._Booster__num_dataset == 1
     assert booster.valid_sets == []
 
     result = booster.eval(valid_set, name="test")
