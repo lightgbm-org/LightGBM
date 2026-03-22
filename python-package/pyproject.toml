@@ -54,10 +54,10 @@ scikit-learn = [
 ]
 
 [project.urls]
-homepage = "https://github.com/microsoft/LightGBM"
+homepage = "https://github.com/lightgbm-org/LightGBM"
 documentation = "https://lightgbm.readthedocs.io/en/latest/"
-repository = "https://github.com/microsoft/LightGBM.git"
-changelog = "https://github.com/microsoft/LightGBM/releases"
+repository = "https://github.com/lightgbm-org/LightGBM.git"
+changelog = "https://github.com/lightgbm-org/LightGBM/releases"
 
 # start:build-system
 [build-system]

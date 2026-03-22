@@ -283,7 +283,7 @@ def test_classifier(output, task, boosting_type, tree_learner, cluster):
         s2 = local_classifier.score(X, y)
 
         if boosting_type == "rf":
-            # https://github.com/microsoft/LightGBM/issues/4118
+            # https://github.com/lightgbm-org/LightGBM/issues/4118
             assert_eq(s1, s2, atol=0.01)
             assert_eq(p1_proba, p2_proba, atol=0.8)
         else:
@@ -672,7 +672,7 @@ def test_regressor_custom_objective(output, cluster):
     platform.lower().startswith("darwin"),
     reason=(
         "learning-to-rank Dask tests are unreliable on macOS. "
-        "See https://github.com/microsoft/LightGBM/issues/4074#issuecomment-3124996317"
+        "See https://github.com/lightgbm-org/LightGBM/issues/4074#issuecomment-3124996317"
     ),
 )
 @pytest.mark.parametrize("output", ["array", "dataframe", "dataframe-with-categorical"])
@@ -698,7 +698,7 @@ def test_ranker(output, group, boosting_type, tree_learner, cluster):
             client.rebalance()
 
         # use many trees + leaves to overfit, help ensure that Dask data-parallel strategy matches that of
-        # serial learner. See https://github.com/microsoft/LightGBM/issues/3292#issuecomment-671288210.
+        # serial learner. See https://github.com/lightgbm-org/LightGBM/issues/3292#issuecomment-671288210.
         params = {
             "boosting_type": boosting_type,
             "random_state": 42,
@@ -1353,7 +1353,7 @@ def test_network_params_not_required_but_respected_if_given(task, listen_port, c
 
 @pytest.mark.parametrize("task", tasks)
 def test_machines_should_be_used_if_provided(task, cluster):
-    pytest.skip("skipping due to timeout issues discussed in https://github.com/microsoft/LightGBM/issues/5390")
+    pytest.skip("skipping due to timeout issues discussed in https://github.com/lightgbm-org/LightGBM/issues/5390")
     with Client(cluster) as client:
         _, _, _, _, dX, dy, _, dg = _create_data(objective=task, output="array", chunk_size=10, group=None)
 

@@ -893,10 +893,10 @@ def _predict_part(
         # assert that 'result' is an array, only necessary because predict(..., pred_contrib=True) on
         # sparse matrices returns a list.
         #
-        # This can be removed when https://github.com/microsoft/LightGBM/pull/6348 is resolved.
+        # This can be removed when https://github.com/lightgbm-org/LightGBM/pull/6348 is resolved.
         error_msg = (
             f"predict(X) for lightgbm.dask estimators should always return an array, not '{type(result)}', when X is a pandas Dataframe. "
-            "If you're seeing this message, it's a bug in lightgbm. Please report it at https://github.com/microsoft/LightGBM/issues."
+            "If you're seeing this message, it's a bug in lightgbm. Please report it at https://github.com/lightgbm-org/LightGBM/issues."
         )
         assert hasattr(result, "shape"), error_msg
         if len(result.shape) == 2:
