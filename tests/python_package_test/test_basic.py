@@ -1144,4 +1144,4 @@ def test_booster_eval_adds_new_valid_dataset() -> None:
     assert dataset_name == "test"
     assert metric_name == "binary_error"
     assert metric_value >= 0.40
-    assert maximize is True
+    assert maximize is False
