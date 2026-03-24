@@ -288,6 +288,7 @@ jobs:
           if type -f apt 2>&1 > /dev/null; then
             apt-get update
             apt-get install --no-install-recommends -y \
+                cmake \
                 devscripts \
                 texinfo \
                 texlive-latex-extra \
@@ -299,6 +300,7 @@ jobs:
           else
             yum update -y
             yum install -y \
+                cmake \
                 devscripts \
                 qpdf \
                 texinfo \
