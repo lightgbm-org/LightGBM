@@ -100,9 +100,11 @@ repos:
     rev: v1.19.1
     hooks:
       - id: mypy
+        args: ["--config-file", "python-package/pyproject.toml", "python-package/"]
+        pass_filenames: false
         verbose: true
-        entry: bash -c 'mypy --config-file=./python-package/pyproject.toml ./python-package || true'
         additional_dependencies:
           - matplotlib>=3.9.1
+          - pandas>=2.0
           - pyarrow>=17.0
           - scikit-learn>=1.5.2

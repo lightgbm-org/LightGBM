@@ -126,7 +126,7 @@ def _get_group_from_constructed_dataset(dataset: Dataset) -> Optional[np.ndarray
     group = dataset.get_group()
     error_msg = (
         "Estimators in lightgbm.sklearn should only retrieve query groups from a constructed Dataset. "
-        "If you're seeing this message, it's a bug in lightgbm. Please report it at https://github.com/microsoft/LightGBM/issues."
+        "If you're seeing this message, it's a bug in lightgbm. Please report it at https://github.com/lightgbm-org/LightGBM/issues."
     )
     assert group is None or isinstance(group, np.ndarray), error_msg
     return group
@@ -136,7 +136,7 @@ def _get_label_from_constructed_dataset(dataset: Dataset) -> np.ndarray:
     label = dataset.get_label()
     error_msg = (
         "Estimators in lightgbm.sklearn should only retrieve labels from a constructed Dataset. "
-        "If you're seeing this message, it's a bug in lightgbm. Please report it at https://github.com/microsoft/LightGBM/issues."
+        "If you're seeing this message, it's a bug in lightgbm. Please report it at https://github.com/lightgbm-org/LightGBM/issues."
     )
     assert isinstance(label, np.ndarray), error_msg
     return label
@@ -146,7 +146,7 @@ def _get_weight_from_constructed_dataset(dataset: Dataset) -> Optional[np.ndarra
     weight = dataset.get_weight()
     error_msg = (
         "Estimators in lightgbm.sklearn should only retrieve weights from a constructed Dataset. "
-        "If you're seeing this message, it's a bug in lightgbm. Please report it at https://github.com/microsoft/LightGBM/issues."
+        "If you're seeing this message, it's a bug in lightgbm. Please report it at https://github.com/lightgbm-org/LightGBM/issues."
     )
     assert weight is None or isinstance(weight, np.ndarray), error_msg
     return weight
@@ -716,13 +716,13 @@ class LGBMModel(_LGBMModelBase):
     # scikit-learn 1.6 introduced an __sklearn__tags() method intended to replace _more_tags().
     # _more_tags() can be removed whenever lightgbm's minimum supported scikit-learn version
     # is >=1.6.
-    # ref: https://github.com/microsoft/LightGBM/pull/6651
+    # ref: https://github.com/lightgbm-org/LightGBM/pull/6651
     def _more_tags(self) -> Dict[str, Any]:
         check_sample_weight_str = (
             "In LightGBM, setting a sample's weight to 0 can produce a different result than omitting the sample. "
             "Such samples intentionally still affect count-based measures like 'min_data_in_leaf' "
-            "(https://github.com/microsoft/LightGBM/issues/5626#issuecomment-1712706678) and the estimated distribution "
-            "of features for Dataset construction (see https://github.com/microsoft/LightGBM/issues/5553)."
+            "(https://github.com/lightgbm-org/LightGBM/issues/5626#issuecomment-1712706678) and the estimated distribution "
+            "of features for Dataset construction (see https://github.com/lightgbm-org/LightGBM/issues/5553)."
         )
         # "check_sample_weight_equivalence" can be removed when lightgbm's
         # minimum supported scikit-learn version is at least 1.6
@@ -734,7 +734,7 @@ class LGBMModel(_LGBMModelBase):
                 "check_no_attributes_set_in_init": (
                     "scikit-learn incorrectly asserts that private attributes "
                     "cannot be set in __init__: "
-                    "(see https://github.com/microsoft/LightGBM/issues/2628)"
+                    "(see https://github.com/lightgbm-org/LightGBM/issues/2628)"
                 ),
                 "check_all_zero_sample_weights_error": (
                     "Beginning in scikit-learn 1.9, by default estimators are expected to reject "
@@ -984,7 +984,7 @@ class LGBMModel(_LGBMModelBase):
         params = self._process_params(stage="fit")
 
         # Do not modify original args in fit function
-        # Refer to https://github.com/microsoft/LightGBM/pull/2619
+        # Refer to https://github.com/lightgbm-org/LightGBM/pull/2619
         eval_metric_list: List[Union[str, _LGBM_ScikitCustomEvalFunction]]
         if eval_metric is None:
             eval_metric_list = []
@@ -1723,7 +1723,7 @@ class LGBMClassifier(_LGBMClassifierBase, LGBMModel):
         else:
             error_msg = (
                 "predict() should return np.ndarray when pred_contrib=False. "
-                "If you're seeing this message, it's a bug in lightgbm. Please report it at https://github.com/microsoft/LightGBM/issues."
+                "If you're seeing this message, it's a bug in lightgbm. Please report it at https://github.com/lightgbm-org/LightGBM/issues."
             )
             assert isinstance(result, np.ndarray), error_msg
             return np.vstack((1.0 - result, result)).transpose()

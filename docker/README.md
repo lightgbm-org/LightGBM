@@ -19,7 +19,7 @@ Build an image with the LightGBM CLI.
 ```shell
 mkdir lightgbm-docker
 cd lightgbm-docker
-wget https://raw.githubusercontent.com/Microsoft/LightGBM/master/docker/dockerfile-cli
+wget https://raw.githubusercontent.com/lightgbm-org/LightGBM/master/docker/dockerfile-cli
 docker build \
     -t lightgbm-cli \
     -f dockerfile-cli \
@@ -40,7 +40,7 @@ output_model = LightGBM-CLI-model.txt
 EOF
 
 # get training data
-curl -O https://raw.githubusercontent.com/Microsoft/LightGBM/master/examples/binary_classification/binary.train
+curl -O https://raw.githubusercontent.com/lightgbm-org/LightGBM/master/examples/binary_classification/binary.train
 
 # train, and save model to a text file
 docker run \
@@ -62,7 +62,7 @@ Build an image with the LightGBM Python-package installed.
 ```shell
 mkdir lightgbm-docker
 cd lightgbm-docker
-wget https://raw.githubusercontent.com/Microsoft/LightGBM/master/docker/dockerfile-python
+wget https://raw.githubusercontent.com/lightgbm-org/LightGBM/master/docker/dockerfile-python
 docker build \
     -t lightgbm-python \
     -f dockerfile-python \
@@ -74,7 +74,7 @@ Run the following to produce a model using the Python-package.
 
 ```shell
 # get training data
-curl -O https://raw.githubusercontent.com/Microsoft/LightGBM/master/examples/binary_classification/binary.train
+curl -O https://raw.githubusercontent.com/lightgbm-org/LightGBM/master/examples/binary_classification/binary.train
 
 # create training script
 cat << EOF > train.py
@@ -121,7 +121,7 @@ Build an image with the LightGBM R-package installed.
 ```shell
 mkdir lightgbm-docker
 cd lightgbm-docker
-wget https://raw.githubusercontent.com/Microsoft/LightGBM/master/docker/dockerfile-r
+wget https://raw.githubusercontent.com/lightgbm-org/LightGBM/master/docker/dockerfile-r
 
 docker build \
     -t lightgbm-r \
@@ -134,7 +134,7 @@ Run the following to produce a model using the R-package.
 
 ```shell
 # get training data
-curl -O https://raw.githubusercontent.com/Microsoft/LightGBM/master/examples/binary_classification/binary.train
+curl -O https://raw.githubusercontent.com/lightgbm-org/LightGBM/master/examples/binary_classification/binary.train
 
 # create training script
 cat << EOF > train.R

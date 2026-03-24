@@ -62,7 +62,6 @@ _DaskCollection = Union[dask_Array, dask_DataFrame, dask_Series]
 _DaskMatrixLike = Union[dask_Array, dask_DataFrame]
 _DaskVectorLike = Union[dask_Array, dask_Series]
 _DaskPart = Union[np.ndarray, pd_DataFrame, pd_Series, ss.spmatrix]
-_PredictionDtype = Union[Type[np.float32], Type[np.float64], Type[np.int32], Type[np.int64]]
 
 
 class _RemoteSocket:
@@ -891,6 +890,15 @@ def _predict_part(
 
     # dask.DataFrame.map_partitions() expects each call to return a pandas DataFrame or Series
     if isinstance(part, pd_DataFrame):
+        # assert that 'result' is an array, only necessary because predict(..., pred_contrib=True) on
+        # sparse matrices returns a list.
+        #
+        # This can be removed when https://github.com/lightgbm-org/LightGBM/pull/6348 is resolved.
+        error_msg = (
+            f"predict(X) for lightgbm.dask estimators should always return an array, not '{type(result)}', when X is a pandas Dataframe. "
+            "If you're seeing this message, it's a bug in lightgbm. Please report it at https://github.com/lightgbm-org/LightGBM/issues."
+        )
+        assert hasattr(result, "shape"), error_msg
         if len(result.shape) == 2:
             result = pd_DataFrame(result, index=part.index)
         else:
@@ -908,7 +916,6 @@ def _predict(
     pred_proba: bool = False,
     pred_leaf: bool = False,
     pred_contrib: bool = False,
-    dtype: _PredictionDtype = np.float32,
     **kwargs: Any,
 ) -> Union[dask_Array, List[dask_Array]]:
     """Inner predict routine.
@@ -927,8 +934,6 @@ def _predict(
         Whether to predict leaf index.
     pred_contrib : bool, optional (default=False)
         Whether to predict feature contributions.
-    dtype : np.dtype, optional (default=np.float32)
-        Dtype of the output.
     **kwargs
         Other parameters passed to ``predict`` or ``predict_proba`` method.
 
@@ -1041,7 +1046,6 @@ def _predict(
             predict_fn,
             chunks=chunks,
             meta=pred_row,
-            dtype=dtype,
             **map_blocks_kwargs,
         )
     else:
@@ -1290,7 +1294,6 @@ class DaskLGBMClassifier(LGBMClassifier, _DaskLGBMModel):
         return _predict(
             model=self.to_local(),
             data=X,
-            dtype=self.classes_.dtype,
             client=_get_dask_client(self.client),
             raw_score=raw_score,
             start_iteration=start_iteration,

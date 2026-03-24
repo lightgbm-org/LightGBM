@@ -140,22 +140,37 @@ elif [[ $TASK == "bdist" ]]; then
             cp "$(echo "dist/lightgbm-${LGB_VER}-py3-none-macosx"*.whl)" "${BUILD_ARTIFACTSTAGINGDIRECTORY}" || exit 1
         fi
     else
-        if [[ $ARCH == "x86_64" ]]; then
-            PLATFORM="manylinux_2_28_x86_64"
-        else
-            PLATFORM="manylinux2014_$ARCH"
-        fi
         sh ./build-python.sh bdist_wheel --integrated-opencl || exit 1
-        # rename wheel, to fix scikit-build-core choosing the platform 'linux_aarch64' instead of
-        # a manylinux tag
-        mv \
-            ./dist/*.whl \
-            ./dist/tmp.whl || exit 1
-        mv \
-            ./dist/tmp.whl \
-            "./dist/lightgbm-${LGB_VER}-py3-none-${PLATFORM}.whl" || exit 1
+
+        # print some debugging logs about the wheel's GLIBC version and dependencies on shared libraries
+        pip install 'auditwheel>=6.5.1'
+        auditwheel show ./dist/lightgbm*.whl
+
+        # pass through 'auditwheel repair' to set the appropriate wheel tags.
+        #
+        # intentionally avoid vendoring libgomp, to reduce the risk of multiple OpenMP libraries
+        # being loaded in the same process.
+        auditwheel repair \
+            --exclude 'libgomp.so*' \
+            --lib-sdir '' \
+            --wheel-dir dist-fixed/ \
+            ./dist/lightgbm*.whl
+
+        # overwrite the original wheel with the new one
+        rm ./dist/lightgbm*.whl
+        mv ./dist-fixed/lightgbm*.whl ./dist
+
+        # check wheel properties
         sh .ci/check-python-dists.sh ./dist || exit 1
+
         if [[ $PRODUCES_ARTIFACTS == "true" ]]; then
+            # hard-code expected tag so CI will fail if 'auditwheel repair' has a surprising result (e.g. newer
+            # manylinux tag than we intended)
+            if [[ $ARCH == "x86_64" ]]; then
+                PLATFORM="manylinux_2_27_x86_64.manylinux_2_28_x86_64"
+            else
+                PLATFORM="manylinux2014_aarch64.manylinux_2_17_aarch64"
+            fi
             cp "dist/lightgbm-${LGB_VER}-py3-none-${PLATFORM}.whl" "${BUILD_ARTIFACTSTAGINGDIRECTORY}" || exit 1
         fi
         # Make sure we can do both CPU and GPU; see tests/python_package_test/test_dual.py

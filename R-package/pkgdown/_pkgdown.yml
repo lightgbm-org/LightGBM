@@ -8,9 +8,9 @@ site:
 
 repo:
   url:
-    home: https://github.com/microsoft/LightGBM/
-    source: https://github.com/microsoft/LightGBM/tree/master/R-package/
-    issue: https://github.com/microsoft/LightGBM/issues/
+    home: https://github.com/lightgbm-org/LightGBM/
+    source: https://github.com/lightgbm-org/LightGBM/tree/master/R-package/
+    issue: https://github.com/lightgbm-org/LightGBM/issues/
     user: https://github.com/
 
 development:
@@ -47,7 +47,7 @@ navbar:
       href: reference/index.html
   right:
     - icon: fa-github fa-lg
-      href: https://github.com/microsoft/LightGBM/tree/master/R-package
+      href: https://github.com/lightgbm-org/LightGBM/tree/master/R-package
 
 reference:
   - title: Datasets

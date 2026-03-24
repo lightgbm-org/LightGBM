@@ -20,14 +20,14 @@ jobs:
   action:
     runs-on: ubuntu-latest
     steps:
-      - uses: dessant/lock-threads@v6
+      - uses: dessant/lock-threads@7266a7ce5c1df01b1c6db85bf8cd86c737dadbe7  # v6.0.0
         with:
           github-token: ${{ github.token }}
           # after how many days of inactivity should a closed issue/PR be locked?
           issue-inactive-days: '365'
           pr-inactive-days: '365'
           # do not close feature request issues...
-          # we close those but track them in https://github.com/microsoft/LightGBM/issues/2302
+          # we close those but track them in https://github.com/lightgbm-org/LightGBM/issues/2302
           exclude-any-issue-labels: 'feature request'
           # what labels should be removed prior to locking?
           remove-issue-labels: 'awaiting response,awaiting review,blocking,in progress'
@@ -38,14 +38,14 @@ jobs:
             since there has not been any recent activity since it was closed.
 
             To start a new related discussion,
-            open a new issue at https://github.com/microsoft/LightGBM/issues
+            open a new issue at https://github.com/lightgbm-org/LightGBM/issues
             including a reference to this.
           pr-comment: >
             This pull request has been automatically locked
             since there has not been any recent activity since it was closed.
 
             To start a new related discussion,
-            open a new issue at https://github.com/microsoft/LightGBM/issues
+            open a new issue at https://github.com/lightgbm-org/LightGBM/issues
             including a reference to this.
           # what should the locking status be?
           issue-lock-reason: 'resolved'

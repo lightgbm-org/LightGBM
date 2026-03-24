@@ -143,6 +143,10 @@ _LGBM_PredictReturnType = Union[
     scipy.sparse.spmatrix,
     List[scipy.sparse.spmatrix],
 ]
+_LGBM_PredictSparseReturnType = Union[
+    scipy.sparse.spmatrix,
+    List[scipy.sparse.spmatrix],
+]
 _LGBM_WeightType = Union[
     List[float],
     List[int],
@@ -1183,14 +1187,16 @@ class _InnerPredictor:
                 preds = np.loadtxt(f.name, dtype=np.float64)
                 nrow = preds.shape[0]
         elif isinstance(data, scipy.sparse.csr_matrix):
-            preds, nrow = self.__pred_for_csr(
+            # TODO: remove 'type: ignore[assignment]' when https://github.com/lightgbm-org/LightGBM/pull/6348 is resolved.
+            preds, nrow = self.__pred_for_csr(  # type: ignore[assignment]
                 csr=data,
                 start_iteration=start_iteration,
                 num_iteration=num_iteration,
                 predict_type=predict_type,
             )
         elif isinstance(data, scipy.sparse.csc_matrix):
-            preds, nrow = self.__pred_for_csc(
+            # TODO: remove 'type: ignore[assignment]' when https://github.com/lightgbm-org/LightGBM/pull/6348 is resolved.
+            preds, nrow = self.__pred_for_csc(  # type: ignore[assignment]
                 csc=data,
                 start_iteration=start_iteration,
                 num_iteration=num_iteration,
@@ -1227,7 +1233,8 @@ class _InnerPredictor:
                 csr = scipy.sparse.csr_matrix(data)
             except BaseException as err:
                 raise TypeError(f"Cannot predict data for type {type(data).__name__}") from err
-            preds, nrow = self.__pred_for_csr(
+            # TODO: remove 'type: ignore[assignment]' when https://github.com/lightgbm-org/LightGBM/pull/6348 is resolved.
+            preds, nrow = self.__pred_for_csr(  # type: ignore[assignment]
                 csr=csr,
                 start_iteration=start_iteration,
                 num_iteration=num_iteration,
@@ -1245,6 +1252,7 @@ class _InnerPredictor:
 
     def __get_num_preds(
         self,
+        *,
         start_iteration: int,
         num_iteration: int,
         nrow: int,
@@ -1328,7 +1336,12 @@ class _InnerPredictor:
             sections = np.arange(_MAX_INT32, nrow, _MAX_INT32)
             # __get_num_preds() cannot work with nrow > MAX_INT32, so calculate overall number of predictions piecemeal
             n_preds = [
-                self.__get_num_preds(start_iteration, num_iteration, i, predict_type)
+                self.__get_num_preds(
+                    start_iteration=start_iteration,
+                    num_iteration=num_iteration,
+                    nrow=int(i),
+                    predict_type=predict_type,
+                )
                 for i in np.diff([0] + list(sections) + [nrow])
             ]
             n_preds_sections = np.array([0] + n_preds, dtype=np.intp).cumsum()
@@ -1364,7 +1377,7 @@ class _InnerPredictor:
         indptr_type: int,
         data_type: int,
         is_csr: bool,
-    ) -> Union[List[scipy.sparse.csc_matrix], List[scipy.sparse.csr_matrix]]:
+    ) -> _LGBM_PredictSparseReturnType:
         # create numpy array from output arrays
         data_indices_len = out_shape[0]
         indptr_len = out_shape[1]
@@ -1472,7 +1485,7 @@ class _InnerPredictor:
         start_iteration: int,
         num_iteration: int,
         predict_type: int,
-    ) -> Tuple[Union[List[scipy.sparse.csc_matrix], List[scipy.sparse.csr_matrix]], int]:
+    ) -> Tuple[_LGBM_PredictSparseReturnType, int]:
         ptr_indptr, type_ptr_indptr, __ = _c_int_array(csr.indptr)
         ptr_data, type_ptr_data, _ = _c_float_array(csr.data)
         csr_indices = csr.indices.astype(np.int32, copy=False)
@@ -1530,7 +1543,7 @@ class _InnerPredictor:
         start_iteration: int,
         num_iteration: int,
         predict_type: int,
-    ) -> Tuple[np.ndarray, int]:
+    ) -> Tuple[_LGBM_PredictSparseReturnType, int]:
         """Predict for a CSR data."""
         if predict_type == _C_API_PREDICT_CONTRIB:
             return self.__inner_predict_csr_sparse(
@@ -1543,7 +1556,15 @@ class _InnerPredictor:
         if nrow > _MAX_INT32:
             sections = [0] + list(np.arange(_MAX_INT32, nrow, _MAX_INT32)) + [nrow]
             # __get_num_preds() cannot work with nrow > MAX_INT32, so calculate overall number of predictions piecemeal
-            n_preds = [self.__get_num_preds(start_iteration, num_iteration, i, predict_type) for i in np.diff(sections)]
+            n_preds = [
+                self.__get_num_preds(
+                    start_iteration=start_iteration,
+                    num_iteration=num_iteration,
+                    nrow=int(i),
+                    predict_type=predict_type,
+                )
+                for i in np.diff(sections)
+            ]
             n_preds_sections = np.array([0] + n_preds, dtype=np.intp).cumsum()
             preds = np.empty(sum(n_preds), dtype=np.float64)
             for (start_idx, end_idx), (start_idx_pred, end_idx_pred) in zip(
@@ -1573,7 +1594,7 @@ class _InnerPredictor:
         start_iteration: int,
         num_iteration: int,
         predict_type: int,
-    ) -> Tuple[Union[List[scipy.sparse.csc_matrix], List[scipy.sparse.csr_matrix]], int]:
+    ) -> Tuple[_LGBM_PredictSparseReturnType, int]:
         ptr_indptr, type_ptr_indptr, __ = _c_int_array(csc.indptr)
         ptr_data, type_ptr_data, _ = _c_float_array(csc.data)
         csc_indices = csc.indices.astype(np.int32, copy=False)
@@ -1631,7 +1652,7 @@ class _InnerPredictor:
         start_iteration: int,
         num_iteration: int,
         predict_type: int,
-    ) -> Tuple[np.ndarray, int]:
+    ) -> Tuple[_LGBM_PredictSparseReturnType, int]:
         """Predict for a CSC data."""
         nrow = csc.shape[0]
         if nrow > _MAX_INT32:
