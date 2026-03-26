@@ -745,8 +745,8 @@ class LGBMModel(_LGBMModelBase):
         }
         # "check_decision_proba_consistency" can be removed when lightgbm's
         # minimum supported scikit-learn version is at least 1.2
-        major, minor, *_ = _sklearn_version.split(".")
-        if int(major) <= 1 and int(minor) < 2:
+        sklearn_major, sklearn_minor, *_ = _sklearn_version.split(".")
+        if (int(sklearn_major), int(sklearn_minor)) < (1, 2):
             xfail_checks["check_decision_proba_consistency"] = (
                 "decision_function() returns raw margins while predict_proba() applies sigmoid in C++ "
                 "independently, causing different tie structures after rounding. "
