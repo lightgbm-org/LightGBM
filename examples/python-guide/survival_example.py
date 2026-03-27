@@ -24,7 +24,7 @@ lgb_train = lgb.Dataset(X_train, label=y_train)
 lgb_val = lgb.Dataset(X_val, label=y_val, reference=lgb_train)
 
 params = {
-    "objective": "survival",
+    "objective": "survival_cox",
     "metric": ["survival_cox_nll", "concordance_index"],
     "num_leaves": 31,
     "learning_rate": 0.05,

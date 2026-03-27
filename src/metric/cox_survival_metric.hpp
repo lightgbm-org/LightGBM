@@ -150,11 +150,15 @@ class ConcordanceIndexMetric : public Metric {
         if (i == j) {
           continue;
         }
-        const double t_j = std::fabs(static_cast<double>(label_[j]));
-        if (t_j <= t_i) {
-          continue;  // j must survive longer than i
+        const double y_j = static_cast<double>(label_[j]);
+        const double t_j = std::fabs(y_j);
+        if (t_j < t_i) {
+          continue;  // j's time is strictly earlier
         }
-        // comparable pair: i had event at t_i, j still at risk at t_i
+        if (t_j == t_i && y_j > 0) {
+          continue;  // j also had event at the same time — not comparable
+        }
+        // comparable: j survived past t_i, or was censored at t_i
         if (score[i] > score[j]) {
           concordant += 1;
         } else if (score[i] < score[j]) {

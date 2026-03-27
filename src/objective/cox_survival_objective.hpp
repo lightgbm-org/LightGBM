@@ -123,12 +123,12 @@ namespace LightGBM
 
     const char *GetName() const override
     {
-      return "survival";
+      return "survival_cox";
     }
 
     std::string ToString() const override
     {
-      return std::string("survival");
+      return std::string("survival_cox");
     }
 
     bool NeedAccuratePrediction() const override { return false; }
