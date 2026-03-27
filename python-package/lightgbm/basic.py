@@ -5308,5 +5308,6 @@ class Booster:
                     )
                 self.__name_inner_eval = [string_buffers[i].value.decode("utf-8") for i in range(self.__num_inner_eval)]
                 self.__higher_better_inner_eval = [
-                    name.startswith(("auc", "ndcg@", "map@", "average_precision")) for name in self.__name_inner_eval
+                    name.startswith(("auc", "ndcg@", "map@", "average_precision", "concordance_index"))
+                    for name in self.__name_inner_eval
                 ]
