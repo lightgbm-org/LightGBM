@@ -46,11 +46,6 @@ gbm = lgb.train(
     ],
 )
 
-loss = np.asarray(evals_result["val"]["survival_cox_nll"])
-c_index = np.asarray(evals_result["val"]["concordance_index"])
-print(f"Validation negative partial log-likelihood: {loss[gbm.best_iteration - 1]:.4f}")
-print(f"Validation concordance index: {c_index[gbm.best_iteration - 1]:.4f}")
-
 # Predictions are log-hazard ratios (higher = more risk)
 preds = gbm.predict(X_val, num_iteration=gbm.best_iteration)
 print(f"\nPrediction range: [{preds.min():.3f}, {preds.max():.3f}]")
