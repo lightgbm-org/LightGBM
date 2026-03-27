@@ -282,14 +282,16 @@ jobs:
           submodules: true
       - name: Install pandoc
         uses: r-lib/actions/setup-pandoc@6f6e5bc62fba3a704f74e7ad7ef7676c5c6a2590  # v2.11.4
-      - name: Install LaTeX
+      - name: Install system dependencies
         shell: bash
         run: |
+          # libuv is needed for {fs} (https://github.com/lightgbm-org/LightGBM/issues/7208)
           if type -f apt 2>&1 > /dev/null; then
             apt-get update
             apt-get install --no-install-recommends -y \
                 cmake \
                 devscripts \
+                libuv1-dev \
                 texinfo \
                 texlive-latex-extra \
                 texlive-latex-recommended \
@@ -302,6 +304,7 @@ jobs:
             yum install -y \
                 cmake \
                 devscripts \
+                libuv-devel \
                 qpdf \
                 texinfo \
                 texinfo-tex \
