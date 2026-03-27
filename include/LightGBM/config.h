@@ -132,7 +132,7 @@ struct Config {
   // [no-automatically-extract]
   // [no-save]
   // type = enum
-  // options = regression, regression_l1, huber, fair, poisson, quantile, mape, gamma, tweedie, binary, multiclass, multiclassova, cross_entropy, cross_entropy_lambda, lambdarank, rank_xendcg, cox
+  // options = regression, regression_l1, huber, fair, poisson, quantile, mape, gamma, tweedie, binary, multiclass, multiclassova, cross_entropy, cross_entropy_lambda, lambdarank, rank_xendcg, survival
   // alias = objective_type, app, application, loss
   // desc = regression application
   // descl2 = ``regression``, L2 loss, aliases: ``regression_l2``, ``l2``, ``mean_squared_error``, ``mse``, ``l2_root``, ``root_mean_squared_error``, ``rmse``
@@ -161,7 +161,7 @@ struct Config {
   // descl2 = ``rank_xendcg`` is faster than and achieves the similar performance as ``lambdarank``
   // descl2 = label should be ``int`` type, and larger number represents the higher relevance (e.g. 0:bad, 1:fair, 2:good, 3:perfect)
   // desc = survival analysis application
-  // descl2 = ``cox``, `Cox proportional hazards <https://en.wikipedia.org/wiki/Proportional_hazards_model>`__ partial likelihood with Breslow's method for ties, aliases: ``cox_ph``, ``survival_cox``
+  // descl2 = ``survival``, `Cox proportional hazards <https://en.wikipedia.org/wiki/Proportional_hazards_model>`__ partial likelihood with Breslow's method for ties, aliases: ``cox``, ``cox_ph``
   // descl2 = label encodes censoring via sign: positive value = event time, negative value = censored time
   // desc = custom objective function (gradients and hessians not computed directly by LightGBM)
   // descl2 = ``custom``
@@ -1042,7 +1042,7 @@ struct Config {
   // descl2 = ``cross_entropy``, cross-entropy (with optional linear weights), aliases: ``xentropy``
   // descl2 = ``cross_entropy_lambda``, "intensity-weighted" cross-entropy, aliases: ``xentlambda``
   // descl2 = ``kullback_leibler``, `Kullback-Leibler divergence <https://en.wikipedia.org/wiki/Kullback%E2%80%93Leibler_divergence>`__, aliases: ``kldiv``
-  // descl2 = ``cox_nll``, negative partial log-likelihood for `Cox proportional hazards <https://en.wikipedia.org/wiki/Proportional_hazards_model>`__ model
+  // descl2 = ``survival_cox_nll``, negative partial log-likelihood for `Cox proportional hazards <https://en.wikipedia.org/wiki/Proportional_hazards_model>`__ model, aliases: ``cox_nll``, ``survival_nll``
   // descl2 = ``concordance_index``, `Harrell's concordance index <https://en.wikipedia.org/wiki/Concordance_(statistics)>`__ for survival models, aliases: ``c_index``
   // desc = support multiple metrics, separated by ``,``
   std::vector<std::string> metric;
@@ -1298,8 +1298,8 @@ inline std::string ParseObjectiveAlias(const std::string& type) {
   } else if (type == std::string("rank_xendcg") || type == std::string("xendcg") || type == std::string("xe_ndcg")
              || type == std::string("xe_ndcg_mart") || type == std::string("xendcg_mart")) {
     return "rank_xendcg";
-  } else if (type == std::string("cox") || type == std::string("cox_ph") || type == std::string("survival_cox")) {
-    return "cox";
+  } else if (type == std::string("survival") || type == std::string("cox") || type == std::string("cox_ph")) {
+    return "survival";
   } else if (type == std::string("none") || type == std::string("null") || type == std::string("custom") || type == std::string("na")) {
     return "custom";
   }
@@ -1330,8 +1330,8 @@ inline std::string ParseMetricAlias(const std::string& type) {
     return "kullback_leibler";
   } else if (type == std::string("mean_absolute_percentage_error") || type == std::string("mape")) {
     return "mape";
-  } else if (type == std::string("cox") || type == std::string("cox_ph") || type == std::string("survival_cox")) {
-    return "cox_nll";
+  } else if (type == std::string("survival") || type == std::string("survival_cox_nll") || type == std::string("survival_nll") || type == std::string("cox") || type == std::string("cox_ph") || type == std::string("cox_nll")) {
+    return "survival_cox_nll";
   } else if (type == std::string("c_index") || type == std::string("concordance_index")) {
     return "concordance_index";
   } else if (type == std::string("none") || type == std::string("null") || type == std::string("custom") || type == std::string("na")) {

@@ -63,8 +63,8 @@ ObjectiveFunction* ObjectiveFunction::CreateObjectiveFunctionCUDA(const std::str
   } else if (type == std::string("tweedie")) {
     Log::Warning("Objective tweedie is not implemented in cuda version. Fall back to boosting on CPU.");
     return new RegressionTweedieLoss(config);
-  } else if (type == std::string("cox")) {
-    Log::Warning("Objective cox is not implemented in cuda version. Fall back to boosting on CPU.");
+  } else if (type == std::string("survival")) {
+    Log::Warning("Objective survival is not implemented in cuda version. Fall back to boosting on CPU.");
     return new CoxPHLoss(config);
   } else if (type == std::string("custom")) {
     Log::Warning("Using customized objective with cuda. This requires copying gradients from CPU to GPU, which can be slow.");
@@ -113,7 +113,7 @@ ObjectiveFunction* ObjectiveFunction::CreateObjectiveFunction(const std::string&
       return new RegressionGammaLoss(config);
     } else if (type == std::string("tweedie")) {
       return new RegressionTweedieLoss(config);
-    } else if (type == std::string("cox")) {
+    } else if (type == std::string("survival")) {
       return new CoxPHLoss(config);
     } else if (type == std::string("custom")) {
       return nullptr;
@@ -160,7 +160,7 @@ ObjectiveFunction* ObjectiveFunction::CreateObjectiveFunction(const std::string&
     return new RegressionGammaLoss(strs);
   } else if (type == std::string("tweedie")) {
     return new RegressionTweedieLoss(strs);
-  } else if (type == std::string("cox")) {
+  } else if (type == std::string("survival")) {
     return new CoxPHLoss(strs);
   } else if (type == std::string("custom")) {
     return nullptr;

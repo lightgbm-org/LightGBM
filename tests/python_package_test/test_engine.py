@@ -449,7 +449,7 @@ def test_cox():
     lgb_train = lgb.Dataset(X_train, label=y_train)
     lgb_eval = lgb.Dataset(X_test, label=y_test, reference=lgb_train)
     evals_result = {}
-    params = {"objective": "cox", "metric": ["cox_nll", "concordance_index"], "verbose": -1, "num_leaves": 8}
+    params = {"objective": "survival", "metric": ["survival_cox_nll", "concordance_index"], "verbose": -1, "num_leaves": 8}
     lgb.train(
         params,
         lgb_train,
@@ -458,9 +458,9 @@ def test_cox():
         valid_names=["val"],
         callbacks=[lgb.record_evaluation(evals_result)],
     )
-    assert "cox_nll" in evals_result["val"]
+    assert "survival_cox_nll" in evals_result["val"]
     assert "concordance_index" in evals_result["val"]
-    assert len(evals_result["val"]["cox_nll"]) == 50
+    assert len(evals_result["val"]["survival_cox_nll"]) == 50
     # concordance index should be above random (0.5) for this easy problem
     assert evals_result["val"]["concordance_index"][-1] > 0.55
 

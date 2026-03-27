@@ -82,8 +82,8 @@ Metric* Metric::CreateMetric(const std::string& type, const Config& config) {
     } else if (type == std::string("r2")) {
       Log::Warning("Metric r2 is not implemented in cuda version. Fall back to evaluation on CPU.");
       return new R2Metric(config);
-    } else if (type == std::string("cox_nll")) {
-      Log::Warning("Metric cox_nll is not implemented in cuda version. Fall back to evaluation on CPU.");
+    } else if (type == std::string("survival_cox_nll")) {
+      Log::Warning("Metric survival_cox_nll is not implemented in cuda version. Fall back to evaluation on CPU.");
       return new CoxNLLMetric(config);
     } else if (type == std::string("concordance_index") || type == std::string("c_index")) {
       Log::Warning("Metric concordance_index is not implemented in cuda version. Fall back to evaluation on CPU.");
@@ -139,7 +139,7 @@ Metric* Metric::CreateMetric(const std::string& type, const Config& config) {
       return new TweedieMetric(config);
     } else if (type == std::string("r2")) {
       return new R2Metric(config);
-    } else if (type == std::string("cox_nll")) {
+    } else if (type == std::string("survival_cox_nll")) {
       return new CoxNLLMetric(config);
     } else if (type == std::string("concordance_index") || type == std::string("c_index")) {
       return new ConcordanceIndexMetric(config);

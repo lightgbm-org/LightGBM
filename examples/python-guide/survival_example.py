@@ -1,11 +1,4 @@
 # coding: utf-8
-"""Cox proportional hazards survival analysis with LightGBM.
-
-Uses the built-in ``cox`` objective for right-censored survival data.
-Labels encode censoring via sign: +t means an event at time t, -t means
-censored at time t.
-"""
-
 import numpy as np
 
 import lightgbm as lgb
@@ -31,8 +24,8 @@ lgb_train = lgb.Dataset(X_train, label=y_train)
 lgb_val = lgb.Dataset(X_val, label=y_val, reference=lgb_train)
 
 params = {
-    "objective": "cox",
-    "metric": ["cox_nll", "concordance_index"],
+    "objective": "survival",
+    "metric": ["survival_cox_nll", "concordance_index"],
     "num_leaves": 31,
     "learning_rate": 0.05,
     "verbose": 0,
@@ -51,7 +44,7 @@ gbm = lgb.train(
     ],
 )
 
-print(f"Validation cox_nll: {evals_result['val']['cox_nll'][gbm.best_iteration - 1]:.4f}")
+print(f"Validation negative partial log-likelihood: {evals_result['val']['survival_cox_nll'][gbm.best_iteration - 1]:.4f}")
 print(f"Validation concordance index: {evals_result['val']['concordance_index'][gbm.best_iteration - 1]:.4f}")
 
 # Predictions are log-hazard ratios (higher = more risk)

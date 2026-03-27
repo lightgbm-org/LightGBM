@@ -29,7 +29,7 @@ class CoxNLLMetric : public Metric {
   ~CoxNLLMetric() {}
 
   void Init(const Metadata& metadata, data_size_t num_data) override {
-    name_.emplace_back("cox_nll");
+    name_.emplace_back("survival_cox_nll");
     num_data_ = num_data;
     label_ = metadata.label();
 
