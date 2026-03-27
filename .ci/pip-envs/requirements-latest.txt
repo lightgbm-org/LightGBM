@@ -14,7 +14,9 @@ numpy>=2.4.0.dev0
 pandas>=3.0.0.dev0
 pyarrow>=21.0.0.dev0
 scikit-learn>=1.8.dev0
-scipy>=1.17.0.dev0
+
+# TODO: make this a pre-release requirement again once https://github.com/scikit-learn/scikit-learn/issues/33616 is resolved
+scipy>=1.17.0
 
 # testing-only dependencies
 cloudpickle>=3.1.1
