@@ -443,7 +443,7 @@ def test_categorical_non_zero_inputs(use_quantized_grad):
     assert evals_result["valid_0"]["auc"][-1] == pytest.approx(ret)
 
 
-def test_cox():
+def test_suvival_cox():
     X, y = load_survival()
     X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.25, random_state=0)
     lgb_train = lgb.Dataset(X_train, label=y_train)
