@@ -98,19 +98,14 @@ namespace LightGBM
           accumulated_sum = 0.0;
         }
 
-        // Floor to prevent division by zero. The max-shift ensures exp_p_sum
-        // starts >= 1.0, but after many boosting rounds predictions can diverge
-        // enough that exp(p_i - max_p) underflows to 0 for tail observations.
-        const double safe_exp_p_sum = std::max(exp_p_sum, 1e-100);
-
         if (y > 0)
         {
-          r_k += 1.0 / safe_exp_p_sum;
-          s_k += 1.0 / (safe_exp_p_sum * safe_exp_p_sum);
+          r_k += 1.0 / exp_p_sum;
+          s_k += 1.0 / (exp_p_sum * exp_p_sum);
         }
 
         double g = exp_p * r_k - static_cast<double>(y > 0);
-        double h = std::max(exp_p * r_k - exp_p * exp_p * s_k, 1e-16);
+        double h = exp_p * r_k - exp_p * exp_p * s_k;
 
         if (weights_ != nullptr)
         {

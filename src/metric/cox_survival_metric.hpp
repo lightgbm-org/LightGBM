@@ -86,11 +86,9 @@ class CoxNLLMetric : public Metric {
         accumulated_sum = 0.0;
       }
 
-      const double safe_exp_p_sum = std::max(exp_p_sum, 1e-100);
-
       if (y > 0) {
         // p - log(sum exp(p_k)) = (p - max_p) - log(sum exp(p_k - max_p))
-        pll += (p - max_p) - std::log(safe_exp_p_sum);
+        pll += (p - max_p) - std::log(exp_p_sum);
         n_events += 1;
       }
 
