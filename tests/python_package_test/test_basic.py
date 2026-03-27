@@ -1098,3 +1098,23 @@ def test_set_field_none_removes_field(rng, field_name):
 
     d.set_field(field_name, None)
     assert d.get_field(field_name) is None
+
+
+def test_booster_shuffle_models() -> None:
+    X_train, _, y_train, _ = train_test_split(
+        *load_breast_cancer(return_X_y=True),
+        test_size=0.1,
+        random_state=42,
+    )
+    train_set = lgb.Dataset(X_train, label=y_train)
+    booster = lgb.Booster(
+        params={"objective": "binary", "verbose": -1},
+        train_set=train_set,
+    )
+    for _ in range(2):
+        booster.update()
+
+    model_str_before = booster.model_to_string()
+    booster.shuffle_models(start_iteration=0, end_iteration=-1)
+    model_str_after = booster.model_to_string()
+    assert model_str_before != model_str_after
