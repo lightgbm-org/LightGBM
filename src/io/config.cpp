@@ -455,8 +455,6 @@ void Config::CheckParamConflict(const std::unordered_map<std::string, std::strin
         "monotone_constraints_method is set to \"%s\" but monotone_constraints "
         "is not provided. Ignoring monotone constraints.",
         monotone_constraints_method.c_str());
-
-    monotone_constraints_method = "basic";
   }
   if (is_parallel && (monotone_constraints_method == std::string("intermediate") || monotone_constraints_method == std::string("advanced"))) {
     // In distributed mode, local node doesn't have histograms on all features, cannot perform "intermediate" monotone constraints.

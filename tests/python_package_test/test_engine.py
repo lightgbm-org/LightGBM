@@ -2278,7 +2278,7 @@ def test_monotone_constraints_method_without_constraints(test_with_categorical_v
     }
 
     with pytest.warns(UserWarning, match="monotone_constraints_method"):
-        booster = lgb.train(params, trainset)   
+        booster = lgb.train(params, trainset)
 
     # Ensure training didn't crash
     assert booster is not None
@@ -2286,8 +2286,9 @@ def test_monotone_constraints_method_without_constraints(test_with_categorical_v
     # Ensure param still exists
     assert "monotone_constraints_method" in booster.params
 
-    # Ensure fallback happened
-    assert booster.params["monotone_constraints_method"] == "basic"
+    # monotone_constraints_method should not be mutated when monotone_constraints is empty.
+    # It should be preserved as provided, but ignored internally.
+    assert booster.params["monotone_constraints_method"] == "advanced"
 
 
 @pytest.mark.skipif(getenv("TASK", "") == "cuda", reason="Monotone constraints are not yet supported by CUDA version")
