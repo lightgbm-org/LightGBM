@@ -1174,6 +1174,9 @@ class AdvancedLeafConstraints : public IntermediateLeafConstraints {
 
 LeafConstraintsBase* LeafConstraintsBase::Create(const Config* config,
                                                  int num_leaves, int num_features) {
+  if (config->monotone_constraints.empty()) {
+    return new BasicLeafConstraints(num_leaves);
+  }
   if (config->monotone_constraints_method == "intermediate") {
     return new IntermediateLeafConstraints(config, num_leaves);
   }
