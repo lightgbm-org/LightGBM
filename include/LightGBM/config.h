@@ -1043,7 +1043,7 @@ struct Config {
   // descl2 = ``cross_entropy_lambda``, "intensity-weighted" cross-entropy, aliases: ``xentlambda``
   // descl2 = ``kullback_leibler``, `Kullback-Leibler divergence <https://en.wikipedia.org/wiki/Kullback%E2%80%93Leibler_divergence>`__, aliases: ``kldiv``
   // descl2 = ``survival_cox_nll``, negative partial log-likelihood for `Cox proportional hazards <https://en.wikipedia.org/wiki/Proportional_hazards_model>`__ model, aliases: ``cox_nll``, ``survival_nll``
-  // descl2 = ``concordance_index``, `Harrell's concordance index <https://doi.org/10.1002/(SICI)1097-0258(19960229)15:4<361::AID-SIM168>3.0.CO;2-4>`__ for survival models, aliases: ``c_index``
+  // descl2 = ``concordance_index``, `Harrell's concordance index <https://doi.org/10.1002/(SICI)1097-0258(19960229)15:4%3C361::AID-SIM168%3E3.0.CO;2-4>`__ for survival models, aliases: ``c_index``
   // desc = support multiple metrics, separated by ``,``
   std::vector<std::string> metric;
 

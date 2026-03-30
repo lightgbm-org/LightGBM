@@ -1287,7 +1287,7 @@ Metric Parameters
 
       -  ``survival_cox_nll``, negative partial log-likelihood for `Cox proportional hazards <https://en.wikipedia.org/wiki/Proportional_hazards_model>`__ model, aliases: ``cox_nll``, ``survival_nll``
 
-      -  ``concordance_index``, `Harrell's concordance index <https://doi.org/10.1002/(SICI)1097-0258(19960229)15:4<361::AID-SIM168>3.0.CO;2-4>`__ for survival models, aliases: ``c_index``
+      -  ``concordance_index``, `Harrell's concordance index <https://doi.org/10.1002/(SICI)1097-0258(19960229)15:4%3C361::AID-SIM168%3E3.0.CO;2-4>`__ for survival models, aliases: ``c_index``
 
    -  support multiple metrics, separated by ``,``
 
