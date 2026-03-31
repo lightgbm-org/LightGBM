@@ -569,21 +569,21 @@ kernel void histogram256(
     uint feature4_id = (group_id >> POWER_FEATURE_WORKGROUPS);
 
     if (POWER_FEATURE_WORKGROUPS != 0) {
-        // Multiple workgroups per feature4: write sub-histogram in INTERLEAVED format
-        // (same as final output) so CPU-side reduction is element-wise addition.
-        // Layout: [grad_b0, hess_b0, grad_b1, hess_b1, ...] per feature
+        // Multiple workgroups per feature4: write sub-histogram.
+        // This matches the original OpenCL write format exactly:
+        //   per feature j: [grad_b0, grad_b1, ..., grad_b255, hess_b0, ..., hess_b255]
+        // Feature j=0 corresponds to the feature at gh_hist[... + 0] (i.e., the .w component
+        // after rotation, which maps to output "feature 0" in within_kernel_reduction).
         device acc_type* output = (device acc_type*)output_buf + group_id * 4 * 2 * NUM_BINS;
         device acc_type* ptr_f = output;
         for (ushort j = 0; j < 4; ++j) {
-            for (ushort i = ltid; i < NUM_BINS; i += lsize) {
-                // gh_hist layout: [bin * 8 + is_hess * 4 + feature]
-                // Read gradient and hessian for this feature and bin
-                ptr_f[i * 2]     = gh_hist[(i * 2) * 4 + j];     // gradient
-                ptr_f[i * 2 + 1] = gh_hist[(i * 2 + 1) * 4 + j]; // hessian
+            for (ushort i = ltid; i < 2 * NUM_BINS; i += lsize) {
+                acc_type value = gh_hist[i * 4 + j];
+                ptr_f[(i & 1) * NUM_BINS + (i >> 1)] = value;
             }
             ptr_f += 2 * NUM_BINS;
         }
-        // Sub-histograms written. CPU-side element-wise reduction follows.
+        // Sub-histograms written. CPU-side reduction follows.
     } else {
         // only 1 workgroup per feature4, no need for counter -- reduction is a simple copy
         uint old_val = 0; // dummy

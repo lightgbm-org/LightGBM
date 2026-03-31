@@ -139,16 +139,16 @@ Tree* MetalTreeLearner::Train(const score_t* gradients, const score_t* hessians,
 // ============================================================================
 
 int MetalTreeLearner::GetNumWorkgroupsPerFeature(data_size_t leaf_num_data) {
-  // We roughly want 256 workgroups per device, and we have num_dense_feature4_ feature tuples.
-  // Also guarantee that there are at least 2K examples per workgroup.
-  // Currently using single workgroup per feature (POWER=0) for correctness.
-  // Multi-workgroup support requires further debugging of the sub-histogram
-  // accumulation with multiple threadgroups. The infrastructure is in place
-  // (interleaved sub-histogram writes + CPU-side reduction), but the kernel
-  // produces incorrect histograms when POWER > 0. This will be addressed in
-  // a follow-up.
-  (void)leaf_num_data;
-  return 0;
+  double x = 256.0 / num_dense_feature4_;
+  int exp_workgroups_per_feature = static_cast<int>(ceil(log2(x)));
+  double t = leaf_num_data / 1024.0;
+  exp_workgroups_per_feature = std::min(exp_workgroups_per_feature,
+                                        static_cast<int>(ceil(log(static_cast<double>(t)) / log(2.0))));
+  if (exp_workgroups_per_feature < 0)
+    exp_workgroups_per_feature = 0;
+  if (exp_workgroups_per_feature > kMaxLogWorkgroupsPerFeature)
+    exp_workgroups_per_feature = kMaxLogWorkgroupsPerFeature;
+  return exp_workgroups_per_feature;
 }
 
 // ============================================================================
@@ -1047,8 +1047,10 @@ void MetalTreeLearner::WaitAndGetHistograms(hist_t* histograms) {
 
     if (pending_exp_workgroups_ > 0) {
       // Multi-workgroup: reduce sub-histograms on CPU.
-      // Sub-histograms are in the same interleaved format as the final output,
-      // so reduction is simple element-wise addition.
+      // Sub-histograms have SEPARATED format per feature:
+      //   [grad_b0..b(N-1), hess_b0..b(N-1)] for each of dword_features_ features.
+      // Final output needs INTERLEAVED format:
+      //   [grad_b0, hess_b0, grad_b1, hess_b1, ...] for each feature.
       id<MTLBuffer> subhistBuf = (__bridge id<MTLBuffer>)subhistograms_buffer_;
       const gpu_hist_t* sub_hist = reinterpret_cast<const gpu_hist_t*>([subhistBuf contents]);
       int num_sub = 1 << pending_exp_workgroups_;
@@ -1058,11 +1060,48 @@ void MetalTreeLearner::WaitAndGetHistograms(hist_t* histograms) {
 
       #pragma omp parallel for num_threads(OMP_NUM_THREADS()) schedule(static)
       for (int f4 = 0; f4 < num_dense_feature4_; ++f4) {
-        gpu_hist_t* dst = hist_outputs + f4 * dword_features_ * device_bin_size_ * 2;
         for (int s = 0; s < num_sub; ++s) {
           const gpu_hist_t* src = sub_hist + (f4 * num_sub + s) * elems_per_sub;
-          for (int e = 0; e < elems_per_sub; ++e) {
-            dst[e] += src[e];
+          if (device_bin_size_ == 256) {
+            // histogram256: each feature's sub-histogram is laid out as
+            // [grad_b0..b255, hess_b0..b255], and kernel feature order is reversed.
+            for (int feat = 0; feat < dword_features_; ++feat) {
+              int reversed_feat = dword_features_ - 1 - feat;
+              const gpu_hist_t* feat_src = src + feat * 2 * device_bin_size_;
+              gpu_hist_t* feat_dst = hist_outputs + (f4 * dword_features_ + reversed_feat) * device_bin_size_ * 2;
+              for (int bin = 0; bin < device_bin_size_; ++bin) {
+                feat_dst[bin * 2]     += feat_src[bin];                      // gradient
+                feat_dst[bin * 2 + 1] += feat_src[device_bin_size_ + bin];  // hessian
+              }
+            }
+          } else if (device_bin_size_ == 64) {
+            // histogram64: gradients are stored as a bin-major block
+            // [f0b0, f1b0, f2b0, f3b0, f0b1, ...], followed by the same layout for hessians.
+            // Kernel feature order is reversed, matching within_kernel_reduction64x4().
+            const gpu_hist_t* grad_src = src;
+            const gpu_hist_t* hess_src = src + dword_features_ * device_bin_size_;
+            for (int bin = 0; bin < device_bin_size_; ++bin) {
+              for (int feat = 0; feat < dword_features_; ++feat) {
+                int reversed_feat = dword_features_ - 1 - feat;
+                gpu_hist_t* feat_dst = hist_outputs + (f4 * dword_features_ + reversed_feat) * device_bin_size_ * 2;
+                feat_dst[bin * 2]     += grad_src[bin * dword_features_ + feat];
+                feat_dst[bin * 2 + 1] += hess_src[bin * dword_features_ + feat];
+              }
+            }
+          } else {
+            // histogram16: sub-histogram has ltid-indexed format
+            // [f0g_b0..f7g_b0, f0h_b0..f7h_b0, f0g_b1..., ...]
+            // Kernel feature order is reversed, matching within_kernel_reduction16x8().
+            for (int bin = 0; bin < device_bin_size_; ++bin) {
+              for (int feat = 0; feat < dword_features_; ++feat) {
+                int reversed_feat = dword_features_ - 1 - feat;
+                gpu_hist_t grad = src[bin * 2 * dword_features_ + feat];
+                gpu_hist_t hess = src[bin * 2 * dword_features_ + dword_features_ + feat];
+                gpu_hist_t* feat_dst = hist_outputs + (f4 * dword_features_ + reversed_feat) * device_bin_size_ * 2;
+                feat_dst[bin * 2]     += grad;
+                feat_dst[bin * 2 + 1] += hess;
+              }
+            }
           }
         }
       }

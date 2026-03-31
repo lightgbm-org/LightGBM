@@ -539,14 +539,14 @@ kernel void histogram64(
     // if there is only one workgroup processing this feature4, don't even need to write
     uint feature4_id = (group_id >> POWER_FEATURE_WORKGROUPS);
     if (POWER_FEATURE_WORKGROUPS != 0) {
-        // Multiple workgroups per feature4: write sub-histogram in INTERLEAVED format
-        // (same as final output) so CPU-side reduction is element-wise addition.
+        // Multiple workgroups per feature4: write sub-histogram.
+        // Matches original OpenCL format: gradient block then hessian block.
         // feature_id = ltid & 3, bin_id = ltid >> 2
+        // ltid maps to: [f0b0, f1b0, f2b0, f3b0, f0b1, f1b1, ...] for 256 threads
         device acc_type* output = (device acc_type*)output_buf + group_id * 4 * 2 * NUM_BINS;
-        // Write grad/hess pair at the interleaved position for this feature and bin
-        output[feature_id * 2 * NUM_BINS + bin_id * 2]     = g_val;
-        output[feature_id * 2 * NUM_BINS + bin_id * 2 + 1] = h_val;
-        // Sub-histograms written. CPU-side element-wise reduction follows.
+        output[0 * 4 * NUM_BINS + ltid] = g_val;
+        output[1 * 4 * NUM_BINS + ltid] = h_val;
+        // Sub-histograms written. CPU-side reduction follows.
     } else {
         // only 1 work group, no need to increase counter
         // the reduction will become a simple copy

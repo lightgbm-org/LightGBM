@@ -562,15 +562,12 @@ kernel void histogram16(
     uint feature4_id = (group_id >> POWER_FEATURE_WORKGROUPS);
 
     if (POWER_FEATURE_WORKGROUPS != 0) {
-        // Multiple workgroups per feature: write sub-histogram in INTERLEAVED format
-        // (same as final output) so CPU-side reduction is element-wise addition.
+        // Multiple workgroups per feature: write sub-histogram.
+        // Matches original OpenCL format: direct ltid-indexed write.
+        // ltid layout: [f0g_b0..f7g_b0, f0h_b0..f7h_b0, f0g_b1..f7g_b1, ...]
         device acc_type* output = (device acc_type*)output_buf + group_id * DWORD_FEATURES * 2 * NUM_BINS;
-        // Recompute bin_id from ltid (may have been modified in CONST_HESSIAN block)
-        ushort out_feature = ltid & DWORD_FEATURES_MASK;
-        ushort out_is_hess = (ltid >> LOG2_DWORD_FEATURES) & 1;
-        ushort out_bin = ltid >> (LOG2_DWORD_FEATURES + 1);
-        output[out_feature * 2 * NUM_BINS + out_bin * 2 + out_is_hess] = stat_val;
-        // Sub-histograms written. CPU-side element-wise reduction follows.
+        output[ltid] = stat_val;
+        // Sub-histograms written. CPU-side reduction follows.
     } else {
         // only 1 workgroup, no need to increase counter
         // the reduction will become a simple copy
