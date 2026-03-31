@@ -30,7 +30,7 @@ constant constexpr ushort FEATURE_BITS         = 4;       // sizeof(uchar4)*8 / 
 constant constexpr ushort DWORD_FEATURES_MASK  = DWORD_FEATURES - 1;  // 7
 constant constexpr ushort LOG2_DWORD_FEATURES  = 3;
 constant constexpr ushort NUM_BANKS            = 8;
-constant constexpr ushort BANK_BITS            = 3;
+// BANK_BITS = 3 (log2(NUM_BANKS)) — used implicitly via BANK_MASK
 constant constexpr ushort BANK_MASK            = NUM_BANKS - 1;       // 7
 // 8 features, each has a gradient and a hessian
 constant constexpr ushort HG_BIN_MULT          = NUM_BANKS * DWORD_FEATURES * 2;  // 128

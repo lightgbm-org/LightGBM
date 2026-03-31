@@ -92,7 +92,6 @@ inline void within_kernel_reduction64x4(
         threadgroup acc_type* local_hist,
         ushort ltid)
 {
-    const ushort lsize = LOCAL_SIZE_0;
     ushort feature_id = ltid & 3; // range 0 - 3
     const ushort bin_id = ltid >> 2; // range 0 - 63
     ushort i;

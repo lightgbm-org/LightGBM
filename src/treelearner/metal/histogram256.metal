@@ -76,7 +76,6 @@ void within_kernel_reduction256x4(
         threadgroup acc_type* local_hist,
         ushort ltid)
 {
-    const ushort lsize = LOCAL_SIZE_0;
     // initialize register counters from our threadgroup memory
     acc_type f0_grad_bin = local_hist[ltid * 8];
     acc_type f1_grad_bin = local_hist[ltid * 8 + 1];
