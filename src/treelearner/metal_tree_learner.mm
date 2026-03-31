@@ -594,8 +594,8 @@ void MetalTreeLearner::AllocateMetalBuffers() {
     features_buffer_ = (__bridge_retained void*)featuresBuf;
 
     // make ordered_gradients and Hessians larger (including extra room for prefetching)
-    ordered_gradients_.resize(allocated_num_data);
-    ordered_hessians_.resize(allocated_num_data);
+    ordered_gradients_.reserve(allocated_num_data);
+    ordered_hessians_.reserve(allocated_num_data);
 
     // Release old gradient/hessian buffers
     if (gradients_buffer_) {
@@ -976,6 +976,9 @@ bool MetalTreeLearner::BeforeFindBestSplit(const Tree* tree, int left_leaf, int 
 // ============================================================================
 
 void MetalTreeLearner::MetalHistogram(data_size_t leaf_num_data, bool use_all_features) {
+  if (!num_dense_feature_groups_) {
+    return;
+  }
   @autoreleasepool {
     int exp_workgroups_per_feature = GetNumWorkgroupsPerFeature(leaf_num_data);
     int num_workgroups = (1 << exp_workgroups_per_feature) * num_dense_feature4_;
@@ -1334,6 +1337,45 @@ void MetalTreeLearner::ConstructHistograms(const std::vector<int8_t>& is_feature
     ordered_gradients_.data(), ordered_hessians_.data(),
     share_state_.get(),
     ptr_smaller_leaf_hist_data);
+
+  // Compare GPU histogram with CPU histogram, useful for debugging GPU code problems.
+  // Uncomment the #define below to enable.
+  // #define METAL_DEBUG_COMPARE
+  #ifdef METAL_DEBUG_COMPARE
+  if (smaller_gpu_used) {
+    for (int i = 0; i < num_dense_feature_groups_; ++i) {
+      if (!feature_masks_[i]) continue;
+      int dense_group_index = dense_feature_group_map_[i];
+      size_t size = train_data_->FeatureGroupNumBin(dense_group_index);
+      hist_t* current_histogram = ptr_smaller_leaf_hist_data + train_data_->GroupBinBoundary(dense_group_index) * 2;
+      std::vector<hist_t> gpu_histogram(size * 2);
+      std::copy(current_histogram, current_histogram + size * 2, gpu_histogram.data());
+      std::memset(current_histogram, 0, size * sizeof(hist_t) * 2);
+      if (train_data_->FeatureGroupBin(dense_group_index) == nullptr) continue;
+      data_size_t num_data_leaf = smaller_leaf_splits_->num_data_in_leaf();
+      if (num_data_leaf != num_data_) {
+        train_data_->FeatureGroupBin(dense_group_index)->ConstructHistogram(
+          smaller_leaf_splits_->data_indices(), 0, num_data_leaf,
+          ordered_gradients_.data(), ordered_hessians_.data(), current_histogram);
+      } else {
+        train_data_->FeatureGroupBin(dense_group_index)->ConstructHistogram(
+          0, num_data_leaf, gradients_, hessians_, current_histogram);
+      }
+      for (size_t j = 0; j < size; ++j) {
+        if (std::fabs(GET_GRAD(gpu_histogram.data(), j) - GET_GRAD(current_histogram, j)) > 1e-3 ||
+            std::fabs(GET_HESS(gpu_histogram.data(), j) - GET_HESS(current_histogram, j)) > 1e-3) {
+          Log::Warning("Metal histogram mismatch: feature %d bin %lu: "
+                       "gpu_g=%.6f cpu_g=%.6f gpu_h=%.6f cpu_h=%.6f",
+                       dense_group_index, j,
+                       GET_GRAD(gpu_histogram.data(), j), GET_GRAD(current_histogram, j),
+                       GET_HESS(gpu_histogram.data(), j), GET_HESS(current_histogram, j));
+          break;
+        }
+      }
+      std::copy(gpu_histogram.data(), gpu_histogram.data() + size * 2, current_histogram);
+    }
+  }
+  #endif
 
   if (larger_leaf_histogram_array_ != nullptr && !use_subtract) {
     hist_t* ptr_larger_leaf_hist_data = larger_leaf_histogram_array_[0].RawData() - kHistOffset;
