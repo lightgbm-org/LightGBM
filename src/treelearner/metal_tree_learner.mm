@@ -897,29 +897,28 @@ void MetalTreeLearner::BeforeTrain() {
   // use bagging
   if (data_partition_->leaf_count(0) != num_data_ && num_dense_feature_groups_) {
     @autoreleasepool {
-      // On Metal, we copy indices, gradients and Hessians now
       const data_size_t* indices = data_partition_->indices();
       data_size_t cnt = data_partition_->leaf_count(0);
 
-      // copy indices to Metal shared buffer
+      // Gather directly into Metal shared buffers (no intermediate vector copy)
       id<MTLBuffer> indicesBuf = (__bridge id<MTLBuffer>)data_indices_buffer_;
       std::memcpy([indicesBuf contents], indices, cnt * sizeof(data_size_t));
 
-      if (!share_state_->is_constant_hessian) {
-        #pragma omp parallel for num_threads(OMP_NUM_THREADS()) schedule(static)
-        for (data_size_t i = 0; i < cnt; ++i) {
-          ordered_hessians_[i] = hessians_[indices[i]];
-        }
-        id<MTLBuffer> hessBuf = (__bridge id<MTLBuffer>)hessians_buffer_;
-        std::memcpy([hessBuf contents], ordered_hessians_.data(), cnt * sizeof(score_t));
-      }
-
+      id<MTLBuffer> gradBuf = (__bridge id<MTLBuffer>)gradients_buffer_;
+      score_t* gpu_grads = reinterpret_cast<score_t*>([gradBuf contents]);
       #pragma omp parallel for num_threads(OMP_NUM_THREADS()) schedule(static)
       for (data_size_t i = 0; i < cnt; ++i) {
-        ordered_gradients_[i] = gradients_[indices[i]];
+        gpu_grads[i] = gradients_[indices[i]];
       }
-      id<MTLBuffer> gradBuf = (__bridge id<MTLBuffer>)gradients_buffer_;
-      std::memcpy([gradBuf contents], ordered_gradients_.data(), cnt * sizeof(score_t));
+
+      if (!share_state_->is_constant_hessian) {
+        id<MTLBuffer> hessBuf = (__bridge id<MTLBuffer>)hessians_buffer_;
+        score_t* gpu_hess = reinterpret_cast<score_t*>([hessBuf contents]);
+        #pragma omp parallel for num_threads(OMP_NUM_THREADS()) schedule(static)
+        for (data_size_t i = 0; i < cnt; ++i) {
+          gpu_hess[i] = hessians_[indices[i]];
+        }
+      }
     }
   }
 }
@@ -941,32 +940,32 @@ bool MetalTreeLearner::BeforeFindBestSplit(const Tree* tree, int left_leaf, int 
     smaller_leaf = right_leaf;
   }
 
-  // Copy indices, gradients and Hessians as early as possible
+  // Copy indices, gradients and Hessians as early as possible.
+  // Gather directly into Metal shared buffers (unified memory — no DMA to pipeline).
   if (smaller_leaf >= 0 && num_dense_feature_groups_) {
     @autoreleasepool {
       const data_size_t* indices = data_partition_->indices();
       data_size_t begin = data_partition_->leaf_begin(smaller_leaf);
       data_size_t end = begin + data_partition_->leaf_count(smaller_leaf);
 
-      // copy indices to Metal shared buffer
       id<MTLBuffer> indicesBuf = (__bridge id<MTLBuffer>)data_indices_buffer_;
       std::memcpy([indicesBuf contents], indices + begin, (end - begin) * sizeof(data_size_t));
 
-      if (!share_state_->is_constant_hessian) {
-        #pragma omp parallel for num_threads(OMP_NUM_THREADS()) schedule(static)
-        for (data_size_t i = begin; i < end; ++i) {
-          ordered_hessians_[i - begin] = hessians_[indices[i]];
-        }
-        id<MTLBuffer> hessBuf = (__bridge id<MTLBuffer>)hessians_buffer_;
-        std::memcpy([hessBuf contents], ordered_hessians_.data(), (end - begin) * sizeof(score_t));
-      }
-
+      id<MTLBuffer> gradBuf = (__bridge id<MTLBuffer>)gradients_buffer_;
+      score_t* gpu_grads = reinterpret_cast<score_t*>([gradBuf contents]);
       #pragma omp parallel for num_threads(OMP_NUM_THREADS()) schedule(static)
       for (data_size_t i = begin; i < end; ++i) {
-        ordered_gradients_[i - begin] = gradients_[indices[i]];
+        gpu_grads[i - begin] = gradients_[indices[i]];
       }
-      id<MTLBuffer> gradBuf = (__bridge id<MTLBuffer>)gradients_buffer_;
-      std::memcpy([gradBuf contents], ordered_gradients_.data(), (end - begin) * sizeof(score_t));
+
+      if (!share_state_->is_constant_hessian) {
+        id<MTLBuffer> hessBuf = (__bridge id<MTLBuffer>)hessians_buffer_;
+        score_t* gpu_hess = reinterpret_cast<score_t*>([hessBuf contents]);
+        #pragma omp parallel for num_threads(OMP_NUM_THREADS()) schedule(static)
+        for (data_size_t i = begin; i < end; ++i) {
+          gpu_hess[i - begin] = hessians_[indices[i]];
+        }
+      }
     }
   }
   return SerialTreeLearner::BeforeFindBestSplit(tree, left_leaf, right_leaf);
@@ -1089,19 +1088,19 @@ void MetalTreeLearner::MetalHistogram(data_size_t leaf_num_data, bool use_all_fe
 // WaitAndGetHistograms — wait for GPU, read results from shared buffer
 // ============================================================================
 
-void MetalTreeLearner::WaitAndGetHistograms(hist_t* histograms) {
+void MetalTreeLearner::WaitForGPU() {
   @autoreleasepool {
-    // Wait for the GPU to finish
     id<MTLCommandBuffer> cmdBuf = (__bridge id<MTLCommandBuffer>)pending_command_buffer_;
     [cmdBuf waitUntilCompleted];
-
     if ([cmdBuf status] == MTLCommandBufferStatusError) {
       Log::Fatal("Metal compute kernel failed: %s",
                  [[[cmdBuf error] localizedDescription] UTF8String]);
     }
+  }
+}
 
-    // For multi-workgroup dispatches, the GPU wrote sub-histograms in separated format.
-    // We need to reduce them into the output buffer in interleaved format on CPU.
+void MetalTreeLearner::ProcessHistogramResults(hist_t* histograms) {
+  @autoreleasepool {
     id<MTLBuffer> outputBuf = (__bridge id<MTLBuffer>)histogram_output_buffer_;
     gpu_hist_t* hist_outputs = reinterpret_cast<gpu_hist_t*>([outputBuf contents]);
 
@@ -1201,6 +1200,11 @@ void MetalTreeLearner::WaitAndGetHistograms(hist_t* histograms) {
   }
 }
 
+void MetalTreeLearner::WaitAndGetHistograms(hist_t* histograms) {
+  WaitForGPU();
+  ProcessHistogramResults(histograms);
+}
+
 // ============================================================================
 // ConstructMetalHistogramsAsync — prepare data and launch GPU kernel
 // ============================================================================
@@ -1220,37 +1224,37 @@ bool MetalTreeLearner::ConstructMetalHistogramsAsync(
   }
 
   @autoreleasepool {
-    // copy data indices if it is not null
+    // Copy data indices directly into Metal shared buffer
     if (data_indices != nullptr && num_data != num_data_) {
       id<MTLBuffer> indicesBuf = (__bridge id<MTLBuffer>)data_indices_buffer_;
       std::memcpy([indicesBuf contents], data_indices, num_data * sizeof(data_size_t));
     }
 
-    // generate and copy ordered_gradients if gradients is not null
+    // Gather ordered gradients directly into Metal shared buffer
     if (gradients != nullptr) {
       id<MTLBuffer> gradBuf = (__bridge id<MTLBuffer>)gradients_buffer_;
+      score_t* gpu_grads = reinterpret_cast<score_t*>([gradBuf contents]);
       if (num_data != num_data_) {
         #pragma omp parallel for num_threads(OMP_NUM_THREADS()) schedule(static)
         for (data_size_t i = 0; i < num_data; ++i) {
-          ordered_gradients[i] = gradients[data_indices[i]];
+          gpu_grads[i] = gradients[data_indices[i]];
         }
-        std::memcpy([gradBuf contents], ordered_gradients, num_data * sizeof(score_t));
       } else {
-        std::memcpy([gradBuf contents], gradients, num_data * sizeof(score_t));
+        std::memcpy(gpu_grads, gradients, num_data * sizeof(score_t));
       }
     }
 
-    // generate and copy ordered_hessians if Hessians is not null
+    // Gather ordered hessians directly into Metal shared buffer
     if (hessians != nullptr && !share_state_->is_constant_hessian) {
       id<MTLBuffer> hessBuf = (__bridge id<MTLBuffer>)hessians_buffer_;
+      score_t* gpu_hess = reinterpret_cast<score_t*>([hessBuf contents]);
       if (num_data != num_data_) {
         #pragma omp parallel for num_threads(OMP_NUM_THREADS()) schedule(static)
         for (data_size_t i = 0; i < num_data; ++i) {
-          ordered_hessians[i] = hessians[data_indices[i]];
+          gpu_hess[i] = hessians[data_indices[i]];
         }
-        std::memcpy([hessBuf contents], ordered_hessians, num_data * sizeof(score_t));
       } else {
-        std::memcpy([hessBuf contents], hessians, num_data * sizeof(score_t));
+        std::memcpy(gpu_hess, hessians, num_data * sizeof(score_t));
       }
     }
   }
@@ -1318,12 +1322,12 @@ void MetalTreeLearner::ConstructHistograms(const std::vector<int8_t>& is_feature
   hist_t* ptr_smaller_leaf_hist_data = smaller_leaf_histogram_array_[0].RawData() - kHistOffset;
 
   // ConstructMetalHistogramsAsync will return true if there are available feature groups dispatched to GPU
-  bool is_gpu_used = ConstructMetalHistogramsAsync(is_feature_used,
+  bool smaller_gpu_used = ConstructMetalHistogramsAsync(is_feature_used,
     nullptr, smaller_leaf_splits_->num_data_in_leaf(),
     nullptr, nullptr,
     nullptr, nullptr);
 
-  // then construct sparse features on CPU
+  // CPU sparse histograms overlap with smaller leaf GPU kernel
   train_data_->ConstructHistograms<false, 0>(is_sparse_feature_used,
     smaller_leaf_splits_->data_indices(), smaller_leaf_splits_->num_data_in_leaf(),
     gradients_, hessians_,
@@ -1331,21 +1335,30 @@ void MetalTreeLearner::ConstructHistograms(const std::vector<int8_t>& is_feature
     share_state_.get(),
     ptr_smaller_leaf_hist_data);
 
-  // wait for GPU to finish, only if GPU is actually used
-  if (is_gpu_used) {
-    WaitAndGetHistograms(ptr_smaller_leaf_hist_data);
-  }
-
   if (larger_leaf_histogram_array_ != nullptr && !use_subtract) {
-    // construct larger leaf
     hist_t* ptr_larger_leaf_hist_data = larger_leaf_histogram_array_[0].RawData() - kHistOffset;
 
-    is_gpu_used = ConstructMetalHistogramsAsync(is_feature_used,
+    // Wait for smaller leaf GPU (must complete before we reuse Metal buffers)
+    int smaller_exp_wg = pending_exp_workgroups_;
+    if (smaller_gpu_used) {
+      WaitForGPU();
+    }
+
+    // Launch larger leaf GPU (reuses buffers now that smaller leaf is done)
+    bool larger_gpu_used = ConstructMetalHistogramsAsync(is_feature_used,
       larger_leaf_splits_->data_indices(), larger_leaf_splits_->num_data_in_leaf(),
       gradients_, hessians_,
       ordered_gradients_.data(), ordered_hessians_.data());
 
-    // then construct sparse features on CPU
+    // Process smaller leaf histogram results — overlaps with larger leaf GPU!
+    if (smaller_gpu_used) {
+      int saved_exp = pending_exp_workgroups_;
+      pending_exp_workgroups_ = smaller_exp_wg;
+      ProcessHistogramResults(ptr_smaller_leaf_hist_data);
+      pending_exp_workgroups_ = saved_exp;
+    }
+
+    // CPU sparse histograms for larger leaf — also overlaps with larger leaf GPU
     train_data_->ConstructHistograms<false, 0>(is_sparse_feature_used,
       larger_leaf_splits_->data_indices(), larger_leaf_splits_->num_data_in_leaf(),
       gradients_, hessians_,
@@ -1353,9 +1366,13 @@ void MetalTreeLearner::ConstructHistograms(const std::vector<int8_t>& is_feature
       share_state_.get(),
       ptr_larger_leaf_hist_data);
 
-    // wait for GPU to finish, only if GPU is actually used
-    if (is_gpu_used) {
+    if (larger_gpu_used) {
       WaitAndGetHistograms(ptr_larger_leaf_hist_data);
+    }
+  } else {
+    // No larger leaf — just wait for smaller leaf
+    if (smaller_gpu_used) {
+      WaitAndGetHistograms(ptr_smaller_leaf_hist_data);
     }
   }
 }

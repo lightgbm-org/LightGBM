@@ -91,7 +91,19 @@ class MetalTreeLearner: public SerialTreeLearner {
   void MetalHistogram(data_size_t leaf_num_data, bool use_all_features);
 
   /*!
-   * \brief Wait for GPU completion and read histogram results
+   * \brief Wait for pending GPU command buffer to complete
+   */
+  void WaitForGPU();
+
+  /*!
+   * \brief Process GPU histogram results after GPU completion.
+   *        Performs multi-workgroup reduction and bin redistribution.
+   * \param histograms Destination of histogram results
+   */
+  void ProcessHistogramResults(hist_t* histograms);
+
+  /*!
+   * \brief Wait for GPU completion and read histogram results (convenience wrapper)
    * \param histograms Destination of histogram results
    */
   void WaitAndGetHistograms(hist_t* histograms);
