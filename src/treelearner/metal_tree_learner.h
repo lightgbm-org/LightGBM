@@ -114,7 +114,7 @@ class MetalTreeLearner: public SerialTreeLearner {
     score_t* ordered_gradients, score_t* ordered_hessians);
 
   /*! \brief Log2 of max number of workgroups per feature */
-  const int kMaxLogWorkgroupsPerFeature = 10;
+  static constexpr int kMaxLogWorkgroupsPerFeature = 10;
   /*! \brief Max total number of workgroups with preallocated workspace */
   int preallocd_max_num_wg_ = 1024;
 

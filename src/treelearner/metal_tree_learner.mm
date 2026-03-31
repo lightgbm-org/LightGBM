@@ -36,7 +36,7 @@ namespace LightGBM {
 MetalTreeLearner::MetalTreeLearner(const Config* config)
   : SerialTreeLearner(config) {
   use_bagging_ = false;
-  Log::Info("This is the Metal (Apple Silicon) trainer!!");
+  Log::Info("Using Metal (Apple Silicon) tree learner");
 }
 
 MetalTreeLearner::~MetalTreeLearner() {
@@ -1046,26 +1046,16 @@ void MetalTreeLearner::WaitAndGetHistograms(hist_t* histograms) {
     gpu_hist_t* hist_outputs = reinterpret_cast<gpu_hist_t*>([outputBuf contents]);
 
     if (pending_exp_workgroups_ > 0) {
-      // DEBUG: dump first sub-histogram raw bytes
-      id<MTLBuffer> subhistBufDbg = (__bridge id<MTLBuffer>)subhistograms_buffer_;
-      const gpu_hist_t* sub_dbg = reinterpret_cast<const gpu_hist_t*>([subhistBufDbg contents]);
-      int elems_dbg = dword_features_ * 2 * device_bin_size_;
-      Log::Info("DEBUG sub-hist[0] first 20 elements (POWER=%d, elems_per_sub=%d):",
-                pending_exp_workgroups_, elems_dbg);
-      for (int dd = 0; dd < std::min(20, elems_dbg); ++dd) {
-        Log::Info("  sub[%d] = %f", dd, sub_dbg[dd]);
-      }
+      // Multi-workgroup: reduce sub-histograms on CPU.
+      // Sub-histograms are in the same interleaved format as the final output,
+      // so reduction is simple element-wise addition.
       id<MTLBuffer> subhistBuf = (__bridge id<MTLBuffer>)subhistograms_buffer_;
       const gpu_hist_t* sub_hist = reinterpret_cast<const gpu_hist_t*>([subhistBuf contents]);
       int num_sub = 1 << pending_exp_workgroups_;
-      int elems_per_sub = dword_features_ * 2 * device_bin_size_;  // separated layout size per sub-histogram
+      int elems_per_sub = dword_features_ * 2 * device_bin_size_;
 
-      // Clear output buffer
       std::memset(hist_outputs, 0, num_dense_feature4_ * dword_features_ * device_bin_size_ * sizeof(gpu_hist_t) * 2);
 
-      // All three kernel variants now write sub-histograms in the same interleaved
-      // format as the final output, so reduction is simple element-wise addition.
-      int out_elems = num_dense_feature4_ * dword_features_ * device_bin_size_ * 2;
       #pragma omp parallel for num_threads(OMP_NUM_THREADS()) schedule(static)
       for (int f4 = 0; f4 < num_dense_feature4_; ++f4) {
         gpu_hist_t* dst = hist_outputs + f4 * dword_features_ * device_bin_size_ * 2;

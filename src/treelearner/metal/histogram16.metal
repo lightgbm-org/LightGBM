@@ -588,55 +588,5 @@ kernel void histogram16(
     }
 }
 
-// ---------------------------------------------------------------------------
-// Reduction kernel: merge sub-histograms from multiple workgroups into final output.
-//
-// Sub-histogram layout (256 entries, feature-and-stat interleaved by ltid):
-//   ltid 0-7:   features 0-7, gradient, bin 0
-//   ltid 8-15:  features 0-7, hessian,  bin 0
-//   ltid 16-23: features 0-7, gradient, bin 1
-//   ...
-//   General: sub[bin * 2 * DWORD_FEATURES + is_hess * DWORD_FEATURES + feature]
-//
-// Output layout (per-feature blocks of interleaved grad/hess):
-//   Feature 0: [grad_b0, hess_b0, grad_b1, hess_b1, ..., grad_b15, hess_b15]
-//   Feature 1: same ...  (8 features total)
-//
-// Each thread handles one (feature, bin) pair.
-// Grid size = num_features4 * DWORD_FEATURES * NUM_BINS.
-// ---------------------------------------------------------------------------
-kernel void reduce_histogram16(
-    device const float* sub_histograms [[buffer(0)]],
-    device float* output              [[buffer(1)]],
-    constant uint& num_sub_hist       [[buffer(2)]],
-    constant uint& num_features4      [[buffer(3)]],
-    uint tid [[thread_position_in_grid]])
-{
-    const uint sub_elems_per_f4 = DWORD_FEATURES * 2 * NUM_BINS;  // 256
-    const uint total_pairs = num_features4 * DWORD_FEATURES * NUM_BINS;
-
-    if (tid >= total_pairs) return;
-
-    uint feature4_id = tid / (DWORD_FEATURES * NUM_BINS);
-    uint within_f4 = tid % (DWORD_FEATURES * NUM_BINS);
-    uint feature_in_f4 = within_f4 / NUM_BINS;
-    uint bin = within_f4 % NUM_BINS;
-
-    // Index into the sub-histogram's interleaved layout
-    uint grad_idx = bin * 2 * DWORD_FEATURES + feature_in_f4;               // gradient slot
-    uint hess_idx = bin * 2 * DWORD_FEATURES + DWORD_FEATURES + feature_in_f4; // hessian slot
-
-    float sum_grad = 0.0f;
-    float sum_hess = 0.0f;
-    for (uint s = 0; s < num_sub_hist; ++s) {
-        uint base = (feature4_id * num_sub_hist + s) * sub_elems_per_f4;
-        sum_grad += sub_histograms[base + grad_idx];
-        sum_hess += sub_histograms[base + hess_idx];
-    }
-
-    // Write in per-feature interleaved format
-    uint out_base = feature4_id * DWORD_FEATURES * NUM_BINS * 2;
-    uint out_offset = out_base + (feature_in_f4 * NUM_BINS + bin) * 2;
-    output[out_offset]     = sum_grad;
-    output[out_offset + 1] = sum_hess;
-}
+// TODO: Add reduce_histogram16 kernel for multi-workgroup support once
+// the histogram kernel's multi-threadgroup accumulation is debugged.

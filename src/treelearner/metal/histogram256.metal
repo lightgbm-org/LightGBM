@@ -194,7 +194,7 @@ void within_kernel_reduction256x4(
 // ---------------------------------------------------------------------------
 kernel void histogram256(
         device const uchar4*      feature_data_base   [[buffer(0)]],
-        constant const uchar4*    feature_masks       [[buffer(1)]],
+        device const uchar4*      feature_masks       [[buffer(1)]],
         constant const data_size_t& feature_size      [[buffer(2)]],
         device const data_size_t* data_indices        [[buffer(3)]],
         constant const data_size_t& num_data          [[buffer(4)]],
@@ -598,50 +598,5 @@ kernel void histogram256(
     }
 }
 
-// ---------------------------------------------------------------------------
-// Reduction kernel: merge sub-histograms from multiple workgroups into final output.
-//
-// Sub-histogram layout (SEPARATED, per feature within a feature4 block):
-//   [grad_bin0, grad_bin1, ..., grad_bin255, hess_bin0, hess_bin1, ..., hess_bin255]
-//
-// Output layout (INTERLEAVED, what WaitAndGetHistograms expects via GET_GRAD/GET_HESS):
-//   [grad_bin0, hess_bin0, grad_bin1, hess_bin1, ..., grad_bin255, hess_bin255]
-//
-// Each thread handles one (feature, bin) pair: reads grad + hess from all sub-histograms,
-// sums them, and writes one interleaved grad/hess pair.
-// Grid size = num_features4 * 4 * NUM_BINS.
-// ---------------------------------------------------------------------------
-kernel void reduce_histogram256(
-    device const float* sub_histograms [[buffer(0)]],
-    device float* output              [[buffer(1)]],
-    constant uint& num_sub_hist       [[buffer(2)]],
-    constant uint& num_features4      [[buffer(3)]],
-    uint tid [[thread_position_in_grid]])
-{
-    const uint FEATURES = 4;
-    const uint sub_elems_per_f4 = FEATURES * 2 * NUM_BINS;  // 2048: separated layout size per feature4
-    const uint total_pairs = num_features4 * FEATURES * NUM_BINS;
-
-    if (tid >= total_pairs) return;
-
-    uint feature4_id = tid / (FEATURES * NUM_BINS);
-    uint within_f4 = tid % (FEATURES * NUM_BINS);
-    uint feature_in_f4 = within_f4 / NUM_BINS;
-    uint bin = within_f4 % NUM_BINS;
-
-    // Sum gradients and hessians from all sub-histograms (separated layout)
-    float sum_grad = 0.0f;
-    float sum_hess = 0.0f;
-    for (uint s = 0; s < num_sub_hist; ++s) {
-        uint base = (feature4_id * num_sub_hist + s) * sub_elems_per_f4;
-        uint feature_base = base + feature_in_f4 * 2 * NUM_BINS;
-        sum_grad += sub_histograms[feature_base + bin];
-        sum_hess += sub_histograms[feature_base + NUM_BINS + bin];
-    }
-
-    // Write in interleaved format: [grad0, hess0, grad1, hess1, ...]
-    uint out_base = feature4_id * FEATURES * NUM_BINS * 2;
-    uint out_offset = out_base + (feature_in_f4 * NUM_BINS + bin) * 2;
-    output[out_offset]     = sum_grad;
-    output[out_offset + 1] = sum_hess;
-}
+// TODO: Add reduce_histogram256 kernel for multi-workgroup support once
+// the histogram kernel's multi-threadgroup accumulation is debugged.
