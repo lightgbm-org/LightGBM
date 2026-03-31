@@ -569,20 +569,21 @@ kernel void histogram256(
     uint feature4_id = (group_id >> POWER_FEATURE_WORKGROUPS);
 
     if (POWER_FEATURE_WORKGROUPS != 0) {
-        // Multiple workgroups per feature4: write sub-histogram only.
-        // Reduction is done in a separate dispatch (reduce_histogram256).
+        // Multiple workgroups per feature4: write sub-histogram in INTERLEAVED format
+        // (same as final output) so CPU-side reduction is element-wise addition.
+        // Layout: [grad_b0, hess_b0, grad_b1, hess_b1, ...] per feature
         device acc_type* output = (device acc_type*)output_buf + group_id * 4 * 2 * NUM_BINS;
-        // write gradients and hessians
         device acc_type* ptr_f = output;
         for (ushort j = 0; j < 4; ++j) {
-            for (ushort i = ltid; i < 2 * NUM_BINS; i += lsize) {
-                // even threads read gradients, odd threads read hessians
-                acc_type value = gh_hist[i * 4 + j];
-                ptr_f[(i & 1) * NUM_BINS + (i >> 1)] = value;
+            for (ushort i = ltid; i < NUM_BINS; i += lsize) {
+                // gh_hist layout: [bin * 8 + is_hess * 4 + feature]
+                // Read gradient and hessian for this feature and bin
+                ptr_f[i * 2]     = gh_hist[(i * 2) * 4 + j];     // gradient
+                ptr_f[i * 2 + 1] = gh_hist[(i * 2 + 1) * 4 + j]; // hessian
             }
             ptr_f += 2 * NUM_BINS;
         }
-        // Sub-histograms written. Reduction will be done in a separate dispatch.
+        // Sub-histograms written. CPU-side element-wise reduction follows.
     } else {
         // only 1 workgroup per feature4, no need for counter -- reduction is a simple copy
         uint old_val = 0; // dummy
@@ -599,7 +600,16 @@ kernel void histogram256(
 
 // ---------------------------------------------------------------------------
 // Reduction kernel: merge sub-histograms from multiple workgroups into final output.
-// Each thread handles one float element. Grid size = num_features4 * 4 * 2 * NUM_BINS.
+//
+// Sub-histogram layout (SEPARATED, per feature within a feature4 block):
+//   [grad_bin0, grad_bin1, ..., grad_bin255, hess_bin0, hess_bin1, ..., hess_bin255]
+//
+// Output layout (INTERLEAVED, what WaitAndGetHistograms expects via GET_GRAD/GET_HESS):
+//   [grad_bin0, hess_bin0, grad_bin1, hess_bin1, ..., grad_bin255, hess_bin255]
+//
+// Each thread handles one (feature, bin) pair: reads grad + hess from all sub-histograms,
+// sums them, and writes one interleaved grad/hess pair.
+// Grid size = num_features4 * 4 * NUM_BINS.
 // ---------------------------------------------------------------------------
 kernel void reduce_histogram256(
     device const float* sub_histograms [[buffer(0)]],
@@ -608,17 +618,30 @@ kernel void reduce_histogram256(
     constant uint& num_features4      [[buffer(3)]],
     uint tid [[thread_position_in_grid]])
 {
-    const uint elements_per_feature4 = 4 * 2 * NUM_BINS; // = 2048 for 256 bins
-    uint feature4_id = tid / elements_per_feature4;
-    uint element_id = tid % elements_per_feature4;
+    const uint FEATURES = 4;
+    const uint sub_elems_per_f4 = FEATURES * 2 * NUM_BINS;  // 2048: separated layout size per feature4
+    const uint total_pairs = num_features4 * FEATURES * NUM_BINS;
 
-    if (feature4_id >= num_features4) return;
+    if (tid >= total_pairs) return;
 
-    float sum = 0.0f;
+    uint feature4_id = tid / (FEATURES * NUM_BINS);
+    uint within_f4 = tid % (FEATURES * NUM_BINS);
+    uint feature_in_f4 = within_f4 / NUM_BINS;
+    uint bin = within_f4 % NUM_BINS;
+
+    // Sum gradients and hessians from all sub-histograms (separated layout)
+    float sum_grad = 0.0f;
+    float sum_hess = 0.0f;
     for (uint s = 0; s < num_sub_hist; ++s) {
-        // Sub-histogram layout: sub_histograms[(feature4_id * num_sub_hist + s) * elements_per_feature4 + element_id]
-        sum += sub_histograms[(feature4_id * num_sub_hist + s) * elements_per_feature4 + element_id];
+        uint base = (feature4_id * num_sub_hist + s) * sub_elems_per_f4;
+        uint feature_base = base + feature_in_f4 * 2 * NUM_BINS;
+        sum_grad += sub_histograms[feature_base + bin];
+        sum_hess += sub_histograms[feature_base + NUM_BINS + bin];
     }
 
-    output[feature4_id * elements_per_feature4 + element_id] = sum;
+    // Write in interleaved format: [grad0, hess0, grad1, hess1, ...]
+    uint out_base = feature4_id * FEATURES * NUM_BINS * 2;
+    uint out_offset = out_base + (feature_in_f4 * NUM_BINS + bin) * 2;
+    output[out_offset]     = sum_grad;
+    output[out_offset + 1] = sum_hess;
 }

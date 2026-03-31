@@ -139,12 +139,15 @@ Tree* MetalTreeLearner::Train(const score_t* gradients, const score_t* hessians,
 // ============================================================================
 
 int MetalTreeLearner::GetNumWorkgroupsPerFeature(data_size_t leaf_num_data) {
+  // We roughly want 256 workgroups per device, and we have num_dense_feature4_ feature tuples.
+  // Also guarantee that there are at least 2K examples per workgroup.
   // Currently using single workgroup per feature (POWER=0) for correctness.
-  // The two-pass reduction kernel for multi-workgroup support has a sub-histogram
-  // layout mismatch that needs investigation. This limits GPU occupancy for large
-  // datasets but guarantees correct results. Multi-workgroup support will be
-  // enabled in a follow-up once the reduction kernel's output layout matches
-  // what WaitAndGetHistograms expects.
+  // Multi-workgroup support requires further debugging of the sub-histogram
+  // accumulation with multiple threadgroups. The infrastructure is in place
+  // (interleaved sub-histogram writes + CPU-side reduction), but the kernel
+  // produces incorrect histograms when POWER > 0. This will be addressed in
+  // a follow-up.
+  (void)leaf_num_data;
   return 0;
 }
 
@@ -945,9 +948,19 @@ void MetalTreeLearner::MetalHistogram(data_size_t leaf_num_data, bool use_all_fe
     }
     id<MTLComputePipelineState> pipeline = pipelineArray[exp_workgroups_per_feature];
 
-    // Create command buffer and compute encoder
+    // Create command buffer
     id<MTLCommandQueue> queue = (__bridge id<MTLCommandQueue>)metal_command_queue_;
     id<MTLCommandBuffer> cmdBuf = [queue commandBuffer];
+
+    // For multi-workgroup: clear sub-histograms buffer to avoid stale data from
+    // previous iterations (different iterations may use different POWER values)
+    if (exp_workgroups_per_feature > 0) {
+      id<MTLBlitCommandEncoder> blit = [cmdBuf blitCommandEncoder];
+      id<MTLBuffer> subhistBufLocal = (__bridge id<MTLBuffer>)subhistograms_buffer_;
+      [blit fillBuffer:subhistBufLocal range:NSMakeRange(0, [subhistBufLocal length]) value:0];
+      [blit endEncoding];
+    }
+
     id<MTLComputeCommandEncoder> encoder = [cmdBuf computeCommandEncoder];
 
     [encoder setComputePipelineState:pipeline];
@@ -996,41 +1009,10 @@ void MetalTreeLearner::MetalHistogram(data_size_t leaf_num_data, bool use_all_fe
 
     [encoder endEncoding];
 
-    if (exp_workgroups_per_feature > 0) {
-      // Second pass: reduce sub-histograms into final output.
-      // Creating a new encoder provides the memory barrier between dispatches.
-      id<MTLComputeCommandEncoder> reduceEncoder = [cmdBuf computeCommandEncoder];
-      id<MTLLibrary> library = (__bridge id<MTLLibrary>)metal_library_;
-
-      // Get the reduction pipeline
-      NSString* reduceFuncName = [NSString stringWithFormat:@"reduce_%@",
-                                  [NSString stringWithCString:kernel_name_.c_str() encoding:NSUTF8StringEncoding]];
-      id<MTLFunction> reduceFunc = [library newFunctionWithName:reduceFuncName];
-      NSError* pipeError = nil;
-      id<MTLComputePipelineState> reducePipeline = [device newComputePipelineStateWithFunction:reduceFunc error:&pipeError];
-      if (!reducePipeline) {
-        Log::Fatal("Failed to create Metal reduction pipeline for %s: %s",
-                   [reduceFuncName UTF8String],
-                   pipeError ? [[pipeError localizedDescription] UTF8String] : "unknown error");
-      }
-
-      uint32_t num_sub = 1u << exp_workgroups_per_feature;
-      uint32_t num_f4 = static_cast<uint32_t>(num_dense_feature4_);
-
-      [reduceEncoder setComputePipelineState:reducePipeline];
-      [reduceEncoder setBuffer:subhistBuf offset:0 atIndex:0];
-      [reduceEncoder setBuffer:outputBuf offset:0 atIndex:1];
-      [reduceEncoder setBytes:&num_sub length:sizeof(uint32_t) atIndex:2];
-      [reduceEncoder setBytes:&num_f4 length:sizeof(uint32_t) atIndex:3];
-
-      uint32_t total_elements = num_f4 * dword_features_ * device_bin_size_ * 2;
-      MTLSize reduceThreads = MTLSizeMake(total_elements, 1, 1);
-      uint32_t reduceGroupWidth = std::min(256u, total_elements);
-      MTLSize reduceGroupSize = MTLSizeMake(reduceGroupWidth, 1, 1);
-      // Use dispatchThreads for non-uniform grid sizes
-      [reduceEncoder dispatchThreads:reduceThreads threadsPerThreadgroup:reduceGroupSize];
-      [reduceEncoder endEncoding];
-    }
+    // For multi-workgroup: reduction is done on CPU after waitUntilCompleted,
+    // since the sub-histogram layout requires a separated→interleaved conversion
+    // that is simpler and more debuggable on CPU. The GPU already did the heavy
+    // work (histogram accumulation); the reduction is a simple O(num_wg * bins) sum.
 
     [cmdBuf commit];
 
@@ -1039,6 +1021,7 @@ void MetalTreeLearner::MetalHistogram(data_size_t leaf_num_data, bool use_all_fe
       (void)(__bridge_transfer id<MTLCommandBuffer>)pending_command_buffer_;
     }
     pending_command_buffer_ = (__bridge_retained void*)cmdBuf;
+    pending_exp_workgroups_ = exp_workgroups_per_feature;
   }
 }
 
@@ -1057,9 +1040,43 @@ void MetalTreeLearner::WaitAndGetHistograms(hist_t* histograms) {
                  [[[cmdBuf error] localizedDescription] UTF8String]);
     }
 
-    // Read directly from the shared histogram output buffer
+    // For multi-workgroup dispatches, the GPU wrote sub-histograms in separated format.
+    // We need to reduce them into the output buffer in interleaved format on CPU.
     id<MTLBuffer> outputBuf = (__bridge id<MTLBuffer>)histogram_output_buffer_;
     gpu_hist_t* hist_outputs = reinterpret_cast<gpu_hist_t*>([outputBuf contents]);
+
+    if (pending_exp_workgroups_ > 0) {
+      // DEBUG: dump first sub-histogram raw bytes
+      id<MTLBuffer> subhistBufDbg = (__bridge id<MTLBuffer>)subhistograms_buffer_;
+      const gpu_hist_t* sub_dbg = reinterpret_cast<const gpu_hist_t*>([subhistBufDbg contents]);
+      int elems_dbg = dword_features_ * 2 * device_bin_size_;
+      Log::Info("DEBUG sub-hist[0] first 20 elements (POWER=%d, elems_per_sub=%d):",
+                pending_exp_workgroups_, elems_dbg);
+      for (int dd = 0; dd < std::min(20, elems_dbg); ++dd) {
+        Log::Info("  sub[%d] = %f", dd, sub_dbg[dd]);
+      }
+      id<MTLBuffer> subhistBuf = (__bridge id<MTLBuffer>)subhistograms_buffer_;
+      const gpu_hist_t* sub_hist = reinterpret_cast<const gpu_hist_t*>([subhistBuf contents]);
+      int num_sub = 1 << pending_exp_workgroups_;
+      int elems_per_sub = dword_features_ * 2 * device_bin_size_;  // separated layout size per sub-histogram
+
+      // Clear output buffer
+      std::memset(hist_outputs, 0, num_dense_feature4_ * dword_features_ * device_bin_size_ * sizeof(gpu_hist_t) * 2);
+
+      // All three kernel variants now write sub-histograms in the same interleaved
+      // format as the final output, so reduction is simple element-wise addition.
+      int out_elems = num_dense_feature4_ * dword_features_ * device_bin_size_ * 2;
+      #pragma omp parallel for num_threads(OMP_NUM_THREADS()) schedule(static)
+      for (int f4 = 0; f4 < num_dense_feature4_; ++f4) {
+        gpu_hist_t* dst = hist_outputs + f4 * dword_features_ * device_bin_size_ * 2;
+        for (int s = 0; s < num_sub; ++s) {
+          const gpu_hist_t* src = sub_hist + (f4 * num_sub + s) * elems_per_sub;
+          for (int e = 0; e < elems_per_sub; ++e) {
+            dst[e] += src[e];
+          }
+        }
+      }
+    }
 
     #if METAL_DEBUG >= 1
     // Debug: check if histogram output has any non-zero values

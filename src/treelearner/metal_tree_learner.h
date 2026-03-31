@@ -149,6 +149,9 @@ class MetalTreeLearner: public SerialTreeLearner {
   void* sync_counters_buffer_ = nullptr;/*!< Atomic counters for WG coordination */
   void* histogram_output_buffer_ = nullptr; /*!< Final output histogram */
 
+  /*! \brief Current exp_workgroups_per_feature for the pending dispatch */
+  int pending_exp_workgroups_ = 0;
+
   /*! \brief total number of feature-groups */
   int num_feature_groups_;
   /*! \brief total number of dense feature-groups, processed on GPU */
