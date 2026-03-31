@@ -147,10 +147,8 @@ kernel void histogram64(
         device const score_t*      ordered_hessians    [[buffer(6)]],
         constant score_t&    const_hessian       [[buffer(7)]],
         device char*               output_buf          [[buffer(8)]],
-        device atomic_uint*        sync_counters       [[buffer(9)]],
-        device acc_type*           hist_buf_base       [[buffer(10)]],
+        device acc_type*           hist_buf_base       [[buffer(9)]],
         uint gtid       [[thread_position_in_grid]],
-        uint gsize      [[threads_per_grid]],
         ushort ltid     [[thread_position_in_threadgroup]],
         uint group_id   [[threadgroup_position_in_grid]])
 {
@@ -563,5 +561,6 @@ kernel void histogram64(
     }
 }
 
-// TODO: Add reduce_histogram64 kernel for multi-workgroup support once
-// the histogram kernel's multi-threadgroup accumulation is debugged.
+// Note: cross-workgroup sub-histogram reduction is performed on CPU
+// in MetalTreeLearner::WaitAndGetHistograms to avoid the lack of
+// reliable cross-threadgroup synchronization primitives in Metal.

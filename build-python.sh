@@ -175,6 +175,9 @@ while [ $# -gt 0 ]; do
     --gpu)
         BUILD_ARGS="${BUILD_ARGS} --config-setting=cmake.define.USE_GPU=ON"
         ;;
+    --metal)
+        BUILD_ARGS="${BUILD_ARGS} --config-setting=cmake.define.USE_METAL=ON"
+        ;;
     --integrated-opencl)
         BUILD_ARGS="${BUILD_ARGS} --config-setting=cmake.define.__INTEGRATE_OPENCL=ON"
         ;;

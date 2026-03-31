@@ -14,7 +14,6 @@
 #include <algorithm>
 #include <chrono>
 #include <cmath>
-#include <cstdio>
 #include <cstdlib>
 #include <cstring>
 #include <dlfcn.h>
@@ -26,8 +25,6 @@
 
 #import <Foundation/Foundation.h>
 #import <Metal/Metal.h>
-
-#define METAL_DEBUG 0
 
 namespace {
 
@@ -165,10 +162,6 @@ MetalTreeLearner::~MetalTreeLearner() {
   if (histogram_output_buffer_) {
     (void)(__bridge_transfer id<MTLBuffer>)histogram_output_buffer_;
     histogram_output_buffer_ = nullptr;
-  }
-  if (sync_counters_buffer_) {
-    (void)(__bridge_transfer id<MTLBuffer>)sync_counters_buffer_;
-    sync_counters_buffer_ = nullptr;
   }
   if (subhistograms_buffer_) {
     (void)(__bridge_transfer id<MTLBuffer>)subhistograms_buffer_;
@@ -675,22 +668,6 @@ void MetalTreeLearner::AllocateMetalBuffers() {
       subhistograms_buffer_ = (__bridge_retained void*)subhistBuf;
     }
 
-    // Allocate sync counters buffer
-    if (sync_counters_buffer_) {
-      (void)(__bridge_transfer id<MTLBuffer>)sync_counters_buffer_;
-      sync_counters_buffer_ = nullptr;
-    }
-    {
-      uint64_t sync_size = static_cast<uint64_t>(num_dense_feature4_) * sizeof(int);
-      id<MTLBuffer> syncBuf = [device newBufferWithLength:sync_size
-                                                  options:MTLResourceStorageModeShared];
-      if (!syncBuf) {
-        Log::Fatal("Failed to allocate Metal sync counters buffer");
-      }
-      std::memset([syncBuf contents], 0, sync_size);
-      sync_counters_buffer_ = (__bridge_retained void*)syncBuf;
-    }
-
     // Allocate histogram output buffer
     if (histogram_output_buffer_) {
       (void)(__bridge_transfer id<MTLBuffer>)histogram_output_buffer_;
@@ -1003,10 +980,6 @@ void MetalTreeLearner::MetalHistogram(data_size_t leaf_num_data, bool use_all_fe
   @autoreleasepool {
     int exp_workgroups_per_feature = GetNumWorkgroupsPerFeature(leaf_num_data);
     int num_workgroups = (1 << exp_workgroups_per_feature) * num_dense_feature4_;
-    #if METAL_DEBUG >= 1
-    Log::Info("MetalHistogram: leaf_num_data=%d, POWER=%d, num_workgroups=%d, num_dense_feature4=%d",
-              leaf_num_data, exp_workgroups_per_feature, num_workgroups, num_dense_feature4_);
-    #endif
 
     id<MTLDevice> device = (__bridge id<MTLDevice>)metal_device_;
 
@@ -1062,7 +1035,6 @@ void MetalTreeLearner::MetalHistogram(data_size_t leaf_num_data, bool use_all_fe
     id<MTLBuffer> gradBuf = (__bridge id<MTLBuffer>)gradients_buffer_;
     id<MTLBuffer> hessBuf = (__bridge id<MTLBuffer>)hessians_buffer_;
     id<MTLBuffer> subhistBuf = (__bridge id<MTLBuffer>)subhistograms_buffer_;
-    id<MTLBuffer> syncBuf = (__bridge id<MTLBuffer>)sync_counters_buffer_;
     id<MTLBuffer> outputBuf = (__bridge id<MTLBuffer>)histogram_output_buffer_;
 
     uint32_t feature_size = static_cast<uint32_t>(num_data_);
@@ -1087,10 +1059,8 @@ void MetalTreeLearner::MetalHistogram(data_size_t leaf_num_data, bool use_all_fe
     [encoder setBytes:&const_hessian length:sizeof(float) atIndex:7];
     // Index 8: output_buf (sub-histograms workspace)
     [encoder setBuffer:subhistBuf offset:0 atIndex:8];
-    // Index 9: sync_counters
-    [encoder setBuffer:syncBuf offset:0 atIndex:9];
-    // Index 10: hist_buf_base (final histogram output)
-    [encoder setBuffer:outputBuf offset:0 atIndex:10];
+    // Index 9: hist_buf_base (final histogram output)
+    [encoder setBuffer:outputBuf offset:0 atIndex:9];
 
     // Dispatch main histogram kernel
     MTLSize threadgroups = MTLSizeMake(num_workgroups, 1, 1);
@@ -1197,32 +1167,6 @@ void MetalTreeLearner::WaitAndGetHistograms(hist_t* histograms) {
       }
     }
 
-    #if METAL_DEBUG >= 1
-    // Debug: check if histogram output has any non-zero values
-    {
-      size_t total_entries = num_dense_feature4_ * dword_features_ * device_bin_size_ * 2;
-      double sum = 0.0;
-      int nonzero = 0;
-      for (size_t i = 0; i < total_entries; ++i) {
-        if (hist_outputs[i] != 0.0f) {
-          nonzero++;
-          sum += std::fabs(hist_outputs[i]);
-        }
-      }
-      Log::Info("Metal histogram output: %d non-zero values out of %lu, sum=%.6f",
-                nonzero, total_entries, sum);
-      // Print first few non-zero
-      if (nonzero > 0) {
-        int printed = 0;
-        for (size_t i = 0; i < total_entries && printed < 10; ++i) {
-          if (hist_outputs[i] != 0.0f) {
-            Log::Info("  hist_output[%lu] = %f", i, hist_outputs[i]);
-            printed++;
-          }
-        }
-      }
-    }
-    #endif
 
     // Redistribute histogram bins back to original feature layout
     #pragma omp parallel for num_threads(OMP_NUM_THREADS()) schedule(static)

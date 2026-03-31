@@ -146,7 +146,6 @@ class MetalTreeLearner: public SerialTreeLearner {
   void* data_indices_buffer_ = nullptr; /*!< Data indices for current leaf */
   void* feature_masks_buffer_ = nullptr;/*!< Per-feature-group enable mask */
   void* subhistograms_buffer_ = nullptr;/*!< Temp sub-histograms for multi-WG reduction */
-  void* sync_counters_buffer_ = nullptr;/*!< Atomic counters for WG coordination */
   void* histogram_output_buffer_ = nullptr; /*!< Final output histogram */
 
   /*! \brief Current exp_workgroups_per_feature for the pending dispatch */
