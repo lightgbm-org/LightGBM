@@ -5,6 +5,7 @@ option(USE_SWIG "Enable SWIG to generate Java API" OFF)
 option(USE_TIMETAG "Set to ON to output time costs" OFF)
 option(USE_CUDA "Enable CUDA-accelerated training " OFF)
 option(USE_ROCM "Enable ROCm-accelerated training " OFF)
+option(USE_METAL "Enable Metal-accelerated training (macOS Apple Silicon)" OFF)
 option(USE_DEBUG "Set to ON for Debug mode" OFF)
 option(USE_SANITIZER "Use sanitizer flags" OFF)
 set(
@@ -292,6 +293,67 @@ if(USE_ROCM)
     add_definitions(-DUSE_ROCM)
 endif()
 
+if(USE_METAL)
+    if(NOT APPLE)
+        message(FATAL_ERROR "USE_METAL is only supported on macOS with Apple Silicon")
+    endif()
+    if(USE_GPU OR USE_CUDA OR USE_ROCM)
+        message(FATAL_ERROR "USE_METAL cannot be combined with USE_GPU, USE_CUDA, or USE_ROCM")
+    endif()
+
+    enable_language(OBJCXX)
+    find_library(METAL_FRAMEWORK Metal REQUIRED)
+    find_library(FOUNDATION_FRAMEWORK Foundation REQUIRED)
+
+    add_definitions(-DUSE_METAL)
+
+    # Pass the kernel source directory so the runtime can find .metal files for compilation
+    add_definitions(-DLIGHTGBM_METAL_KERNEL_DIR="${PROJECT_SOURCE_DIR}/src/treelearner/metal")
+
+    # Try to compile Metal kernels into a metallib at build time
+    # If the Metal toolchain is not available, kernels will be compiled at runtime
+    set(METAL_KERNEL_DIR "${PROJECT_SOURCE_DIR}/src/treelearner/metal")
+    set(METAL_KERNELS
+        "${METAL_KERNEL_DIR}/histogram16.metal"
+        "${METAL_KERNEL_DIR}/histogram64.metal"
+        "${METAL_KERNEL_DIR}/histogram256.metal"
+    )
+    # Test that the Metal compiler can actually run (not just that the binary exists)
+    execute_process(
+        COMMAND xcrun -sdk macosx metal -v
+        OUTPUT_VARIABLE METAL_COMPILER_VERSION
+        ERROR_VARIABLE METAL_COMPILER_VERSION
+        OUTPUT_STRIP_TRAILING_WHITESPACE
+        RESULT_VARIABLE METAL_COMPILER_RESULT
+    )
+    if(METAL_COMPILER_RESULT EQUAL 0)
+        message(STATUS "Found Metal compiler: ${METAL_COMPILER}")
+        set(METAL_AIR_FILES "")
+        foreach(metal_src IN LISTS METAL_KERNELS)
+            get_filename_component(metal_name "${metal_src}" NAME_WE)
+            set(air_file "${CMAKE_BINARY_DIR}/${metal_name}.air")
+            add_custom_command(
+                OUTPUT "${air_file}"
+                COMMAND xcrun -sdk macosx metal -c "${metal_src}" -o "${air_file}"
+                DEPENDS "${metal_src}"
+                COMMENT "Compiling Metal kernel ${metal_name}.metal"
+            )
+            list(APPEND METAL_AIR_FILES "${air_file}")
+        endforeach()
+        add_custom_command(
+            OUTPUT "${CMAKE_BINARY_DIR}/default.metallib"
+            COMMAND xcrun -sdk macosx metallib ${METAL_AIR_FILES} -o "${CMAKE_BINARY_DIR}/default.metallib"
+            DEPENDS ${METAL_AIR_FILES}
+            COMMENT "Linking Metal kernels into default.metallib"
+        )
+        add_custom_target(metal_kernels ALL DEPENDS "${CMAKE_BINARY_DIR}/default.metallib")
+        install(FILES "${CMAKE_BINARY_DIR}/default.metallib" DESTINATION lib)
+    else()
+        message(WARNING "Metal compiler not found. Metal kernels will be compiled at runtime from source.\n"
+                        "To enable build-time compilation: xcodebuild -downloadComponent MetalToolchain")
+    endif()
+endif()
+
 include(CheckCXXSourceCompiles)
 check_cxx_source_compiles("
 #include <xmmintrin.h>
@@ -438,6 +500,14 @@ set(
       src/treelearner/voting_parallel_tree_learner.cpp
       src/utils/openmp_wrapper.cpp
 )
+
+if(USE_METAL)
+    list(APPEND LGBM_SOURCES src/treelearner/metal_tree_learner.mm)
+    set_source_files_properties(src/treelearner/metal_tree_learner.mm PROPERTIES
+        LANGUAGE OBJCXX
+        COMPILE_FLAGS "-fobjc-arc"
+    )
+endif()
 set(
     LGBM_CUDA_SOURCES
       src/boosting/cuda/cuda_score_updater.cpp
@@ -611,6 +681,13 @@ endif()
 if(USE_ROCM)
   find_package(rccl)
   target_link_libraries(lightgbm_objs PUBLIC ${RCCL_LIBRARY})
+endif()
+
+if(USE_METAL)
+  if(TARGET metal_kernels)
+    add_dependencies(lightgbm_objs metal_kernels)
+  endif()
+  target_link_libraries(lightgbm_objs PUBLIC ${METAL_FRAMEWORK} ${FOUNDATION_FRAMEWORK})
 endif()
 
 if(__INTEGRATE_OPENCL)

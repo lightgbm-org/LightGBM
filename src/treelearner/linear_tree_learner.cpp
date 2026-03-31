@@ -403,4 +403,11 @@ template Tree* LinearTreeLearner<GPUTreeLearner>::FitByExistingTree(const Tree* 
 template Tree* LinearTreeLearner<GPUTreeLearner>::FitByExistingTree(const Tree* old_tree, const std::vector<int>& leaf_pred,
                                            const score_t* gradients, const score_t *hessians) const;
 
+template void LinearTreeLearner<MetalTreeLearner>::Init(const Dataset* train_data, bool is_constant_hessian);
+template void LinearTreeLearner<MetalTreeLearner>::InitLinear(const Dataset* train_data, const int max_leaves);
+template Tree* LinearTreeLearner<MetalTreeLearner>::Train(const score_t* gradients, const score_t *hessians, bool is_first_tree);
+template Tree* LinearTreeLearner<MetalTreeLearner>::FitByExistingTree(const Tree* old_tree, const score_t* gradients, const score_t *hessians) const;
+template Tree* LinearTreeLearner<MetalTreeLearner>::FitByExistingTree(const Tree* old_tree, const std::vector<int>& leaf_pred,
+                                           const score_t* gradients, const score_t *hessians) const;
+
 }  // namespace LightGBM

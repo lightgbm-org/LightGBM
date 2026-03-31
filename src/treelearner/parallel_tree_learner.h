@@ -14,6 +14,7 @@
 #include <vector>
 
 #include "gpu_tree_learner.h"
+#include "metal_tree_learner.h"
 #include "serial_tree_learner.h"
 
 namespace LightGBM {
