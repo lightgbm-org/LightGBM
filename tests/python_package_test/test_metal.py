@@ -1,15 +1,17 @@
 # coding: utf-8
 """Tests for Metal GPU backend on Apple Silicon."""
 
-import os
 import platform
+from pathlib import Path
 
 import numpy as np
 import pytest
-from sklearn.datasets import make_classification, make_regression
-from sklearn.metrics import log_loss
+from sklearn.datasets import load_breast_cancer, make_classification, make_regression
+from sklearn.metrics import log_loss, mean_squared_error
+from sklearn.model_selection import train_test_split
 
 import lightgbm as lgb
+from lightgbm.libpath import _find_lib_path
 
 
 def _skip_if_not_metal():
@@ -40,6 +42,17 @@ def _assert_binary_models_similar(y, cpu_preds, metal_preds, max_loss_gap=0.01):
     )
 
 
+class _LogCollector:
+    def __init__(self):
+        self.messages = []
+
+    def info(self, msg):
+        self.messages.append(msg)
+
+    def warning(self, msg):
+        self.messages.append(msg)
+
+
 @pytest.fixture(autouse=True)
 def check_metal():
     _skip_if_not_metal()
@@ -47,6 +60,26 @@ def check_metal():
 
 class TestMetalBasic:
     """Basic Metal functionality tests."""
+
+    def test_packaged_metallib_lookup_outside_repo(self, monkeypatch, tmp_path):
+        lib_path = Path(_find_lib_path()[0]).resolve()
+        metallib_path = lib_path.parent / "default.metallib"
+        if not metallib_path.is_file():
+            pytest.skip("No pre-compiled default.metallib (Metal Toolchain not installed)")
+
+        logger = _LogCollector()
+        lgb.register_logger(logger)
+        monkeypatch.chdir(tmp_path)
+
+        X, y = make_classification(n_samples=100, n_features=6, random_state=42)
+        data = lgb.Dataset(X, label=y)
+        params = {"objective": "binary", "device": "metal", "num_leaves": 7, "verbose": 1}
+        model = lgb.train(params, data, num_boost_round=5)
+
+        assert model is not None
+        joined_logs = "\n".join(logger.messages)
+        assert f"Loaded pre-compiled Metal library from {metallib_path}" in joined_logs
+        assert "compiling metal kernels from source" not in joined_logs.lower()
 
     def test_binary_classification(self):
         X, y = make_classification(n_samples=500, n_features=10, random_state=42)
@@ -216,6 +249,79 @@ class TestMetalOptions:
         np.testing.assert_allclose(
             cpu_model.predict(X), metal_model.predict(X), rtol=1e-2, atol=1e-3
         )
+
+
+class TestMetalSupportedRoutes:
+    """Smoke-test broader training routes advertised by the Metal backend."""
+
+    def test_linear_tree(self):
+        x = np.arange(0, 100, 0.1)
+        rng = np.random.default_rng(0)
+        y = 2 * x + rng.normal(0, 0.1, len(x))
+        x = x[:, np.newaxis]
+
+        params = {
+            "objective": "regression",
+            "metric": "l2",
+            "seed": 0,
+            "num_leaves": 2,
+            "verbose": -1,
+            "device": "metal",
+        }
+        base_model = lgb.train(params, lgb.Dataset(x, label=y), num_boost_round=10)
+        linear_model = lgb.train(dict(params, linear_tree=True), lgb.Dataset(x, label=y), num_boost_round=10)
+
+        base_mse = mean_squared_error(y, base_model.predict(x))
+        linear_mse = mean_squared_error(y, linear_model.predict(x))
+        assert linear_mse < base_mse
+
+    def test_refit(self):
+        X, y = load_breast_cancer(return_X_y=True)
+        X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.1, random_state=42)
+
+        params = {
+            "objective": "binary",
+            "metric": "binary_logloss",
+            "verbose": -1,
+            "min_data": 10,
+            "device": "metal",
+        }
+        train_set = lgb.Dataset(X_train, y_train)
+        gbm = lgb.train(params, train_set, num_boost_round=20)
+        err_pred = log_loss(y_test, gbm.predict(X_test))
+
+        new_gbm = gbm.refit(X_test, y_test)
+        new_err_pred = log_loss(y_test, new_gbm.predict(X_test))
+
+        assert err_pred > new_err_pred
+
+    def test_reset_training_data_via_update(self):
+        X, y = load_breast_cancer(return_X_y=True)
+        X_train, X_update, y_train, y_update = train_test_split(X, y, test_size=0.2, random_state=24)
+
+        params = {
+            "objective": "binary",
+            "metric": "binary_logloss",
+            "verbose": -1,
+            "num_leaves": 15,
+            "min_data": 10,
+            "device": "metal",
+            "seed": 0,
+        }
+        train_initial = lgb.Dataset(X_train, label=y_train, free_raw_data=False)
+        train_update = lgb.Dataset(X_update, label=y_update, reference=train_initial, free_raw_data=False)
+
+        booster = lgb.Booster(params=params, train_set=train_initial)
+        for _ in range(10):
+            booster.update()
+        loss_before = log_loss(y_update, booster.predict(X_update))
+
+        for _ in range(10):
+            booster.update(train_set=train_update)
+        loss_after = log_loss(y_update, booster.predict(X_update))
+
+        assert booster.train_set is train_update
+        assert loss_after < loss_before
 
 
 if __name__ == "__main__":

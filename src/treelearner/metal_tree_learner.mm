@@ -15,7 +15,9 @@
 #include <chrono>
 #include <cmath>
 #include <cstdio>
+#include <cstdlib>
 #include <cstring>
+#include <dlfcn.h>
 #include <memory>
 #include <string>
 #include <vector>
@@ -26,6 +28,125 @@
 #import <Metal/Metal.h>
 
 #define METAL_DEBUG 0
+
+namespace {
+
+void LightGBMMetalLibraryAnchor() {}
+
+NSString* StandardizePath(NSString* path) {
+  if (!path || [path length] == 0) {
+    return nil;
+  }
+  return [path stringByStandardizingPath];
+}
+
+void AppendCandidatePath(NSMutableArray<NSString*>* candidates, NSString* path) {
+  NSString* standardized = StandardizePath(path);
+  if (standardized && ![candidates containsObject:standardized]) {
+    [candidates addObject:standardized];
+  }
+}
+
+NSString* LoadedImageDirectory() {
+  Dl_info info;
+  if (dladdr(reinterpret_cast<const void*>(&LightGBMMetalLibraryAnchor), &info) == 0 || info.dli_fname == nullptr) {
+    return nil;
+  }
+  return StandardizePath(
+    [[NSString stringWithUTF8String:info.dli_fname] stringByDeletingLastPathComponent]
+  );
+}
+
+NSString* ExecutableDirectory() {
+  NSArray<NSString*>* arguments = [[NSProcessInfo processInfo] arguments];
+  if ([arguments count] == 0) {
+    return nil;
+  }
+  return StandardizePath([arguments[0] stringByDeletingLastPathComponent]);
+}
+
+NSString* CurrentWorkingDirectory() {
+  return StandardizePath([[NSFileManager defaultManager] currentDirectoryPath]);
+}
+
+NSString* FirstExistingPath(NSArray<NSString*>* candidates) {
+  NSFileManager* file_manager = [NSFileManager defaultManager];
+  for (NSString* candidate in candidates) {
+    if ([file_manager fileExistsAtPath:candidate]) {
+      return candidate;
+    }
+  }
+  return nil;
+}
+
+NSString* FirstExistingDirectory(NSArray<NSString*>* candidates) {
+  NSFileManager* file_manager = [NSFileManager defaultManager];
+  for (NSString* candidate in candidates) {
+    BOOL is_directory = NO;
+    if ([file_manager fileExistsAtPath:candidate isDirectory:&is_directory] && is_directory) {
+      return candidate;
+    }
+  }
+  return nil;
+}
+
+NSString* FindPrecompiledMetalLibraryPath() {
+  NSMutableArray<NSString*>* candidates = [NSMutableArray array];
+  NSString* loaded_image_dir = LoadedImageDirectory();
+  if (loaded_image_dir) {
+    AppendCandidatePath(candidates, [loaded_image_dir stringByAppendingPathComponent:@"default.metallib"]);
+  }
+
+  AppendCandidatePath(candidates, [[NSBundle mainBundle] pathForResource:@"default" ofType:@"metallib"]);
+
+  NSString* exec_dir = ExecutableDirectory();
+  if (exec_dir) {
+    AppendCandidatePath(candidates, [exec_dir stringByAppendingPathComponent:@"default.metallib"]);
+    AppendCandidatePath(candidates, [exec_dir stringByAppendingPathComponent:@"../lib/default.metallib"]);
+  }
+
+  NSString* cwd = CurrentWorkingDirectory();
+  if (cwd) {
+    AppendCandidatePath(candidates, [cwd stringByAppendingPathComponent:@"default.metallib"]);
+  }
+
+  return FirstExistingPath(candidates);
+}
+
+NSString* FindMetalKernelDirectory() {
+  NSMutableArray<NSString*>* candidates = [NSMutableArray array];
+
+  const char* env_kernel_dir = std::getenv("LIGHTGBM_METAL_KERNEL_DIR");
+  if (env_kernel_dir != nullptr && env_kernel_dir[0] != '\0') {
+    AppendCandidatePath(candidates, [NSString stringWithUTF8String:env_kernel_dir]);
+  }
+
+#ifdef LIGHTGBM_METAL_KERNEL_DIR
+  AppendCandidatePath(candidates, @LIGHTGBM_METAL_KERNEL_DIR);
+#endif
+
+  NSString* loaded_image_dir = LoadedImageDirectory();
+  if (loaded_image_dir) {
+    AppendCandidatePath(candidates, [loaded_image_dir stringByAppendingPathComponent:@"src/treelearner/metal"]);
+    AppendCandidatePath(candidates, [loaded_image_dir stringByAppendingPathComponent:@"../src/treelearner/metal"]);
+  }
+
+  NSString* exec_dir = ExecutableDirectory();
+  if (exec_dir) {
+    AppendCandidatePath(candidates, [exec_dir stringByAppendingPathComponent:@"src/treelearner/metal"]);
+    AppendCandidatePath(candidates, [exec_dir stringByAppendingPathComponent:@"../src/treelearner/metal"]);
+  }
+
+  NSString* cwd = CurrentWorkingDirectory();
+  if (cwd) {
+    AppendCandidatePath(candidates, [cwd stringByAppendingPathComponent:@"src/treelearner/metal"]);
+    AppendCandidatePath(candidates, [cwd stringByAppendingPathComponent:@"../src/treelearner/metal"]);
+  }
+
+  return FirstExistingDirectory(candidates);
+}
+
+}  // namespace
 
 namespace LightGBM {
 
@@ -229,28 +350,7 @@ void MetalTreeLearner::InitMetal() {
     NSError* error = nil;
     id<MTLLibrary> library = nil;
 
-    // Try several locations for default.metallib
-    NSString* libPath = [[NSBundle mainBundle] pathForResource:@"default" ofType:@"metallib"];
-
-    if (!libPath || ![[NSFileManager defaultManager] fileExistsAtPath:libPath]) {
-      // Try relative to the executable
-      NSString* execPath = [[NSProcessInfo processInfo] arguments][0];
-      NSString* dir = [execPath stringByDeletingLastPathComponent];
-      libPath = [dir stringByAppendingPathComponent:@"default.metallib"];
-    }
-
-    if (![[NSFileManager defaultManager] fileExistsAtPath:libPath]) {
-      // Try current working directory
-      libPath = @"default.metallib";
-    }
-
-    if (![[NSFileManager defaultManager] fileExistsAtPath:libPath]) {
-      // Try the lib directory relative to the executable
-      NSString* execPath = [[NSProcessInfo processInfo] arguments][0];
-      NSString* dir = [execPath stringByDeletingLastPathComponent];
-      libPath = [dir stringByAppendingPathComponent:@"lib/default.metallib"];
-    }
-
+    NSString* libPath = FindPrecompiledMetalLibraryPath();
     if ([[NSFileManager defaultManager] fileExistsAtPath:libPath]) {
       NSURL* libURL = [NSURL fileURLWithPath:libPath];
       library = [device newLibraryWithURL:libURL error:&error];
@@ -260,24 +360,14 @@ void MetalTreeLearner::InitMetal() {
                    [[error localizedDescription] UTF8String]);
       }
       Log::Info("Loaded pre-compiled Metal library from %s", [libPath UTF8String]);
-    } else {
-      // Try the default library
-      library = [device newDefaultLibrary];
     }
 
     // If no pre-compiled metallib found, compile from .metal source at runtime
     if (!library) {
-      Log::Info("No pre-compiled metallib found, compiling Metal kernels from source...");
-      // Try to find .metal source files
-      NSString* kernelDir = nil;
-      #ifdef LIGHTGBM_METAL_KERNEL_DIR
-      kernelDir = @LIGHTGBM_METAL_KERNEL_DIR;
-      #endif
-      if (!kernelDir || ![[NSFileManager defaultManager] fileExistsAtPath:kernelDir]) {
-        // Try relative to executable
-        NSString* execPath2 = [[NSProcessInfo processInfo] arguments][0];
-        NSString* dir2 = [execPath2 stringByDeletingLastPathComponent];
-        kernelDir = [dir2 stringByAppendingPathComponent:@"src/treelearner/metal"];
+      Log::Info("No pre-compiled metallib found beside lib_lightgbm, the executable, or the current working directory. Compiling Metal kernels from source as a developer fallback...");
+      NSString* kernelDir = FindMetalKernelDirectory();
+      if (!kernelDir) {
+        Log::Fatal("Cannot find Metal kernel sources. Expected a packaged default.metallib beside lib_lightgbm, or developer sources in LIGHTGBM_METAL_KERNEL_DIR / src/treelearner/metal.");
       }
       // Compile each .metal file into a separate library, then use the one we need
       // We need kernel_name_ to be set first, but at this point we may not know it yet.
@@ -310,7 +400,7 @@ void MetalTreeLearner::InitMetal() {
                        [kernelFile UTF8String],
                        [[error localizedDescription] UTF8String]);
           }
-          Log::Info("Metal kernel %s compiled from source successfully", [kernelFile UTF8String]);
+          Log::Info("Metal kernel %s compiled from source successfully from %s", [kernelFile UTF8String], [path UTF8String]);
         } else {
           Log::Fatal("Could not read Metal kernel source %s: %s",
                      [path UTF8String], [[error localizedDescription] UTF8String]);

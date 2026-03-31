@@ -1,8 +1,11 @@
 import copy
 import io
+import platform
 import socket
 import subprocess
+import tempfile
 from concurrent.futures import ThreadPoolExecutor
+from functools import lru_cache
 from pathlib import Path
 from typing import Any, Dict, Generator, List
 
@@ -98,12 +101,11 @@ class DistributedMockup:
             for port in self.listen_ports:
                 f.write(f"127.0.0.1 {port}\n")
 
-    def _write_data(self, partitions: List[np.ndarray]) -> None:
-        """Write all training data as train.txt and each training partition as train{i}.txt."""
-        all_data = np.vstack(partitions)
+    def _write_data(self, all_data: np.ndarray, worker_datasets: List[np.ndarray]) -> None:
+        """Write train.txt for prediction and one training file per worker."""
         np.savetxt(str(TESTS_DIR / "train.txt"), all_data, delimiter=",")
-        for i, partition in enumerate(partitions):
-            np.savetxt(str(TESTS_DIR / f"train{i}.txt"), partition, delimiter=",")
+        for i, worker_data in enumerate(worker_datasets):
+            np.savetxt(str(TESTS_DIR / f"train{i}.txt"), worker_data, delimiter=",")
 
     def fit(self, partitions: List[np.ndarray], train_config: Dict) -> None:
         """Run the distributed training process on a single machine.
@@ -120,8 +122,14 @@ class DistributedMockup:
         self.train_config.update(train_config)
         self.n_workers = self.train_config["num_machines"]
         self._set_ports()
-        self._write_data(partitions)
-        self.label_ = np.hstack([partition[:, 0] for partition in partitions])
+        all_data = np.vstack(partitions)
+        if self.train_config["tree_learner"] == "feature":
+            self.train_config["pre_partition"] = False
+            worker_datasets = [all_data for _ in range(self.n_workers)]
+        else:
+            worker_datasets = partitions
+        self._write_data(all_data, worker_datasets)
+        self.label_ = all_data[:, 0]
         futures = []
         with ThreadPoolExecutor(max_workers=self.n_workers) as executor:
             for i in range(self.n_workers):
@@ -165,6 +173,54 @@ class DistributedMockup:
             _write_dict(self.train_config, file)
 
 
+@lru_cache(maxsize=None)
+def _metal_cli_available(executable: str) -> bool:
+    if platform.system() != "Darwin":
+        return False
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        tmp_dir_path = Path(tmp_dir)
+        data_path = tmp_dir_path / "train.txt"
+        config_path = tmp_dir_path / "train.conf"
+        model_path = tmp_dir_path / "model.txt"
+        np.savetxt(str(data_path), create_data(task="binary-classification", n_samples=40), delimiter=",")
+        with open(config_path, "wt") as file:
+            _write_dict(
+                {
+                    "task": "train",
+                    "data": data_path,
+                    "output_model": model_path,
+                    "objective": "binary",
+                    "device_type": "metal",
+                    "num_iterations": 1,
+                    "num_leaves": 3,
+                    "min_data_in_leaf": 1,
+                    "force_row_wise": True,
+                    "verbose": -1,
+                },
+                file,
+            )
+        result = subprocess.run([executable, f"config={config_path}"], capture_output=True, text=True)
+
+    if result.returncode == 0:
+        return True
+
+    combined_output = f"{result.stdout}\n{result.stderr}".lower()
+    if "metal" in combined_output or "apple silicon" in combined_output:
+        return False
+
+    raise RuntimeError(
+        "Unable to determine whether the LightGBM CLI supports Metal:\n"
+        f"stdout:\n{result.stdout}\n"
+        f"stderr:\n{result.stderr}"
+    )
+
+
+def _skip_if_not_metal_cli(executable: str) -> None:
+    if not _metal_cli_available(executable):
+        pytest.skip("Metal CLI backend not available")
+
+
 def test_classifier(executable):
     """Test the classification task."""
     num_machines = 2
@@ -189,6 +245,47 @@ def test_regressor(executable):
     train_params = {
         "objective": "regression",
         "num_machines": num_machines,
+    }
+    reg = DistributedMockup(executable)
+    reg.fit(partitions, train_params)
+    y_pred = reg.predict(predict_config={})
+    np.testing.assert_allclose(y_pred, reg.label_, rtol=0.2, atol=50.0)
+
+
+@pytest.mark.parametrize("tree_learner", ["data", "voting", "feature"])
+def test_metal_classifier(executable, tree_learner):
+    """Test Metal distributed binary classification across supported tree learners."""
+    _skip_if_not_metal_cli(executable)
+
+    num_machines = 2
+    data = create_data(task="binary-classification")
+    partitions = np.array_split(data, num_machines)
+    train_params = {
+        "objective": "binary",
+        "num_machines": num_machines,
+        "tree_learner": tree_learner,
+        "device_type": "metal",
+    }
+    clf = DistributedMockup(executable)
+    clf.fit(partitions, train_params)
+    y_probas = clf.predict(predict_config={})
+    y_pred = y_probas > 0.5
+    assert accuracy_score(clf.label_, y_pred) == 1.0
+
+
+@pytest.mark.parametrize("tree_learner", ["data", "voting"])
+def test_metal_regressor(executable, tree_learner):
+    """Test Metal distributed regression across the data-based tree learners."""
+    _skip_if_not_metal_cli(executable)
+
+    num_machines = 2
+    data = create_data(task="regression")
+    partitions = np.array_split(data, num_machines)
+    train_params = {
+        "objective": "regression",
+        "num_machines": num_machines,
+        "tree_learner": tree_learner,
+        "device_type": "metal",
     }
     reg = DistributedMockup(executable)
     reg.fit(partitions, train_params)

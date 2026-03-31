@@ -682,12 +682,39 @@ Clang
 macOS
 ^^^^^
 
-The GPU version is not supported on macOS.
+The OpenCL GPU version (``device_type=gpu``) is not supported on macOS.
+On Apple Silicon, use the Metal version below.
 
 Docker
 ^^^^^^
 
 Refer to `GPU Docker folder <https://github.com/lightgbm-org/LightGBM/tree/master/docker/gpu>`__.
+
+Build Metal Version
+~~~~~~~~~~~~~~~~~~~
+
+The Metal version of LightGBM (``device_type=metal``) uses Apple Metal for histogram construction on macOS with Apple Silicon.
+It supports serial training, linear trees, refit, and distributed training with the tree learners that LightGBM already exposes outside the C API.
+
+macOS
+^^^^^
+
+1. Install `CMake`_, `OpenMP`_, and Xcode Command Line Tools.
+
+2. Run the following commands:
+
+   .. code:: sh
+
+     git clone --recursive https://github.com/lightgbm-org/LightGBM
+     cd LightGBM
+     cmake -B build -S . -DUSE_METAL=ON
+     cmake --build build -j4
+
+After compilation the executable and ``.dylib`` files will be in ``LightGBM/``.
+
+When the Metal toolchain is available at build time, LightGBM also produces ``default.metallib`` and installs or packages it beside ``lib_lightgbm``.
+Packaged builds should load that precompiled Metal library at runtime.
+Compiling ``.metal`` sources at runtime is only a fallback intended for developer or source-tree builds when ``default.metallib`` is unavailable.
 
 Build CUDA Version
 ~~~~~~~~~~~~~~~~~~

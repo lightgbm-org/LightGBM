@@ -258,7 +258,7 @@ Core Parameters
 
    -  **Note**: please **don't** change this during training, especially when running multiple jobs simultaneously by external packages, otherwise it may cause undesirable errors
 
--  ``device_type`` :raw-html:`<a id="device_type" title="Permalink to this parameter" href="#device_type">&#x1F517;&#xFE0E;</a>`, default = ``cpu``, type = enum, options: ``cpu``, ``gpu``, ``cuda``, aliases: ``device``
+-  ``device_type`` :raw-html:`<a id="device_type" title="Permalink to this parameter" href="#device_type">&#x1F517;&#xFE0E;</a>`, default = ``cpu``, type = enum, options: ``cpu``, ``gpu``, ``cuda``, ``metal``, aliases: ``device``
 
    -  device for the tree learning
 
@@ -268,11 +268,15 @@ Core Parameters
 
    -  ``gpu`` can be faster than ``cpu`` and works on a wider range of GPUs than CUDA
 
+   -  ``metal`` uses Apple Metal for GPU-accelerated histogram construction on macOS with Apple Silicon
+
    -  **Note**: it is recommended to use the smaller ``max_bin`` (e.g. 63) to get the better speed up
 
    -  **Note**: for the faster speed, GPU uses 32-bit float point to sum up by default, so this may affect the accuracy for some tasks. You can set ``gpu_use_dp=true`` to enable 64-bit float point, but it will slow down the training
 
-   -  **Note**: refer to `Installation Guide <./Installation-Guide.rst>`__ to build LightGBM with GPU, CUDA, or ROCm support
+   -  **Note**: ``metal`` always uses 32-bit float point. ``gpu_use_dp`` is not supported with Metal
+
+   -  **Note**: refer to `Installation Guide <./Installation-Guide.rst>`__ to build LightGBM with GPU, Metal, CUDA, or ROCm support
 
 -  ``seed`` :raw-html:`<a id="seed" title="Permalink to this parameter" href="#seed">&#x1F517;&#xFE0E;</a>`, default = ``None``, type = int, aliases: ``random_seed``, ``random_state``
 
@@ -797,7 +801,7 @@ Dataset Parameters
 
    -  it is recommended to rescale data before training so that features have similar mean and standard deviation
 
-   -  **Note**: works only with ``cpu``, ``gpu`` device type and ``serial`` tree learner
+   -  **Note**: works only with ``cpu``, ``gpu``, or ``metal`` device type and ``serial`` tree learner
 
    -  **Note**: ``regression_l1`` objective is not supported with linear tree boosting
 
@@ -1389,7 +1393,7 @@ GPU Parameters
 
    -  set this to ``true`` to use double precision math on GPU (by default single precision is used)
 
-   -  **Note**: can be used only in OpenCL implementation (``device_type="gpu"``), in CUDA implementation only double precision is currently supported
+   -  **Note**: can be used only in OpenCL implementation (``device_type="gpu"``); ``metal`` always uses single precision, and in CUDA implementation only double precision is currently supported
 
 -  ``num_gpu`` :raw-html:`<a id="num_gpu" title="Permalink to this parameter" href="#num_gpu">&#x1F517;&#xFE0E;</a>`, default = ``1``, type = int, constraints: ``num_gpu > 0``
 
