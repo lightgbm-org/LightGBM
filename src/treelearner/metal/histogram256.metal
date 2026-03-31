@@ -569,7 +569,8 @@ kernel void histogram256(
     uint feature4_id = (group_id >> POWER_FEATURE_WORKGROUPS);
 
     if (POWER_FEATURE_WORKGROUPS != 0) {
-        // Multiple workgroups per feature4: write sub-histogram, then reduce
+        // Multiple workgroups per feature4: write sub-histogram only.
+        // Reduction is done in a separate dispatch (reduce_histogram256).
         device acc_type* output = (device acc_type*)output_buf + group_id * 4 * 2 * NUM_BINS;
         // write gradients and hessians
         device acc_type* ptr_f = output;
@@ -581,41 +582,7 @@ kernel void histogram256(
             }
             ptr_f += 2 * NUM_BINS;
         }
-        // Ensure all sub-histogram writes are visible to other threadgroups
-        threadgroup_barrier(mem_flags::mem_device);
-
-        // To avoid the cost of an extra reducing kernel, the last workgroup that
-        // processes this feature makes the final reduction; others quit.
-        // This is done using a global atomic counter.
-        threadgroup uint* counter_val = (threadgroup uint*)(gh_hist + 2 * 4 * NUM_BINS);
-        // backup the old value
-        uint old_val = *counter_val;
-        if (ltid == 0) {
-            // all workgroups processing the same feature add this counter
-            *counter_val = atomic_fetch_add_explicit(sync_counters + feature4_id, 1u, memory_order_relaxed);
-        }
-        // make sure everyone in this workgroup is here
-        threadgroup_barrier(mem_flags::mem_threadgroup);
-        // everyone in this workgroup: if we are the last workgroup, then do reduction!
-        if (*counter_val == (uint)((1 << POWER_FEATURE_WORKGROUPS) - 1)) {
-            // Device fence to see all sub-histogram writes from other workgroups
-            threadgroup_barrier(mem_flags::mem_device);
-            if (ltid == 0) {
-                // clear the sync counter for next time
-                atomic_store_explicit(sync_counters + feature4_id, 0u, memory_order_relaxed);
-            }
-            // locate our feature4's block in output memory
-            uint output_offset = (feature4_id << POWER_FEATURE_WORKGROUPS);
-            device acc_type const* feature4_subhists =
-                     (device acc_type*)output_buf + output_offset * 4 * 2 * NUM_BINS;
-            // skip reading the data already in threadgroup memory
-            uint skip_id = group_id ^ output_offset;
-            // locate output histogram location for this feature4
-            device acc_type* hist_buf = hist_buf_base + feature4_id * 4 * 2 * NUM_BINS;
-            within_kernel_reduction256x4(feature_mask, feature4_subhists, skip_id, old_val,
-                                         1 << POWER_FEATURE_WORKGROUPS,
-                                         hist_buf, (threadgroup acc_type*)shared_array, ltid);
-        }
+        // Sub-histograms written. Reduction will be done in a separate dispatch.
     } else {
         // only 1 workgroup per feature4, no need for counter -- reduction is a simple copy
         uint old_val = 0; // dummy
@@ -628,4 +595,30 @@ kernel void histogram256(
                                      1 << POWER_FEATURE_WORKGROUPS,
                                      hist_buf, (threadgroup acc_type*)shared_array, ltid);
     }
+}
+
+// ---------------------------------------------------------------------------
+// Reduction kernel: merge sub-histograms from multiple workgroups into final output.
+// Each thread handles one float element. Grid size = num_features4 * 4 * 2 * NUM_BINS.
+// ---------------------------------------------------------------------------
+kernel void reduce_histogram256(
+    device const float* sub_histograms [[buffer(0)]],
+    device float* output              [[buffer(1)]],
+    constant uint& num_sub_hist       [[buffer(2)]],
+    constant uint& num_features4      [[buffer(3)]],
+    uint tid [[thread_position_in_grid]])
+{
+    const uint elements_per_feature4 = 4 * 2 * NUM_BINS; // = 2048 for 256 bins
+    uint feature4_id = tid / elements_per_feature4;
+    uint element_id = tid % elements_per_feature4;
+
+    if (feature4_id >= num_features4) return;
+
+    float sum = 0.0f;
+    for (uint s = 0; s < num_sub_hist; ++s) {
+        // Sub-histogram layout: sub_histograms[(feature4_id * num_sub_hist + s) * elements_per_feature4 + element_id]
+        sum += sub_histograms[(feature4_id * num_sub_hist + s) * elements_per_feature4 + element_id];
+    }
+
+    output[feature4_id * elements_per_feature4 + element_id] = sum;
 }

@@ -139,25 +139,13 @@ Tree* MetalTreeLearner::Train(const score_t* gradients, const score_t* hessians,
 // ============================================================================
 
 int MetalTreeLearner::GetNumWorkgroupsPerFeature(data_size_t leaf_num_data) {
-  // TODO: Metal lacks reliable cross-threadgroup memory synchronization within a
-  // single dispatch. Until we implement a two-pass reduction kernel, force single
-  // workgroup per feature (POWER=0) for correctness.
-  // This reduces GPU occupancy for large datasets but guarantees correct results.
+  // Currently using single workgroup per feature (POWER=0) for correctness.
+  // The two-pass reduction kernel for multi-workgroup support has a sub-histogram
+  // layout mismatch that needs investigation. This limits GPU occupancy for large
+  // datasets but guarantees correct results. Multi-workgroup support will be
+  // enabled in a follow-up once the reduction kernel's output layout matches
+  // what WaitAndGetHistograms expects.
   return 0;
-
-  // Original logic (for future two-pass reduction implementation):
-  // we roughly want 256 workgroups per device, and we have num_dense_feature4_ feature tuples.
-  // also guarantee that there are at least 2K examples per workgroup
-  double x = 256.0 / num_dense_feature4_;
-  int exp_workgroups_per_feature = static_cast<int>(ceil(log2(x)));
-  double t = leaf_num_data / 1024.0;
-  exp_workgroups_per_feature = std::min(exp_workgroups_per_feature,
-                                        static_cast<int>(ceil(log(static_cast<double>(t)) / log(2.0))));
-  if (exp_workgroups_per_feature < 0)
-    exp_workgroups_per_feature = 0;
-  if (exp_workgroups_per_feature > kMaxLogWorkgroupsPerFeature)
-    exp_workgroups_per_feature = kMaxLogWorkgroupsPerFeature;
-  return exp_workgroups_per_feature;
 }
 
 // ============================================================================
@@ -922,6 +910,10 @@ void MetalTreeLearner::MetalHistogram(data_size_t leaf_num_data, bool use_all_fe
   @autoreleasepool {
     int exp_workgroups_per_feature = GetNumWorkgroupsPerFeature(leaf_num_data);
     int num_workgroups = (1 << exp_workgroups_per_feature) * num_dense_feature4_;
+    #if METAL_DEBUG >= 1
+    Log::Info("MetalHistogram: leaf_num_data=%d, POWER=%d, num_workgroups=%d, num_dense_feature4=%d",
+              leaf_num_data, exp_workgroups_per_feature, num_workgroups, num_dense_feature4_);
+    #endif
 
     id<MTLDevice> device = (__bridge id<MTLDevice>)metal_device_;
 
@@ -997,12 +989,49 @@ void MetalTreeLearner::MetalHistogram(data_size_t leaf_num_data, bool use_all_fe
     // Index 10: hist_buf_base (final histogram output)
     [encoder setBuffer:outputBuf offset:0 atIndex:10];
 
-    // Dispatch
+    // Dispatch main histogram kernel
     MTLSize threadgroups = MTLSizeMake(num_workgroups, 1, 1);
     MTLSize threadsPerGroup = MTLSizeMake(256, 1, 1);
     [encoder dispatchThreadgroups:threadgroups threadsPerThreadgroup:threadsPerGroup];
 
     [encoder endEncoding];
+
+    if (exp_workgroups_per_feature > 0) {
+      // Second pass: reduce sub-histograms into final output.
+      // Creating a new encoder provides the memory barrier between dispatches.
+      id<MTLComputeCommandEncoder> reduceEncoder = [cmdBuf computeCommandEncoder];
+      id<MTLLibrary> library = (__bridge id<MTLLibrary>)metal_library_;
+
+      // Get the reduction pipeline
+      NSString* reduceFuncName = [NSString stringWithFormat:@"reduce_%@",
+                                  [NSString stringWithCString:kernel_name_.c_str() encoding:NSUTF8StringEncoding]];
+      id<MTLFunction> reduceFunc = [library newFunctionWithName:reduceFuncName];
+      NSError* pipeError = nil;
+      id<MTLComputePipelineState> reducePipeline = [device newComputePipelineStateWithFunction:reduceFunc error:&pipeError];
+      if (!reducePipeline) {
+        Log::Fatal("Failed to create Metal reduction pipeline for %s: %s",
+                   [reduceFuncName UTF8String],
+                   pipeError ? [[pipeError localizedDescription] UTF8String] : "unknown error");
+      }
+
+      uint32_t num_sub = 1u << exp_workgroups_per_feature;
+      uint32_t num_f4 = static_cast<uint32_t>(num_dense_feature4_);
+
+      [reduceEncoder setComputePipelineState:reducePipeline];
+      [reduceEncoder setBuffer:subhistBuf offset:0 atIndex:0];
+      [reduceEncoder setBuffer:outputBuf offset:0 atIndex:1];
+      [reduceEncoder setBytes:&num_sub length:sizeof(uint32_t) atIndex:2];
+      [reduceEncoder setBytes:&num_f4 length:sizeof(uint32_t) atIndex:3];
+
+      uint32_t total_elements = num_f4 * dword_features_ * device_bin_size_ * 2;
+      MTLSize reduceThreads = MTLSizeMake(total_elements, 1, 1);
+      uint32_t reduceGroupWidth = std::min(256u, total_elements);
+      MTLSize reduceGroupSize = MTLSizeMake(reduceGroupWidth, 1, 1);
+      // Use dispatchThreads for non-uniform grid sizes
+      [reduceEncoder dispatchThreads:reduceThreads threadsPerThreadgroup:reduceGroupSize];
+      [reduceEncoder endEncoding];
+    }
+
     [cmdBuf commit];
 
     // Store the pending command buffer for later wait
