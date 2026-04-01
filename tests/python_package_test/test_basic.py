@@ -1098,3 +1098,50 @@ def test_set_field_none_removes_field(rng, field_name):
 
     d.set_field(field_name, None)
     assert d.get_field(field_name) is None
+
+
+def test_booster_eval_adds_new_valid_dataset() -> None:
+    X_train, X_test, y_train, y_test = train_test_split(
+        *load_breast_cancer(return_X_y=True),
+        test_size=0.1,
+        random_state=42,
+    )
+    train_set = lgb.Dataset(X_train, label=y_train)
+    valid_set = lgb.Dataset(X_test, label=y_test, reference=train_set)
+    booster = lgb.Booster(
+        params={
+            "deterministic": True,
+            "force_row_wise": True,
+            "objective": "binary",
+            "metric": ["auc", "binary_error"],
+            "num_iterations": 2,
+            "num_leaves": 3,
+            "num_threads": 1,
+            "seed": 708,
+            "verbose": -1,
+        },
+        train_set=train_set,
+    )
+    assert booster._Booster__num_dataset == 1
+    assert booster.valid_sets == []
+
+    result = booster.eval(valid_set, name="test")
+
+    assert booster._Booster__num_dataset == 2
+    assert booster.valid_sets == [valid_set]
+    assert len(result) == 2
+    assert isinstance(result, list)
+
+    # first metric - AUC
+    dataset_name, metric_name, metric_value, maximize = result[0]
+    assert dataset_name == "test"
+    assert metric_name == "auc"
+    assert metric_value >= 0.50
+    assert maximize is True
+
+    # second metric - binary error
+    dataset_name, metric_name, metric_value, maximize = result[1]
+    assert dataset_name == "test"
+    assert metric_name == "binary_error"
+    assert metric_value >= 0.40
+    assert maximize is False
