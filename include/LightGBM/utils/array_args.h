@@ -185,15 +185,6 @@ class ArrayArgs {
     }
   }
 
-  inline static bool CheckAllZero(const std::vector<VAL_T>& array) {
-    for (size_t i = 0; i < array.size(); ++i) {
-      if (array[i] != VAL_T(0)) {
-        return false;
-      }
-    }
-    return true;
-  }
-
   inline static bool CheckAll(const std::vector<VAL_T>& array, VAL_T t) {
     for (size_t i = 0; i < array.size(); ++i) {
       if (array[i] != t) {

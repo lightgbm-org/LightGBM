@@ -57,6 +57,10 @@ const int INVALID_SOCKET = -1;
 #endif
 
 #ifdef _WIN32
+
+#define MALLOC(x) HeapAlloc(GetProcessHeap(), 0, (x))
+#define FREE(x) HeapFree(GetProcessHeap(), 0, (x))
+
 // existence of inet_pton is checked in CMakeLists.txt and configure.win, then stored in WIN_HAS_INET_PTON
 #ifndef WIN_HAS_INET_PTON
 inline int inet_pton(int af, const char *src, void *dst) {
@@ -83,9 +87,6 @@ inline int inet_pton(int af, const char *src, void *dst) {
 }
 #endif
 #endif
-
-#define MALLOC(x) HeapAlloc(GetProcessHeap(), 0, (x))
-#define FREE(x) HeapFree(GetProcessHeap(), 0, (x))
 
 namespace SocketConfig {
 const int kSocketBufferSize = 100 * 1000;
