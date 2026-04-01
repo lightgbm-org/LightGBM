@@ -1,24 +1,26 @@
 # coding: utf-8
 import numpy as np
-from sklearn.datasets import fetch_openml
 from sklearn.model_selection import train_test_split
 
 import lightgbm as lgb
 
-# Load FLCHAIN dataset (serum free light chain and mortality)
-data = fetch_openml("flchain", version=1, as_frame=True)
-df = data.data.copy()
-time = data.target.values
-event = df.pop("status").values
 
-# Encode strings as integers
-df["sex"] = (df["sex"] == "F").astype(int)
-df["flc.grp"] = df["flc.grp"].astype(int)
-df["mgus"] = df["mgus"].astype(int)
+def load_survival():
+    """Generate synthetic survival data with signed-time label convention."""
+    n = 500
+    p = 5
+    censoring_rate = 0.3
+    rng = np.random.RandomState(seed=42)
+    X = rng.randn(n, p)
+    log_hazard = X[:, 0] + 0.1 * X[:, 1]
+    times = rng.exponential(np.exp(-log_hazard))
+    censor_times = rng.exponential(np.median(times) / censoring_rate, n)
+    observed = times <= censor_times
+    y = np.where(observed, np.minimum(times, censor_times), -censor_times)
+    return X.astype(np.float64), y.astype(np.float64)
 
-# Encode labels: positive = event (death), negative = censored
-y = np.where(event == 1, time, -time)
-X = df.values
+
+X, y = load_survival()
 
 X_train, X_val, y_train, y_val = train_test_split(X, y, test_size=0.2, random_state=42)
 
@@ -28,7 +30,7 @@ lgb_val = lgb.Dataset(X_val, label=y_val, reference=lgb_train)
 params = {
     "objective": "survival_cox",
     "metric": ["survival_cox_nll", "concordance_index"],
-    "num_leaves": 31,
+    "num_leaves": 10,
     "learning_rate": 0.05,
     "verbose": 0,
 }
@@ -41,7 +43,7 @@ gbm = lgb.train(
     valid_sets=[lgb_val],
     valid_names=["val"],
     callbacks=[
-        lgb.early_stopping(stopping_rounds=20, first_metric_only=True),
+        lgb.early_stopping(stopping_rounds=5, first_metric_only=True),
         lgb.record_evaluation(evals_result),
     ],
 )
