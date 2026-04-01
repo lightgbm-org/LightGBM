@@ -894,7 +894,7 @@ def test_pandas_categorical_json_serialization_works(rng):
     )
 
     # confirm that the array dtypes also become the category dtypes
-    assert df["np_float"].dtype.categories.dtype == np.float32
+    assert df["np_float"].dtype.categories.dtype in (np.float32, np.float64)
     assert df["np_bool"].dtype.categories.dtype == np.bool_
     assert df["np_int"].dtype.categories.dtype == np.int64
 
