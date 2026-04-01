@@ -51,18 +51,17 @@ class CoxPHLoss : public ObjectiveFunction {
     // Iterate through data in sorted time order.
 
     // find max score for numerical stability
-    double max_p = score[sorted_indices_[0]];
+    double max_p = score[0];
     for (data_size_t k = 1; k < num_data_; ++k) {
-      const data_size_t idx = sorted_indices_[k];
-      if (score[idx] > max_p) {
-        max_p = score[idx];
+      if (score[k] > max_p) {
+        max_p = score[k];
       }
     }
 
     // sum of exp(score - max_p) over all samples
     double exp_p_sum = 0.0;
     for (data_size_t k = 0; k < num_data_; ++k) {
-      exp_p_sum += std::exp(score[sorted_indices_[k]] - max_p);
+      exp_p_sum += std::exp(score[k] - max_p);
     }
 
     // forward pass in sorted order
