@@ -226,8 +226,8 @@ def _accuracy_score(dy_true, dy_pred):
 def _constant_metric(y_true, y_pred):
     metric_name = "constant_metric"
     value = 0.708
-    is_higher_better = False
-    return metric_name, value, is_higher_better
+    maximize = False
+    return metric_name, value, maximize
 
 
 def _objective_least_squares(y_true, y_pred):

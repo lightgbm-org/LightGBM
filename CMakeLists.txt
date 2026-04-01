@@ -1,3 +1,5 @@
+cmake_minimum_required(VERSION 3.28)
+
 option(USE_MPI "Enable MPI-based distributed learning" OFF)
 option(USE_OPENMP "Enable OpenMP" ON)
 option(USE_GPU "Enable GPU-accelerated training" OFF)
@@ -23,8 +25,6 @@ option(INSTALL_HEADERS "Install headers to CMAKE_INSTALL_PREFIX (e.g. '/usr/loca
 option(__BUILD_FOR_PYTHON "Set to ON if building lib_lightgbm for use with the Python-package" OFF)
 option(__BUILD_FOR_R "Set to ON if building lib_lightgbm for use with the R-package" OFF)
 option(__INTEGRATE_OPENCL "Set to ON if building LightGBM with the OpenCL ICD Loader and its dependencies included" OFF)
-
-cmake_minimum_required(VERSION 3.28)
 
 # If using Visual Studio generators, always target v10.x of the Windows SDK.
 # Doing this avoids lookups that could fall back to very old versions, e.g. by finding
