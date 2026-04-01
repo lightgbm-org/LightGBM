@@ -12,6 +12,7 @@ get_omp_pragmas_without_num_threads() {
         --include='*.cpp' \
         --include='*.h' \
         --include='*.hpp' \
+        --include='*.mm' \
         'pragma omp parallel' \
     | grep -v ' num_threads'
 }

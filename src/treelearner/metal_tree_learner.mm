@@ -3,7 +3,7 @@
  * Copyright (c) 2017-2026 The LightGBM developers. All rights reserved.
  * Licensed under the MIT License. See LICENSE file in the project root for license information.
  */
-#ifdef USE_METAL
+#ifdef LGBM_USE_METAL
 
 #include "metal_tree_learner.h"
 
@@ -14,7 +14,6 @@
 #include <algorithm>
 #include <chrono>
 #include <cmath>
-#include <cstdlib>
 #include <cstring>
 #include <dlfcn.h>
 #include <memory>
@@ -76,71 +75,27 @@ NSString* FirstExistingPath(NSArray<NSString*>* candidates) {
   return nil;
 }
 
-NSString* FirstExistingDirectory(NSArray<NSString*>* candidates) {
-  NSFileManager* file_manager = [NSFileManager defaultManager];
-  for (NSString* candidate in candidates) {
-    BOOL is_directory = NO;
-    if ([file_manager fileExistsAtPath:candidate isDirectory:&is_directory] && is_directory) {
-      return candidate;
-    }
-  }
-  return nil;
-}
-
 NSString* FindPrecompiledMetalLibraryPath() {
   NSMutableArray<NSString*>* candidates = [NSMutableArray array];
   NSString* loaded_image_dir = LoadedImageDirectory();
   if (loaded_image_dir) {
-    AppendCandidatePath(candidates, [loaded_image_dir stringByAppendingPathComponent:@"default.metallib"]);
+    AppendCandidatePath(candidates, [loaded_image_dir stringByAppendingPathComponent:@"lib_lightgbm.metallib"]);
   }
 
-  AppendCandidatePath(candidates, [[NSBundle mainBundle] pathForResource:@"default" ofType:@"metallib"]);
+  AppendCandidatePath(candidates, [[NSBundle mainBundle] pathForResource:@"lib_lightgbm" ofType:@"metallib"]);
 
   NSString* exec_dir = ExecutableDirectory();
   if (exec_dir) {
-    AppendCandidatePath(candidates, [exec_dir stringByAppendingPathComponent:@"default.metallib"]);
-    AppendCandidatePath(candidates, [exec_dir stringByAppendingPathComponent:@"../lib/default.metallib"]);
+    AppendCandidatePath(candidates, [exec_dir stringByAppendingPathComponent:@"lib_lightgbm.metallib"]);
+    AppendCandidatePath(candidates, [exec_dir stringByAppendingPathComponent:@"../lib/lib_lightgbm.metallib"]);
   }
 
   NSString* cwd = CurrentWorkingDirectory();
   if (cwd) {
-    AppendCandidatePath(candidates, [cwd stringByAppendingPathComponent:@"default.metallib"]);
+    AppendCandidatePath(candidates, [cwd stringByAppendingPathComponent:@"lib_lightgbm.metallib"]);
   }
 
   return FirstExistingPath(candidates);
-}
-
-NSString* FindMetalKernelDirectory() {
-  NSMutableArray<NSString*>* candidates = [NSMutableArray array];
-
-  const char* env_kernel_dir = std::getenv("LIGHTGBM_METAL_KERNEL_DIR");
-  if (env_kernel_dir != nullptr && env_kernel_dir[0] != '\0') {
-    AppendCandidatePath(candidates, [NSString stringWithUTF8String:env_kernel_dir]);
-  }
-
-#ifdef LIGHTGBM_METAL_KERNEL_DIR
-  AppendCandidatePath(candidates, @LIGHTGBM_METAL_KERNEL_DIR);
-#endif
-
-  NSString* loaded_image_dir = LoadedImageDirectory();
-  if (loaded_image_dir) {
-    AppendCandidatePath(candidates, [loaded_image_dir stringByAppendingPathComponent:@"src/treelearner/metal"]);
-    AppendCandidatePath(candidates, [loaded_image_dir stringByAppendingPathComponent:@"../src/treelearner/metal"]);
-  }
-
-  NSString* exec_dir = ExecutableDirectory();
-  if (exec_dir) {
-    AppendCandidatePath(candidates, [exec_dir stringByAppendingPathComponent:@"src/treelearner/metal"]);
-    AppendCandidatePath(candidates, [exec_dir stringByAppendingPathComponent:@"../src/treelearner/metal"]);
-  }
-
-  NSString* cwd = CurrentWorkingDirectory();
-  if (cwd) {
-    AppendCandidatePath(candidates, [cwd stringByAppendingPathComponent:@"src/treelearner/metal"]);
-    AppendCandidatePath(candidates, [cwd stringByAppendingPathComponent:@"../src/treelearner/metal"]);
-  }
-
-  return FirstExistingDirectory(candidates);
 }
 
 }  // namespace
@@ -339,71 +294,21 @@ void MetalTreeLearner::InitMetal() {
     }
     metal_command_queue_ = (__bridge_retained void*)queue;
 
-    // Load compiled metallib
+    // Load compiled metallib (always available — built at compile time)
     NSError* error = nil;
-    id<MTLLibrary> library = nil;
-
     NSString* libPath = FindPrecompiledMetalLibraryPath();
-    if ([[NSFileManager defaultManager] fileExistsAtPath:libPath]) {
-      NSURL* libURL = [NSURL fileURLWithPath:libPath];
-      library = [device newLibraryWithURL:libURL error:&error];
-      if (!library) {
-        Log::Fatal("Failed to load Metal library from %s: %s",
-                   [libPath UTF8String],
-                   [[error localizedDescription] UTF8String]);
-      }
-      Log::Info("Loaded pre-compiled Metal library from %s", [libPath UTF8String]);
+    if (!libPath) {
+      Log::Fatal("Cannot find lib_lightgbm.metallib. "
+                 "It should be located beside the lib_lightgbm shared library.");
     }
-
-    // If no pre-compiled metallib found, compile from .metal source at runtime
+    NSURL* libURL = [NSURL fileURLWithPath:libPath];
+    id<MTLLibrary> library = [device newLibraryWithURL:libURL error:&error];
     if (!library) {
-      Log::Info("No pre-compiled metallib found beside lib_lightgbm, the executable, or the current working directory. Compiling Metal kernels from source as a developer fallback...");
-      NSString* kernelDir = FindMetalKernelDirectory();
-      if (!kernelDir) {
-        Log::Fatal("Cannot find Metal kernel sources. Expected a packaged default.metallib beside lib_lightgbm, or developer sources in LIGHTGBM_METAL_KERNEL_DIR / src/treelearner/metal.");
-      }
-      // Compile each .metal file into a separate library, then use the one we need
-      // We need kernel_name_ to be set first, but at this point we may not know it yet.
-      // Compile the kernel file that matches our device_bin_size_.
-      // Since InitMetal is called after we know max_num_bin_, select the right kernel.
-      NSString* kernelFile = nil;
-      if (max_num_bin_ <= 16) {
-        kernelFile = @"histogram16.metal";
-      } else if (max_num_bin_ <= 64) {
-        kernelFile = @"histogram64.metal";
-      } else {
-        kernelFile = @"histogram256.metal";
-      }
-      NSString* path = [kernelDir stringByAppendingPathComponent:kernelFile];
-      if ([[NSFileManager defaultManager] fileExistsAtPath:path]) {
-        NSString* src = [NSString stringWithContentsOfFile:path encoding:NSUTF8StringEncoding error:&error];
-        if (src) {
-          MTLCompileOptions* opts = [[MTLCompileOptions alloc] init];
-          if (@available(macOS 15.0, *)) {
-            opts.mathMode = MTLMathModeFast;
-          } else {
-#pragma clang diagnostic push
-#pragma clang diagnostic ignored "-Wdeprecated-declarations"
-            opts.fastMathEnabled = YES;
-#pragma clang diagnostic pop
-          }
-          library = [device newLibraryWithSource:src options:opts error:&error];
-          if (!library) {
-            Log::Fatal("Failed to compile Metal kernel %s: %s",
-                       [kernelFile UTF8String],
-                       [[error localizedDescription] UTF8String]);
-          }
-          Log::Info("Metal kernel %s compiled from source successfully from %s", [kernelFile UTF8String], [path UTF8String]);
-        } else {
-          Log::Fatal("Could not read Metal kernel source %s: %s",
-                     [path UTF8String], [[error localizedDescription] UTF8String]);
-        }
-      } else {
-        Log::Fatal("Cannot find Metal kernel source at %s. "
-                   "Ensure .metal files are available or build with Metal toolchain to create default.metallib",
-                   [path UTF8String]);
-      }
+      Log::Fatal("Failed to load Metal library from %s: %s",
+                 [libPath UTF8String],
+                 [[error localizedDescription] UTF8String]);
     }
+    Log::Info("Loaded pre-compiled Metal library from %s", [libPath UTF8String]);
 
     metal_library_ = (__bridge_retained void*)library;
     Log::Info("Metal library loaded successfully");
@@ -1338,45 +1243,6 @@ void MetalTreeLearner::ConstructHistograms(const std::vector<int8_t>& is_feature
     share_state_.get(),
     ptr_smaller_leaf_hist_data);
 
-  // Compare GPU histogram with CPU histogram, useful for debugging GPU code problems.
-  // Uncomment the #define below to enable.
-  // #define METAL_DEBUG_COMPARE
-  #ifdef METAL_DEBUG_COMPARE
-  if (smaller_gpu_used) {
-    for (int i = 0; i < num_dense_feature_groups_; ++i) {
-      if (!feature_masks_[i]) continue;
-      int dense_group_index = dense_feature_group_map_[i];
-      size_t size = train_data_->FeatureGroupNumBin(dense_group_index);
-      hist_t* current_histogram = ptr_smaller_leaf_hist_data + train_data_->GroupBinBoundary(dense_group_index) * 2;
-      std::vector<hist_t> gpu_histogram(size * 2);
-      std::copy(current_histogram, current_histogram + size * 2, gpu_histogram.data());
-      std::memset(current_histogram, 0, size * sizeof(hist_t) * 2);
-      if (train_data_->FeatureGroupBin(dense_group_index) == nullptr) continue;
-      data_size_t num_data_leaf = smaller_leaf_splits_->num_data_in_leaf();
-      if (num_data_leaf != num_data_) {
-        train_data_->FeatureGroupBin(dense_group_index)->ConstructHistogram(
-          smaller_leaf_splits_->data_indices(), 0, num_data_leaf,
-          ordered_gradients_.data(), ordered_hessians_.data(), current_histogram);
-      } else {
-        train_data_->FeatureGroupBin(dense_group_index)->ConstructHistogram(
-          0, num_data_leaf, gradients_, hessians_, current_histogram);
-      }
-      for (size_t j = 0; j < size; ++j) {
-        if (std::fabs(GET_GRAD(gpu_histogram.data(), j) - GET_GRAD(current_histogram, j)) > 1e-3 ||
-            std::fabs(GET_HESS(gpu_histogram.data(), j) - GET_HESS(current_histogram, j)) > 1e-3) {
-          Log::Warning("Metal histogram mismatch: feature %d bin %lu: "
-                       "gpu_g=%.6f cpu_g=%.6f gpu_h=%.6f cpu_h=%.6f",
-                       dense_group_index, j,
-                       GET_GRAD(gpu_histogram.data(), j), GET_GRAD(current_histogram, j),
-                       GET_HESS(gpu_histogram.data(), j), GET_HESS(current_histogram, j));
-          break;
-        }
-      }
-      std::copy(gpu_histogram.data(), gpu_histogram.data() + size * 2, current_histogram);
-    }
-  }
-  #endif
-
   if (larger_leaf_histogram_array_ != nullptr && !use_subtract) {
     hist_t* ptr_larger_leaf_hist_data = larger_leaf_histogram_array_[0].RawData() - kHistOffset;
 
@@ -1464,4 +1330,4 @@ void MetalTreeLearner::Split(Tree* tree, int best_Leaf, int* left_leaf, int* rig
 
 }  // namespace LightGBM
 
-#endif  // USE_METAL
+#endif  // LGBM_USE_METAL

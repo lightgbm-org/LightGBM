@@ -17,7 +17,7 @@
 
 #include "serial_tree_learner.h"
 
-#ifdef USE_METAL
+#ifdef LGBM_USE_METAL
 
 namespace LightGBM {
 
@@ -203,12 +203,12 @@ class MetalTreeLearner: public SerialTreeLearner {
   #endif
   explicit MetalTreeLearner(const Config* tree_config) : SerialTreeLearner(tree_config) {
     Log::Fatal("Metal Tree Learner was not enabled in this build.\n"
-               "Please recompile with CMake option -DUSE_METAL=1");
+               "Please recompile with CMake option -DLGBM_USE_METAL=1");
   }
 };
 
 }  // namespace LightGBM
 
-#endif   // USE_METAL
+#endif   // LGBM_USE_METAL
 
 #endif   // LIGHTGBM_SRC_TREELEARNER_METAL_TREE_LEARNER_H_

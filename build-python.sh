@@ -75,31 +75,6 @@ PIP_INSTALL_ARGS=""
 BUILD_ARGS=""
 PRECOMPILE="false"
 
-copy_metal_runtime_assets_if_needed() {
-    if ! test -f ./lightgbm/lib/lib_lightgbm.dylib; then
-        return
-    fi
-
-    if ! strings ./lightgbm/lib/lib_lightgbm.dylib 2>/dev/null | grep -Fq "Using Metal (Apple Silicon) tree learner"; then
-        return
-    fi
-
-    for metallib_path in \
-        ../default.metallib \
-        ../build/default.metallib
-    do
-        if test -f "${metallib_path}"; then
-            echo "[INFO] found ${metallib_path}"
-            cp "${metallib_path}" ./lightgbm/lib/default.metallib
-            return
-        fi
-    done
-
-    echo "[ERROR] found a Metal-enabled lib_lightgbm.dylib but could not find default.metallib."
-    echo "[ERROR] Expected default.metallib beside the repo root build output or in build/default.metallib."
-    exit 1
-}
-
 while [ $# -gt 0 ]; do
   case "$1" in
     ############################
@@ -176,7 +151,7 @@ while [ $# -gt 0 ]; do
         BUILD_ARGS="${BUILD_ARGS} --config-setting=cmake.define.USE_GPU=ON"
         ;;
     --metal)
-        BUILD_ARGS="${BUILD_ARGS} --config-setting=cmake.define.USE_METAL=ON"
+        BUILD_ARGS="${BUILD_ARGS} --config-setting=cmake.define.LGBM_USE_METAL=ON"
         ;;
     --integrated-opencl)
         BUILD_ARGS="${BUILD_ARGS} --config-setting=cmake.define.__INTEGRATE_OPENCL=ON"
@@ -358,7 +333,6 @@ EOF
         elif test -f ../lib_lightgbm.dylib; then
             echo "[INFO] found pre-compiled lib_lightgbm.dylib"
             cp ../lib_lightgbm.dylib ./lightgbm/lib/lib_lightgbm.dylib
-            copy_metal_runtime_assets_if_needed
         elif test -f ../lib_lightgbm.dll; then
             echo "[INFO] found pre-compiled lib_lightgbm.dll"
             cp ../lib_lightgbm.dll ./lightgbm/lib/lib_lightgbm.dll

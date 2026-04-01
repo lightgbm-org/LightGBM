@@ -58,12 +58,8 @@ TreeLearner* TreeLearner::CreateTreeLearner(const std::string& learner_type, con
       } else {
         return new MetalTreeLearner(config);
       }
-    } else if (learner_type == std::string("feature")) {
-      return new FeatureParallelTreeLearner<MetalTreeLearner>(config);
-    } else if (learner_type == std::string("data")) {
-      return new DataParallelTreeLearner<MetalTreeLearner>(config);
-    } else if (learner_type == std::string("voting")) {
-      return new VotingParallelTreeLearner<MetalTreeLearner>(config);
+    } else {
+      Log::Fatal("Currently Metal version only supports training on a single machine.");
     }
   }
   return nullptr;
