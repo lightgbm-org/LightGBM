@@ -52,7 +52,7 @@ class EarlyStopException(Exception):
         best_iteration : int
             The best iteration stopped.
             0-based... pass ``best_iteration=2`` to indicate that the third iteration was the best one.
-        best_score : list of (eval_name, metric_name, eval_result, is_higher_better) tuple or (eval_name, metric_name, eval_result, is_higher_better, stdv) tuple
+        best_score : list of (dataset_name, metric_name, metric_value, maximize) tuple or (dataset_name, metric_name, metric_value, maximize, metric_std_dev) tuple
             Scores for each metric, on each validation set, as of the best iteration.
         """
         super().__init__()
@@ -317,7 +317,7 @@ class _EarlyStoppingCallback:
         if _is_using_cv(env) and dataset_name == "train":
             return True
 
-        # for lgb.train(), it's possible to pass the training data via valid_sets with any eval_name
+        # for lgb.train(), it's possible to pass the training data via valid_sets with any name
         if isinstance(env.model, Booster) and dataset_name == env.model._train_data_name:
             return True
 
@@ -397,7 +397,10 @@ class _EarlyStoppingCallback:
                 )
                 if self.first_metric_only:
                     _log_info(f"Evaluated only: {metric_name}")
-            raise EarlyStopException(self.best_iter[i], self.best_score_list[i])
+            raise EarlyStopException(
+                best_iteration=self.best_iter[i],
+                best_score=self.best_score_list[i],
+            )
 
     def __call__(self, env: CallbackEnv) -> None:
         if env.iteration == env.begin_iteration:
@@ -437,7 +440,10 @@ class _EarlyStoppingCallback:
                     _log_info(f"Early stopping, best iteration is:\n[{self.best_iter[i] + 1}]\t{eval_result_str}")
                     if self.first_metric_only:
                         _log_info(f"Evaluated only: {metric_name}")
-                raise EarlyStopException(self.best_iter[i], self.best_score_list[i])
+                raise EarlyStopException(
+                    best_iteration=self.best_iter[i],
+                    best_score=self.best_score_list[i],
+                )
             self._final_iteration_check(env=env, metric_name=metric_name, i=i)
 
 
