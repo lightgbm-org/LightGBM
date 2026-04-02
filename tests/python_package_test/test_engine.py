@@ -468,9 +468,26 @@ def test_suvival_cox():
         callbacks=[lgb.record_evaluation(evals_result)],
     )
     assert set(evals_result["val"].keys()) == {"survival_cox_nll", "concordance_index"}
-    assert len(evals_result["val"]["survival_cox_nll"]) == 50
-    # concordance index should be above random (0.5) for this easy problem
-    assert evals_result["val"]["concordance_index"][-1] > 0.55
+
+    losses = np.asarray(evals_result["val"]["survival_cox_nll"])
+    c_indices = np.asarray(evals_result["val"]["concordance_index"])
+
+    assert len(losses) == len(c_indices) == 10
+    assert np.all(np.isfinite(losses))
+    assert np.all(np.isfinite(c_indices))
+
+    # Test that metrics are in a reasonable range for this problem.
+    assert np.all((3.7 < losses) & (losses < 4.1))
+    assert np.all((0.6 < c_indices) & (c_indices < 0.8))
+
+    # Test that validation loss generally improves (last < first).
+    assert losses[0] > losses[-1]
+
+    # Test that concordance index and loss improves for at least half the rounds.
+    loss_improvements = np.sum(np.diff(losses) < 0)
+    ci_improvements = np.sum(np.diff(c_indices) > 0)
+    assert loss_improvements >= 5
+    assert ci_improvements >= 5
 
 
 def test_multiclass():
