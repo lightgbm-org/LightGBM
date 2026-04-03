@@ -126,7 +126,7 @@ def _get_group_from_constructed_dataset(dataset: Dataset) -> Optional[np.ndarray
     group = dataset.get_group()
     error_msg = (
         "Estimators in lightgbm.sklearn should only retrieve query groups from a constructed Dataset. "
-        "If you're seeing this message, it's a bug in lightgbm. Please report it at https://github.com/microsoft/LightGBM/issues."
+        "If you're seeing this message, it's a bug in lightgbm. Please report it at https://github.com/lightgbm-org/LightGBM/issues."
     )
     assert group is None or isinstance(group, np.ndarray), error_msg
     return group
@@ -136,7 +136,7 @@ def _get_label_from_constructed_dataset(dataset: Dataset) -> np.ndarray:
     label = dataset.get_label()
     error_msg = (
         "Estimators in lightgbm.sklearn should only retrieve labels from a constructed Dataset. "
-        "If you're seeing this message, it's a bug in lightgbm. Please report it at https://github.com/microsoft/LightGBM/issues."
+        "If you're seeing this message, it's a bug in lightgbm. Please report it at https://github.com/lightgbm-org/LightGBM/issues."
     )
     assert isinstance(label, np.ndarray), error_msg
     return label
@@ -146,7 +146,7 @@ def _get_weight_from_constructed_dataset(dataset: Dataset) -> Optional[np.ndarra
     weight = dataset.get_weight()
     error_msg = (
         "Estimators in lightgbm.sklearn should only retrieve weights from a constructed Dataset. "
-        "If you're seeing this message, it's a bug in lightgbm. Please report it at https://github.com/microsoft/LightGBM/issues."
+        "If you're seeing this message, it's a bug in lightgbm. Please report it at https://github.com/lightgbm-org/LightGBM/issues."
     )
     assert weight is None or isinstance(weight, np.ndarray), error_msg
     return weight
@@ -347,7 +347,8 @@ _lgbmmodel_doc_fit = """
             A list of (X, y) tuple pairs to use as validation sets.
             Use ``eval_X`` and ``eval_y`` instead.
     eval_names : list of str, or None, optional (default=None)
-        Names of eval_set.
+        Unique identifiers for each evaluation dataset.
+        Should be the same length as ``eval_set`` / ``eval_X``.
     eval_sample_weight : {eval_sample_weight_shape}
         Weights of eval data. Weights should be non-negative.
     eval_class_weight : list or None, optional (default=None)
@@ -716,36 +717,46 @@ class LGBMModel(_LGBMModelBase):
     # scikit-learn 1.6 introduced an __sklearn__tags() method intended to replace _more_tags().
     # _more_tags() can be removed whenever lightgbm's minimum supported scikit-learn version
     # is >=1.6.
-    # ref: https://github.com/microsoft/LightGBM/pull/6651
+    # ref: https://github.com/lightgbm-org/LightGBM/pull/6651
     def _more_tags(self) -> Dict[str, Any]:
         check_sample_weight_str = (
             "In LightGBM, setting a sample's weight to 0 can produce a different result than omitting the sample. "
             "Such samples intentionally still affect count-based measures like 'min_data_in_leaf' "
-            "(https://github.com/microsoft/LightGBM/issues/5626#issuecomment-1712706678) and the estimated distribution "
-            "of features for Dataset construction (see https://github.com/microsoft/LightGBM/issues/5553)."
+            "(https://github.com/lightgbm-org/LightGBM/issues/5626#issuecomment-1712706678) and the estimated distribution "
+            "of features for Dataset construction (see https://github.com/lightgbm-org/LightGBM/issues/5553)."
         )
         # "check_sample_weight_equivalence" can be removed when lightgbm's
         # minimum supported scikit-learn version is at least 1.6
         # ref: https://github.com/scikit-learn/scikit-learn/pull/30137
+        xfail_checks = {
+            "check_no_attributes_set_in_init": (
+                "scikit-learn incorrectly asserts that private attributes "
+                "cannot be set in __init__: "
+                "(see https://github.com/lightgbm-org/LightGBM/issues/2628)"
+            ),
+            "check_all_zero_sample_weights_error": (
+                "Beginning in scikit-learn 1.9, by default estimators are expected to reject "
+                "sample weight arrays that are all-0. LightGBM intentionally accepts such arrays. "
+                "LightGBM supports some operations where training on an all-0-weight input could make sense, "
+                "like batch updates with training continuation or manual model creation with forced splits."
+            ),
+            "check_sample_weight_equivalence": check_sample_weight_str,
+            "check_sample_weight_equivalence_on_dense_data": check_sample_weight_str,
+            "check_sample_weight_equivalence_on_sparse_data": check_sample_weight_str,
+        }
+        # "check_decision_proba_consistency" can be removed when lightgbm's
+        # minimum supported scikit-learn version is at least 1.2
+        sklearn_major, sklearn_minor, *_ = _sklearn_version.split(".")
+        if (int(sklearn_major), int(sklearn_minor)) < (1, 2):
+            xfail_checks["check_decision_proba_consistency"] = (
+                "decision_function() returns raw margins while predict_proba() applies sigmoid in C++ "
+                "independently, causing different tie structures after rounding. "
+                "scikit-learn >= 1.2 relaxed this check to accept monotonically consistent scores."
+            )
         return {
             "allow_nan": True,
             "X_types": ["2darray", "sparse", "1dlabels"],
-            "_xfail_checks": {
-                "check_no_attributes_set_in_init": (
-                    "scikit-learn incorrectly asserts that private attributes "
-                    "cannot be set in __init__: "
-                    "(see https://github.com/microsoft/LightGBM/issues/2628)"
-                ),
-                "check_all_zero_sample_weights_error": (
-                    "Beginning in scikit-learn 1.9, by default estimators are expected to reject "
-                    "sample weight arrays that are all-0. LightGBM intentionally accepts such arrays. "
-                    "LightGBM supports some operations where training on an all-0-weight input could make sense, "
-                    "like batch updates with training continuation or manual model creation with forced splits."
-                ),
-                "check_sample_weight_equivalence": check_sample_weight_str,
-                "check_sample_weight_equivalence_on_dense_data": check_sample_weight_str,
-                "check_sample_weight_equivalence_on_sparse_data": check_sample_weight_str,
-            },
+            "_xfail_checks": xfail_checks,
         }
 
     @staticmethod
@@ -984,7 +995,7 @@ class LGBMModel(_LGBMModelBase):
         params = self._process_params(stage="fit")
 
         # Do not modify original args in fit function
-        # Refer to https://github.com/microsoft/LightGBM/pull/2619
+        # Refer to https://github.com/lightgbm-org/LightGBM/pull/2619
         eval_metric_list: List[Union[str, _LGBM_ScikitCustomEvalFunction]]
         if eval_metric is None:
             eval_metric_list = []
@@ -1723,7 +1734,7 @@ class LGBMClassifier(_LGBMClassifierBase, LGBMModel):
         else:
             error_msg = (
                 "predict() should return np.ndarray when pred_contrib=False. "
-                "If you're seeing this message, it's a bug in lightgbm. Please report it at https://github.com/microsoft/LightGBM/issues."
+                "If you're seeing this message, it's a bug in lightgbm. Please report it at https://github.com/lightgbm-org/LightGBM/issues."
             )
             assert isinstance(result, np.ndarray), error_msg
             return np.vstack((1.0 - result, result)).transpose()
@@ -1736,6 +1747,49 @@ class LGBMClassifier(_LGBMClassifierBase, LGBMModel):
         X_leaves_shape="array-like of shape = [n_samples, n_trees] or shape = [n_samples, n_trees * n_classes]",
         X_SHAP_values_shape="array-like of shape = [n_samples, n_features + 1] or shape = [n_samples, (n_features + 1) * n_classes] or list with n_classes length of such objects",
     )
+
+    def decision_function(
+        self,
+        X: _LGBM_ScikitMatrixLike,
+        *,
+        start_iteration: int = 0,
+        num_iteration: Optional[int] = None,
+        validate_features: bool = False,
+        **kwargs: Any,
+    ) -> _LGBM_PredictReturnType:
+        """Return the raw margin score for each sample.
+
+        Parameters
+        ----------
+        X : numpy array, pandas DataFrame, scipy.sparse, list of lists of int or float of shape = [n_samples, n_features]
+            Input features matrix.
+        start_iteration : int, optional (default=0)
+            Start index of the iteration to predict.
+            If <= 0, starts from the first iteration.
+        num_iteration : int or None, optional (default=None)
+            Total number of iterations used in the prediction.
+            If None, if the best iteration exists and start_iteration <= 0, the best iteration is used;
+            otherwise, all iterations from ``start_iteration`` are used (no limits).
+            If <= 0, all iterations from ``start_iteration`` are used (no limits).
+        validate_features : bool, optional (default=False)
+            If True, ensure that the features used to predict match the ones used to train.
+            Used only if data is pandas DataFrame.
+        **kwargs
+            Other parameters forwarded to ``predict()``.
+
+        Returns
+        -------
+        raw_score : array-like of shape = [n_samples] or shape = [n_samples, n_classes]
+            The predicted values.
+        """
+        return super().predict(
+            X=X,
+            raw_score=True,
+            start_iteration=start_iteration,
+            num_iteration=num_iteration,
+            validate_features=validate_features,
+            **kwargs,
+        )
 
     @property
     def classes_(self) -> np.ndarray:

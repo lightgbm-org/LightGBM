@@ -48,7 +48,7 @@ class EarlyStopException(Exception):
         best_iteration : int
             The best iteration stopped.
             0-based... pass ``best_iteration=2`` to indicate that the third iteration was the best one.
-        best_score : list of (dataset_name, metric_name, metric_value, maximize) tuple, (dataset_name, metric_name, metric_value, maximize, stdv) tuple, or ``lightgbm.EvalResult``
+        best_score : list of (dataset_name, metric_name, metric_value, maximize) tuple, (dataset_name, metric_name, metric_value, maximize, metric_std_dev) tuple, or ``lightgbm.EvalResult``
             Scores for each metric, on each validation set, as of the best iteration.
 
         Notes
@@ -148,7 +148,7 @@ class _RecordEvaluationCallback:
         if env.evaluation_result_list is None:
             raise RuntimeError(
                 "record_evaluation() callback enabled but no evaluation results found. This is a probably bug in LightGBM. "
-                "Please report it at https://github.com/microsoft/LightGBM/issues"
+                "Please report it at https://github.com/lightgbm-org/LightGBM/issues"
             )
         self.eval_result.clear()
         for item in env.evaluation_result_list:
@@ -167,7 +167,7 @@ class _RecordEvaluationCallback:
         if env.evaluation_result_list is None:
             raise RuntimeError(
                 "record_evaluation() callback enabled but no evaluation results found. This is a probably bug in LightGBM. "
-                "Please report it at https://github.com/microsoft/LightGBM/issues"
+                "Please report it at https://github.com/lightgbm-org/LightGBM/issues"
             )
         for item in env.evaluation_result_list:
             if item.is_cv_result():
@@ -397,7 +397,10 @@ class _EarlyStoppingCallback:
                 )
                 if self.first_metric_only:
                     _log_info(f"Evaluated only: {metric_name}")
-            raise EarlyStopException(best_iteration=self.best_iter[i], best_score=self.best_score_list[i])
+            raise EarlyStopException(
+                best_iteration=self.best_iter[i],
+                best_score=self.best_score_list[i],
+            )
 
     def __call__(self, env: CallbackEnv) -> None:
         if env.iteration == env.begin_iteration:
@@ -407,7 +410,7 @@ class _EarlyStoppingCallback:
         if env.evaluation_result_list is None:
             raise RuntimeError(
                 "early_stopping() callback enabled but no evaluation results found. This is a probably bug in LightGBM. "
-                "Please report it at https://github.com/microsoft/LightGBM/issues"
+                "Please report it at https://github.com/lightgbm-org/LightGBM/issues"
             )
         # self.best_score_list is initialized to an empty list
         first_time_updating_best_score_list = self.best_score_list == []

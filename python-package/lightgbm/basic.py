@@ -1185,7 +1185,7 @@ class _InnerPredictor:
                 preds = np.loadtxt(f.name, dtype=np.float64)
                 nrow = preds.shape[0]
         elif isinstance(data, scipy.sparse.csr_matrix):
-            # TODO: remove 'type: ignore[assignment]' when https://github.com/microsoft/LightGBM/pull/6348 is resolved.
+            # TODO: remove 'type: ignore[assignment]' when https://github.com/lightgbm-org/LightGBM/pull/6348 is resolved.
             preds, nrow = self.__pred_for_csr(  # type: ignore[assignment]
                 csr=data,
                 start_iteration=start_iteration,
@@ -1193,7 +1193,7 @@ class _InnerPredictor:
                 predict_type=predict_type,
             )
         elif isinstance(data, scipy.sparse.csc_matrix):
-            # TODO: remove 'type: ignore[assignment]' when https://github.com/microsoft/LightGBM/pull/6348 is resolved.
+            # TODO: remove 'type: ignore[assignment]' when https://github.com/lightgbm-org/LightGBM/pull/6348 is resolved.
             preds, nrow = self.__pred_for_csc(  # type: ignore[assignment]
                 csc=data,
                 start_iteration=start_iteration,
@@ -1231,7 +1231,7 @@ class _InnerPredictor:
                 csr = scipy.sparse.csr_matrix(data)
             except BaseException as err:
                 raise TypeError(f"Cannot predict data for type {type(data).__name__}") from err
-            # TODO: remove 'type: ignore[assignment]' when https://github.com/microsoft/LightGBM/pull/6348 is resolved.
+            # TODO: remove 'type: ignore[assignment]' when https://github.com/lightgbm-org/LightGBM/pull/6348 is resolved.
             preds, nrow = self.__pred_for_csr(  # type: ignore[assignment]
                 csr=csr,
                 start_iteration=start_iteration,
@@ -3595,7 +3595,7 @@ class EvalResult(NamedTuple):
       * train(): ``(dataset_name, metric_name, metric_value, maximize)``
       * cv(): ``(dataset_name, metric_name, mean(metric_value), maximize, std_dev(metric_value))``
 
-    
+
     """
 
     dataset_name: str
@@ -3618,7 +3618,9 @@ class EvalResult(NamedTuple):
 
     def is_cv_result(self) -> bool:
         """
-        Whether the result was created by ``cv()``, and therefore:
+        Whether the result was created by ``cv()``.
+
+        If ``True``:
 
           * ``metric_value`` = mean of ``metric_name`` over CV folds
           * ``metric_std_dev`` = standard deviation of ``metric_name`` over CV folds

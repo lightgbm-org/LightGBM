@@ -1,7 +1,7 @@
 # coding: utf-8
 """LightGBM, Light Gradient Boosting Machine.
 
-Contributors: https://github.com/microsoft/LightGBM/graphs/contributors.
+Contributors: https://github.com/lightgbm-org/LightGBM/graphs/contributors.
 """
 
 from pathlib import Path
