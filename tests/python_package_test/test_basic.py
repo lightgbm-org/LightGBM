@@ -1145,3 +1145,113 @@ def test_booster_eval_adds_new_valid_dataset() -> None:
     assert metric_name == "binary_error"
     assert metric_value >= 0.40
     assert maximize is False
+
+
+def test_eval_result_no_std_dev_works():
+    # can be constructed with positional args
+    eval_tuple = ("dataset_2", "mape", 0.567, True)
+    eval_result = lgb.EvalResult(*eval_tuple)
+
+    # can be constructed with keyword args
+    assert (
+        lgb.EvalResult(
+            dataset_name="dataset_2",
+            metric_value=0.567,
+            maximize=True,
+            metric_name="mape",
+        )
+        == eval_result
+    )
+
+    # passes isinstance() check
+    assert isinstance(eval_result, tuple)
+
+    # length is correct
+    assert len(eval_result) == 4
+
+    # keyword and positional access works
+    assert eval_result.dataset_name == "dataset_2"
+    assert eval_result[0] == "dataset_2"
+    assert eval_result.metric_name == "mape"
+    assert eval_result[1] == "mape"
+    assert eval_result.metric_value == 0.567
+    assert eval_result[2] == 0.567
+    assert eval_result.maximize is True
+    assert eval_result[3] is True
+
+    # trying to unpack back to 4 variables works
+    dataset_name, metric_name, metric_value, maximize = eval_result
+    assert dataset_name == "dataset_2"
+    assert metric_name == "mape"
+    assert metric_value == 0.567
+    assert maximize is True
+
+    # trying to unpack to 5 variables fails the same way other tuple unpacking fails
+    with pytest.raises(ValueError, match=re.escape("not enough values to unpack (expected 5, got 4)")):
+        a, b, c, d, e = eval_result
+
+    # trying to unpack to 3 variables fails the same way other tuple unpacking fails
+    with pytest.raises(ValueError, match=re.escape("too many values to unpack (expected 3)")):
+        a, b, c = eval_result
+
+    # accessing 5th element directly still works
+    assert eval_result.metric_std_dev is None
+    assert eval_result[4] is None
+
+    # reports as not a cv() tuple
+    assert eval_result.is_cv_result() is False
+
+
+def test_eval_result_with_std_dev_works():
+    # can be constructed with positional args
+    eval_tuple = ("dataset_2", "mape", 2.004, True, 0.617)
+    eval_result = lgb.EvalResult(*eval_tuple)
+
+    # can be constructed with keyword args
+    assert (
+        lgb.EvalResult(
+            dataset_name="dataset_2",
+            metric_value=2.004,
+            maximize=True,
+            metric_name="mape",
+            metric_std_dev=0.617,
+        )
+        == eval_result
+    )
+
+    # passes isinstance() check
+    assert isinstance(eval_result, tuple)
+
+    # length is correct
+    assert len(eval_result) == 5
+
+    # keyword and positional access works
+    assert eval_result.dataset_name == "dataset_2"
+    assert eval_result[0] == "dataset_2"
+    assert eval_result.metric_name == "mape"
+    assert eval_result[1] == "mape"
+    assert eval_result.metric_value == 2.004
+    assert eval_result[2] == 2.004
+    assert eval_result.maximize is True
+    assert eval_result[3] is True
+    assert eval_result.metric_std_dev == 0.617
+    assert eval_result[4] == 0.617
+
+    # trying to unpack back to 5 variables works
+    dataset_name, metric_name, metric_value, maximize, metric_std_dev = eval_result
+    assert dataset_name == "dataset_2"
+    assert metric_name == "mape"
+    assert metric_value == 2.004
+    assert maximize is True
+    assert metric_std_dev == 0.617
+
+    # trying to unpack to 6 variables fails the same way other tuple unpacking fails
+    with pytest.raises(ValueError, match=re.escape("not enough values to unpack (expected 6, got 5)")):
+        a, b, c, d, e, f = eval_result
+
+    # trying to unpack to 4 variables fails the same way other tuple unpacking fails
+    with pytest.raises(ValueError, match=re.escape("too many values to unpack (expected 4)")):
+        a, b, c, d = eval_result
+
+    # reports as a cv() tuple
+    assert eval_result.is_cv_result() is True

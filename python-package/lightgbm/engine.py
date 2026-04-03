@@ -14,12 +14,11 @@ from . import callback
 from .basic import (
     Booster,
     Dataset,
+    EvalResult,
     LightGBMError,
     _choose_param_value,
     _ConfigAliases,
     _InnerPredictor,
-    _LGBM_BoosterEvalMethodResultType,
-    _LGBM_BoosterEvalMethodResultWithStandardDeviationType,
     _LGBM_CustomObjectiveFunction,
     _LGBM_EvalFunctionResultType,
     _log_warning,
@@ -321,7 +320,7 @@ def train(
 
         booster.update(fobj=fobj)
 
-        evaluation_result_list: List[_LGBM_BoosterEvalMethodResultType] = []
+        evaluation_result_list: List[EvalResult] = []
         # check evaluation result.
         if valid_sets is not None:
             if is_valid_contain_train:
@@ -341,13 +340,11 @@ def train(
                 )
         except callback.EarlyStopException as earlyStopException:
             booster.best_iteration = earlyStopException.best_iteration + 1
-            # eval results from cv() have a 5th element with the standard deviation of metrics,
-            # which is not needed for early stopping
-            evaluation_result_list = [item[:4] for item in earlyStopException.best_score]
+            evaluation_result_list = earlyStopException.best_score
             break
     booster.best_score = defaultdict(OrderedDict)
-    for dataset_name, metric_name, metric_value, _ in evaluation_result_list:
-        booster.best_score[dataset_name][metric_name] = metric_value
+    for result in evaluation_result_list:
+        booster.best_score[result.dataset_name][result.metric_name] = result.metric_value
     if not keep_training_booster:
         booster.model_from_string(booster.model_to_string()).free_dataset()
     return booster
@@ -594,8 +591,8 @@ def _make_n_folds(
 
 
 def _agg_cv_result(
-    raw_results: List[List[_LGBM_BoosterEvalMethodResultType]],
-) -> List[_LGBM_BoosterEvalMethodResultWithStandardDeviationType]:
+    raw_results: List[List[EvalResult]],
+) -> List[EvalResult]:
     """Aggregate cross-validation results."""
     # build up 2 maps, of the form:
     #
@@ -609,19 +606,29 @@ def _agg_cv_result(
     #
     metric_types: Dict[Tuple[str, str], bool] = OrderedDict()
     metric_values: Dict[Tuple[str, str], List[float]] = OrderedDict()
-    for one_result in raw_results:
-        for dataset_name, metric_name, metric_value, maximize in one_result:
-            key = (dataset_name, metric_name)
-            metric_types[key] = maximize
+    for result_list in raw_results:
+        for result in result_list:
+            key = (result.dataset_name, result.metric_name)
+            metric_types[key] = result.maximize
             metric_values.setdefault(key, [])
-            metric_values[key].append(metric_value)
+            metric_values[key].append(result.metric_value)
 
     # turn that into a list of tuples of the form:
     #
     # [
     #     (<dataset_name>, <metric_name>, mean(<values>), <maximize>, std_dev(<values>))
     # ]
-    return [(k[0], k[1], float(np.mean(v)), metric_types[k], float(np.std(v))) for k, v in metric_values.items()]
+    # TODO: could this be refactored?
+    return [
+        EvalResult(
+            dataset_name=k[0],
+            metric_name=k[1],
+            metric_value=float(np.mean(v)),
+            maximize=metric_types[k],
+            metric_std_dev=float(np.std(v)),
+        )
+        for k, v in metric_values.items()
+    ]
 
 
 def cv(
@@ -843,10 +850,10 @@ def cv(
                 )
             )
         cvbooster.update(fobj=fobj)  # type: ignore[call-arg]
-        res = _agg_cv_result(cvbooster.eval_valid(feval))  # type: ignore[call-arg]
-        for dataset_name, metric_name, metric_mean, _, metric_std_dev in res:
-            results[f"{dataset_name} {metric_name}-mean"].append(metric_mean)
-            results[f"{dataset_name} {metric_name}-stdv"].append(metric_std_dev)
+        evaluation_result_list = _agg_cv_result(cvbooster.eval_valid(feval))  # type: ignore[call-arg]
+        for result in evaluation_result_list:
+            results[f"{result.dataset_name} {result.metric_name}-mean"].append(result.metric_value)
+            results[f"{result.dataset_name} {result.metric_name}-stdv"].append(result.metric_std_dev)  # type: ignore[arg-type]
         try:
             for cb in callbacks_after_iter:
                 cb(
@@ -856,7 +863,7 @@ def cv(
                         iteration=i,
                         begin_iteration=0,
                         end_iteration=num_boost_round,
-                        evaluation_result_list=res,
+                        evaluation_result_list=evaluation_result_list,
                     )
                 )
         except callback.EarlyStopException as earlyStopException:
