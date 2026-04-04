@@ -9,16 +9,21 @@ on:
   # allow manual triggering from GitHub UI
   workflow_dispatch:
 
-permissions:
-  issues: write
-  pull-requests: write
-
+# only 1 job running in the repo at any time
 concurrency:
   group: lock
+
+# default to 0 permissions
+# (job-level overrides add the minimal permissions needed)
+permissions:
+  contents: none
 
 jobs:
   action:
     runs-on: ubuntu-latest
+    permissions:
+      issues: write
+      pull-requests: write
     steps:
       - uses: dessant/lock-threads@7266a7ce5c1df01b1c6db85bf8cd86c737dadbe7  # v6.0.0
         with:

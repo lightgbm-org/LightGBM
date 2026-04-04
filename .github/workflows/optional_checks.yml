@@ -5,12 +5,25 @@ on:
     branches:
       - master
 
+# automatically cancel in-progress builds if another commit is pushed
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+# default to 0 permissions
+# (job-level overrides add the minimal permissions needed)
+permissions:
+  contents: none
+
 jobs:
   all-optional-checks-successful:
     timeout-minutes: 30
     runs-on: ubuntu-latest
     env:
       GITHUB_TOKEN: ${{ github.token }}
+    permissions:
+      contents: write
+      id-token: write
     steps:
       - name: Checkout repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2

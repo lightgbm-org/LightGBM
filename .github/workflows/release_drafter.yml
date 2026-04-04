@@ -1,12 +1,18 @@
 name: Release Drafter
 
-permissions:
-  contents: read
-
 on:
   push:
     branches:
       - master
+
+# only 1 job running in the repo at any time
+concurrency:
+  group: lock
+
+# default to 0 permissions
+# (job-level overrides add the minimal permissions needed)
+permissions:
+  contents: none
 
 jobs:
   updateReleaseDraft:
