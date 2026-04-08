@@ -273,14 +273,16 @@ jobs:
         # references:
         #   * CRAN "additional checks": https://cran.r-project.org/web/checks/check_issue_kinds.html
         #   * images: https://r-hub.github.io/containers/containers.html
+        #
+        # Generally, only images that are still supported, listed at
+        # https://r-hub.github.io/containers/#available-containers, should be used.
         image:
-          # unless a specific reason to do otherwise, just test
-          # oldest and newest supported versions of compilers here
-          - clang16
+          - clang21
           - clang22
-          - gcc14
           - gcc16
           - rchk
+          - r-devel-linux-x86_64-debian-clang
+          - r-devel-linux-x86_64-debian-gcc
     runs-on: ubuntu-latest
     container: ghcr.io/r-hub/containers/${{ matrix.image }}:latest
     steps:
