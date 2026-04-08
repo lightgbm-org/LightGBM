@@ -274,13 +274,12 @@ jobs:
         #   * CRAN "additional checks": https://cran.r-project.org/web/checks/check_issue_kinds.html
         #   * images: https://r-hub.github.io/containers/containers.html
         image:
+          # unless a specific reason to do otherwise, just test
+          # oldest and newest supported versions of compilers here
           - clang16
-          - clang17
-          - clang18
-          - clang19
-          - clang20
+          - clang22
           - gcc14
-          - intel
+          - gcc16
           - rchk
     runs-on: ubuntu-latest
     container: ghcr.io/r-hub/containers/${{ matrix.image }}:latest
