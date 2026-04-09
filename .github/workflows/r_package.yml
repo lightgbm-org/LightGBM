@@ -281,8 +281,8 @@ jobs:
           - clang22
           - gcc16
           - rchk
-          - r-devel-linux-x86_64-debian-clang
-          - r-devel-linux-x86_64-debian-gcc
+          - ubuntu-clang
+          - ubuntu-gcc12
     runs-on: ubuntu-latest
     container: ghcr.io/r-hub/containers/${{ matrix.image }}:latest
     steps:
@@ -320,6 +320,7 @@ jobs:
                 qpdf \
                 texinfo \
                 texinfo-tex \
+                texlive-collection-fontsrecommended \
                 texlive-latex \
                 tidy
           fi
