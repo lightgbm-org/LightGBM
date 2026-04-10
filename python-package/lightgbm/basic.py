@@ -3710,9 +3710,14 @@ class Booster:
             params = self._get_loaded_param()
         elif model_str is not None:
             self.model_from_string(model_str)
-            if params:
-                _log_warning("Ignoring params argument, using parameters from model string.")
-            params = self._get_loaded_param()
+            # ensure params are updated on the C++ side
+            # NOTE: models loaded from file are initially set to "boosting: GBDT", so "boosting"
+            #       shouldn't be passed through here
+            self.params = params
+            boosting_type = params.pop("boosting", None)
+            self.reset_parameter(params)
+            if boosting_type is not None:
+                params["boosting"] = boosting_type
         else:
             raise TypeError(
                 "Need at least one training dataset or model file or model string to create Booster instance"
@@ -3736,7 +3741,7 @@ class Booster:
 
     def __deepcopy__(self, *args: Any, **kwargs: Any) -> "Booster":
         model_str = self.model_to_string(num_iteration=-1)
-        return Booster(model_str=model_str)
+        return Booster(model_str=model_str, params=self.params)
 
     def __getstate__(self) -> Dict[str, Any]:
         this = self.__dict__.copy()

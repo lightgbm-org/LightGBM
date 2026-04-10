@@ -15,7 +15,7 @@ from sklearn.model_selection import train_test_split
 import lightgbm as lgb
 from lightgbm.compat import PANDAS_INSTALLED, pd_DataFrame, pd_Series
 
-from .utils import dummy_obj, load_breast_cancer, mse_obj, np_assert_array_equal
+from .utils import BOOSTING_TYPES, dummy_obj, load_breast_cancer, mse_obj, np_assert_array_equal
 
 
 def test_basic(tmp_path):
@@ -1008,6 +1008,37 @@ def test_max_depth_warning_is_raised_if_max_depth_gte_5_and_num_leaves_omitted(c
         "in params. Alternatively, pass (max_depth=-1) and just use 'num_leaves' to constrain model complexity."
     )
     assert expected_warning in capsys.readouterr().out
+
+
+@pytest.mark.parametrize("boosting_type", BOOSTING_TYPES)
+def test_booster_deepcopy_preserves_parameters(boosting_type, default_rng):
+    orig_params = {"boosting": boosting_type, "feature_fraction": 0.708, "num_leaves": 5, "verbosity": -1}
+    bst = lgb.train(params=orig_params, num_boost_round=2, train_set=lgb.Dataset(default_rng.random(100, 2)))
+    bst2 = deepcopy(bst)
+    assert bst2.params == bst.params
+    assert bst.params["num_leaves"] == 5
+    assert bst.params["verbosity"] == -1
+
+    # passed-in params shouldn't have been modified outside of lightgbm
+    assert orig_params == {"boosting": boosting_type, "feature_fraction": 0.708, "num_leaves": 5, "verbosity": -1}
+
+
+@pytest.mark.parametrize("boosting_type", BOOSTING_TYPES)
+def test_booster_params_kwarg_overrides_params_from_model_string(boosting_type, default_rng):
+    orig_params = {"boosting": boosting_type, "feature_fraction": 0.708, "num_leaves": 5, "verbosity": -1}
+    bst = lgb.train(params=orig_params, num_boost_round=2, train_set=lgb.Dataset(default_rng.random(100, 2)))
+    bst2 = lgb.Booster(params={"num_leaves": 7}, model_str=bst.model_to_string())
+
+    # params should have been updated on the Python object and the C++ side
+    assert bst2.params["num_leaves"] == 7
+    assert "[num_leaves: 7]" in bst2.model_to_string()
+
+    # boosting type should have been preserved in the new model
+    if boosting_type != "gbdt":
+        raise RuntimeError
+
+    # passed-in params shouldn't have been modified outside of lightgbm
+    assert orig_params == {"boosting": boosting_type, "feature_fraction": 0.708, "num_leaves": 5, "verbosity": -1}
 
 
 @pytest.mark.parametrize("order", ["C", "F"])

@@ -11,6 +11,7 @@ from sklearn.utils import check_random_state
 
 import lightgbm as lgb
 
+BOOSTING_TYPES = ["gbdt", "dart", "goss", "rf"]
 SERIALIZERS = ["pickle", "joblib", "cloudpickle"]
 
 
