@@ -302,7 +302,6 @@ jobs:
             apt-get update
             apt-get install --no-install-recommends -y \
                 cmake \
-                curl \
                 devscripts \
                 libuv1-dev \
                 texinfo \
@@ -316,7 +315,6 @@ jobs:
             yum update -y
             yum install -y \
                 cmake \
-                curl \
                 devscripts \
                 libuv-devel \
                 qpdf \
@@ -355,8 +353,12 @@ jobs:
             fi
           fi
 
-          # 'testthat' is not needed by 'rchk', so avoid installing it until here
-          Rscript -e "install.packages('testthat', repos = 'https://cran.rstudio.com', Ncpus = parallel::detectCores())"
+          # why these packages?
+          #
+          #   - 'curl' is not a dependency of {lightgbm}, but it's needed for 'R CMD check' URL checks
+          #   - 'testthat' is not needed by 'rchk', so avoid installing it until here
+          #
+          Rscript -e "install.packages(c('curl', 'testthat'), repos = 'https://cran.rstudio.com', Ncpus = parallel::detectCores())"
 
           if [[ "${{ matrix.image }}" =~ "clang" ]]; then
             # allowing the following NOTEs (produced by default in the clang images):
