@@ -85,12 +85,6 @@ jobs:
             os-display-name: 'ubuntu22.04'
           - os: macos-15-intel
             task: r-package
-            compiler: gcc
-            r_version: 4.3
-            build_type: cmake
-            container: null
-          - os: macos-15-intel
-            task: r-package
             compiler: clang
             r_version: 4.3
             build_type: cmake
