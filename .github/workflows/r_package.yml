@@ -302,6 +302,7 @@ jobs:
             apt-get update
             apt-get install --no-install-recommends -y \
                 cmake \
+                curl \
                 devscripts \
                 libuv1-dev \
                 texinfo \
@@ -315,12 +316,16 @@ jobs:
             yum update -y
             yum install -y \
                 cmake \
+                curl \
                 devscripts \
                 libuv-devel \
                 qpdf \
                 texinfo \
                 texinfo-tex \
+                texlive-amsmath \
+                texlive-amsfonts \
                 texlive-collection-fontsrecommended \
+                texlive-collection-latexrecommended \
                 texlive-latex \
                 tidy
           fi
