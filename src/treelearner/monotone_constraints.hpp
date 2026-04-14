@@ -306,11 +306,11 @@ struct AdvancedFeatureConstraints : FeatureConstraint {
     max_constraints.UpdateMax(new_max);
   }
 
-  bool FeatureMaxConstraintsToBeUpdated() {
+  bool FeatureMaxConstraintsToBeUpdated() const {
     return max_constraints_to_be_recomputed;
   }
 
-  bool FeatureMinConstraintsToBeUpdated() {
+  bool FeatureMinConstraintsToBeUpdated() const {
     return min_constraints_to_be_recomputed;
   }
 

@@ -42,15 +42,15 @@ struct ByteBuffer final : public BinaryWriter {
     buffer_.reserve(capacity);
   }
 
-  LIGHTGBM_EXPORT size_t GetSize() {
+  LIGHTGBM_EXPORT size_t GetSize() const {
     return buffer_.size();
   }
 
-  LIGHTGBM_EXPORT char GetAt(size_t index) {
+  LIGHTGBM_EXPORT char GetAt(size_t index) const {
     return buffer_.at(index);
   }
 
-  LIGHTGBM_EXPORT char* Data() {
+  LIGHTGBM_EXPORT char* Data() const {
     return buffer_.data();
   }
 

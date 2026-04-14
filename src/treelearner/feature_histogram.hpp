@@ -702,7 +702,7 @@ class FeatureHistogram {
   /*!
    * \brief True if this histogram can be splitted
    */
-  bool is_splittable() { return is_splittable_; }
+  bool is_splittable() const { return is_splittable_; }
 
   /*!
    * \brief Set splittable to this histogram
