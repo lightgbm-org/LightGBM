@@ -23,7 +23,7 @@ class MultiValBinWrapper {
   MultiValBinWrapper(MultiValBin* bin, data_size_t num_data,
     const std::vector<int>& feature_groups_contained, const int num_grad_quant_bins);
 
-  bool const IsSparse() {
+  bool IsSparse() const {
     if (multi_val_bin_ != nullptr) {
       return multi_val_bin_->IsSparse();
     }

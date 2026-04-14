@@ -50,7 +50,7 @@ struct ByteBuffer final : public BinaryWriter {
     return buffer_.at(index);
   }
 
-  LIGHTGBM_EXPORT char* Data() const {
+  LIGHTGBM_EXPORT char* Data() {
     return buffer_.data();
   }
 
