@@ -1688,8 +1688,8 @@ def test_fit_only_raises_num_rounds_warning_when_expected(capsys):
 
 @pytest.mark.parametrize("estimator_class", estimator_classes)
 def test_getting_feature_names_in_np_input(estimator_class):
-    # input is a numpy array, which doesn't have feature names. LightGBM adds
-    # feature names to the fitted model, which is inconsistent with sklearn's behavior
+    # Input is a numpy array, which doesn't have feature names.
+    # feature_names_in_ should not be set (raises AttributeError), consistent with sklearn's behavior.
     X, y = load_digits(n_class=2, return_X_y=True)
     params = {"n_estimators": 2, "num_leaves": 7}
     if estimator_class is lgb.LGBMModel:
@@ -1703,7 +1703,26 @@ def test_getting_feature_names_in_np_input(estimator_class):
         model.fit(X, y, group=[X.shape[0]])
     else:
         model.fit(X, y)
-    np_assert_array_equal(model.feature_names_in_, np.array([f"Column_{i}" for i in range(X.shape[1])]), strict=True)
+    assert not hasattr(model, "feature_names_in_"), (
+        "feature_names_in_ should not be set when training data had no feature names"
+    )
+    # auto-generated names should still be accessible via the LightGBM-specific feature_name_ property
+    assert model.feature_name_ == [f"Column_{i}" for i in range(X.shape[1])]
+
+
+@pytest.mark.parametrize("estimator_class", [lgb.LGBMClassifier, lgb.LGBMRegressor])
+def test_no_spurious_feature_name_warning_on_np_predict(estimator_class):
+    # Regression test for https://github.com/lightgbm-org/LightGBM/issues/6798
+    # sklearn 1.6+ warns "X does not have valid feature names, but ... was fitted with feature names"
+    # when predict() is called with a numpy array after fit() on a numpy array, because LightGBM
+    # auto-generates feature names. This should not produce any warning.
+    import warnings
+
+    X, y = load_digits(n_class=2, return_X_y=True)
+    model = estimator_class(n_estimators=2, num_leaves=7).fit(X, y)
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")
+        model.predict(X[:5])
 
 
 @pytest.mark.parametrize("estimator_class", estimator_classes)
