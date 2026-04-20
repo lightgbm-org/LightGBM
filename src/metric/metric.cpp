@@ -136,6 +136,12 @@ Metric* Metric::CreateMetric(const std::string& type, const Config& config) {
   #ifdef USE_CUDA
   }
   #endif  // USE_CUDA
+  // "custom" is a sentinel value produced by ParseMetricAlias for "none" / "na" / "null" / "custom";
+  // it means the user deliberately requested no built-in metric, so returning nullptr is intentional.
+  // Any other unrecognised name is a user mistake and deserves a clear error.
+  if (type != std::string("custom")) {
+    Log::Fatal("Unknown metric type: %s", type.c_str());
+  }
   return nullptr;
 }
 
