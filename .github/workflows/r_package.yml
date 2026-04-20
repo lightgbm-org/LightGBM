@@ -273,15 +273,16 @@ jobs:
         # references:
         #   * CRAN "additional checks": https://cran.r-project.org/web/checks/check_issue_kinds.html
         #   * images: https://r-hub.github.io/containers/containers.html
+        #
+        # Generally, only images that are still supported, listed at
+        # https://r-hub.github.io/containers/#available-containers, should be used.
         image:
-          - clang16
-          - clang17
-          - clang18
-          - clang19
-          - clang20
-          - gcc14
-          - intel
+          - clang21
+          - clang22
+          - gcc16
           - rchk
+          - ubuntu-clang
+          - ubuntu-gcc12
     runs-on: ubuntu-latest
     container: ghcr.io/r-hub/containers/${{ matrix.image }}:latest
     steps:
@@ -302,6 +303,7 @@ jobs:
             apt-get install --no-install-recommends -y \
                 cmake \
                 devscripts \
+                libcurl4-openssl-dev \
                 libuv1-dev \
                 texinfo \
                 texlive-latex-extra \
@@ -315,10 +317,15 @@ jobs:
             yum install -y \
                 cmake \
                 devscripts \
+                libcurl-devel \
                 libuv-devel \
                 qpdf \
                 texinfo \
                 texinfo-tex \
+                texlive-amsmath \
+                texlive-amsfonts \
+                texlive-collection-fontsrecommended \
+                texlive-collection-latexrecommended \
                 texlive-latex \
                 tidy
           fi
@@ -348,8 +355,16 @@ jobs:
             fi
           fi
 
-          # 'testthat' is not needed by 'rchk', so avoid installing it until here
-          Rscript -e "install.packages('testthat', repos = 'https://cran.rstudio.com', Ncpus = parallel::detectCores())"
+          # why these packages?
+          #
+          #   - 'curl' is not a dependency of {lightgbm}, but it's needed for 'R CMD check' URL checks
+          #   - 'testthat' is not needed by 'rchk', so avoid installing it until here
+          #
+          Rscript -e "
+            install.packages(c('curl', 'testthat'),
+            repos = 'https://cran.rstudio.com',
+            Ncpus = parallel::detectCores())
+          "
 
           if [[ "${{ matrix.image }}" =~ "clang" ]]; then
             # allowing the following NOTEs (produced by default in the clang images):
