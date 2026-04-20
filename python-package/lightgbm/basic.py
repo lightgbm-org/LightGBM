@@ -4907,6 +4907,12 @@ class Booster:
         )
         new_params["linear_tree"] = bool(out_is_linear.value)
         new_params.update(dataset_params)
+        # Strip params that are explicit keyword arguments of Dataset.__init__ so they
+        # are not passed via both the params dict and the dedicated argument, which
+        # would trigger a "keyword found in params" warning. categorical_feature is the
+        # common offender because it is persisted inside the model's parameter string.
+        for _alias in _ConfigAliases.get("categorical_feature"):
+            new_params.pop(_alias, None)
         train_set = Dataset(
             data=data,
             label=label,
