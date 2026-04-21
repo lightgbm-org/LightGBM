@@ -3,6 +3,7 @@ import inspect
 import itertools
 import math
 import re
+import warnings
 from functools import partial
 from os import getenv
 from pathlib import Path
@@ -1716,8 +1717,6 @@ def test_no_spurious_feature_name_warning_on_np_predict(estimator_class):
     # sklearn 1.6+ warns "X does not have valid feature names, but ... was fitted with feature names"
     # when predict() is called with a numpy array after fit() on a numpy array, because LightGBM
     # auto-generates feature names. This should not produce any warning.
-    import warnings
-
     X, y = load_digits(n_class=2, return_X_y=True)
     model = estimator_class(n_estimators=2, num_leaves=7).fit(X, y)
     with warnings.catch_warnings():
