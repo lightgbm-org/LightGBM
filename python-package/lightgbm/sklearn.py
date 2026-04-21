@@ -1013,6 +1013,8 @@ class LGBMModel(_LGBMModelBase):
         params["metric"] = [e for e in eval_metrics_builtin if e not in params["metric"]] + params["metric"]
         params["metric"] = [metric for metric in params["metric"] if metric is not None]
 
+        self._fitted_with_feature_names = isinstance(X, (pd_DataFrame, pa_Table))
+
         if not isinstance(X, (pd_DataFrame, pa_Table)):
             _X, _y = _LGBMValidateData(
                 self,
@@ -1359,10 +1361,20 @@ class LGBMModel(_LGBMModelBase):
     def feature_names_in_(self) -> np.ndarray:
         """:obj:`array` of shape = [n_features]: scikit-learn compatible version of ``.feature_name_``.
 
+        Only available when training data had feature names (e.g. a pandas DataFrame).
+        When training was done with data without feature names (e.g. a numpy array),
+        accessing this attribute raises ``AttributeError``.
+
         .. versionadded:: 4.5.0
         """
         if not self.__sklearn_is_fitted__():
             raise LGBMNotFittedError("No feature_names_in_ found. Need to call fit beforehand.")
+        if not self._fitted_with_feature_names:
+            raise AttributeError(
+                f"'{type(self).__name__}' object has no attribute 'feature_names_in_'. "
+                "The training data did not have feature names "
+                "(e.g. was a numpy array rather than a pandas DataFrame)."
+            )
         return np.array(self.feature_name_)
 
     @feature_names_in_.deleter
@@ -1370,14 +1382,8 @@ class LGBMModel(_LGBMModelBase):
         """Intercept calls to delete ``feature_names_in_``.
 
         Some code paths in ``scikit-learn`` try to delete the ``feature_names_in_`` attribute
-        on estimators when a new training dataset that doesn't have features is passed.
-        LightGBM automatically assigns feature names to such datasets
-        (like ``Column_0``, ``Column_1``, etc.) and so does not want that behavior.
-
-        However, that behavior is coupled to ``scikit-learn`` automatically updating
-        ``n_features_in_`` in those same code paths, which is necessary for compliance
-        with its API (via argument ``reset`` to functions like ``validate_data()`` and
-        ``check_array()``).
+        on estimators when a new training dataset that doesn't have feature names is passed.
+        This is handled via ``_fitted_with_feature_names``, so deletion is a no-op here.
 
         .. note::
 
