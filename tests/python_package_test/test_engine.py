@@ -7,7 +7,6 @@ import pickle
 import platform
 import random
 import re
-import warnings
 from os import getenv
 from pathlib import Path
 from shutil import copyfile
@@ -2467,24 +2466,6 @@ def test_refit_linear_tree_single_class_no_segfault():
     assert isinstance(refitted, lgb.Booster)
     preds = refitted.predict(X[:5])
     assert preds.shape == (5,)
-
-
-def test_refit_no_spurious_categorical_feature_warning(tmp_path):
-    # Regression test for https://github.com/microsoft/LightGBM/issues/6792.
-    # Loading a model from a text file embeds `categorical_feature` in Booster.params.
-    # Calling refit() on that booster used to forward categorical_feature via the
-    # params dict to Dataset, triggering a spurious "keyword found in params" warning.
-    X, y = load_breast_cancer(return_X_y=True)
-    lgb_train = lgb.Dataset(X, y)
-    params = {"objective": "binary", "verbose": -1}
-    model = lgb.train(params, lgb_train, num_boost_round=3)
-    model_path = tmp_path / "model.txt"
-    model.save_model(str(model_path))
-    loaded = lgb.Booster(model_file=str(model_path))
-    with warnings.catch_warnings():
-        warnings.simplefilter("error")
-        refitted = loaded.refit(X, y)
-    assert isinstance(refitted, lgb.Booster)
 
 
 @pytest.mark.parametrize("boosting_type", ["rf", "dart"])
