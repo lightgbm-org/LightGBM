@@ -7,6 +7,7 @@ import pickle
 import platform
 import random
 import re
+import warnings
 from os import getenv
 from pathlib import Path
 from shutil import copyfile
@@ -2480,8 +2481,6 @@ def test_refit_no_spurious_categorical_feature_warning(tmp_path):
     model_path = tmp_path / "model.txt"
     model.save_model(str(model_path))
     loaded = lgb.Booster(model_file=str(model_path))
-    import warnings
-
     with warnings.catch_warnings():
         warnings.simplefilter("error")
         refitted = loaded.refit(X, y)
