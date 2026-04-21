@@ -479,7 +479,15 @@ def test_regressor_chain():
     X, y = bunch["data"], bunch["target"]
     X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.1, random_state=42)
     order = [2, 0, 1]
-    reg = RegressorChain(base_estimator=lgb.LGBMRegressor(n_estimators=10), order=order, random_state=42)
+    # 'base_estimator' parameter was deprecated in scikit-learn 1.7 and removed in 1.9
+    #
+    #  * https://github.com/scikit-learn/scikit-learn/pull/30152
+    #  * https://github.com/scikit-learn/scikit-learn/pull/33750
+    #
+    if SKLEARN_VERSION_GTE_1_7:
+        reg = RegressorChain(estimator=lgb.LGBMRegressor(n_estimators=10), order=order, random_state=42)
+    else:
+        reg = RegressorChain(base_estimator=lgb.LGBMRegressor(n_estimators=10), order=order, random_state=42)
     reg.fit(X_train, y_train)
     y_pred = reg.predict(X_test)
     _, score, _ = mse(y_test, y_pred)
