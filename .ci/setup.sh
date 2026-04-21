@@ -124,6 +124,7 @@ else  # Linux
         if [[ $IN_UBUNTU_BASE_CONTAINER == "true" ]]; then
             sudo apt-get update
             sudo apt-get install --no-install-recommends -y \
+                patchelf \
                 pocl-opencl-icd
         elif [[ $(uname -m) == "x86_64" ]]; then
             sudo yum update -y

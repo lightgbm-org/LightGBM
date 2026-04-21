@@ -143,6 +143,10 @@ _LGBM_PredictReturnType = Union[
     scipy.sparse.spmatrix,
     List[scipy.sparse.spmatrix],
 ]
+_LGBM_PredictSparseReturnType = Union[
+    scipy.sparse.spmatrix,
+    List[scipy.sparse.spmatrix],
+]
 _LGBM_WeightType = Union[
     List[float],
     List[int],
@@ -1183,14 +1187,16 @@ class _InnerPredictor:
                 preds = np.loadtxt(f.name, dtype=np.float64)
                 nrow = preds.shape[0]
         elif isinstance(data, scipy.sparse.csr_matrix):
-            preds, nrow = self.__pred_for_csr(
+            # TODO: remove 'type: ignore[assignment]' when https://github.com/lightgbm-org/LightGBM/pull/6348 is resolved.
+            preds, nrow = self.__pred_for_csr(  # type: ignore[assignment]
                 csr=data,
                 start_iteration=start_iteration,
                 num_iteration=num_iteration,
                 predict_type=predict_type,
             )
         elif isinstance(data, scipy.sparse.csc_matrix):
-            preds, nrow = self.__pred_for_csc(
+            # TODO: remove 'type: ignore[assignment]' when https://github.com/lightgbm-org/LightGBM/pull/6348 is resolved.
+            preds, nrow = self.__pred_for_csc(  # type: ignore[assignment]
                 csc=data,
                 start_iteration=start_iteration,
                 num_iteration=num_iteration,
@@ -1227,7 +1233,8 @@ class _InnerPredictor:
                 csr = scipy.sparse.csr_matrix(data)
             except BaseException as err:
                 raise TypeError(f"Cannot predict data for type {type(data).__name__}") from err
-            preds, nrow = self.__pred_for_csr(
+            # TODO: remove 'type: ignore[assignment]' when https://github.com/lightgbm-org/LightGBM/pull/6348 is resolved.
+            preds, nrow = self.__pred_for_csr(  # type: ignore[assignment]
                 csr=csr,
                 start_iteration=start_iteration,
                 num_iteration=num_iteration,
@@ -1245,6 +1252,7 @@ class _InnerPredictor:
 
     def __get_num_preds(
         self,
+        *,
         start_iteration: int,
         num_iteration: int,
         nrow: int,
@@ -1328,7 +1336,12 @@ class _InnerPredictor:
             sections = np.arange(_MAX_INT32, nrow, _MAX_INT32)
             # __get_num_preds() cannot work with nrow > MAX_INT32, so calculate overall number of predictions piecemeal
             n_preds = [
-                self.__get_num_preds(start_iteration, num_iteration, i, predict_type)
+                self.__get_num_preds(
+                    start_iteration=start_iteration,
+                    num_iteration=num_iteration,
+                    nrow=int(i),
+                    predict_type=predict_type,
+                )
                 for i in np.diff([0] + list(sections) + [nrow])
             ]
             n_preds_sections = np.array([0] + n_preds, dtype=np.intp).cumsum()
@@ -1364,7 +1377,7 @@ class _InnerPredictor:
         indptr_type: int,
         data_type: int,
         is_csr: bool,
-    ) -> Union[List[scipy.sparse.csc_matrix], List[scipy.sparse.csr_matrix]]:
+    ) -> _LGBM_PredictSparseReturnType:
         # create numpy array from output arrays
         data_indices_len = out_shape[0]
         indptr_len = out_shape[1]
@@ -1472,7 +1485,7 @@ class _InnerPredictor:
         start_iteration: int,
         num_iteration: int,
         predict_type: int,
-    ) -> Tuple[Union[List[scipy.sparse.csc_matrix], List[scipy.sparse.csr_matrix]], int]:
+    ) -> Tuple[_LGBM_PredictSparseReturnType, int]:
         ptr_indptr, type_ptr_indptr, __ = _c_int_array(csr.indptr)
         ptr_data, type_ptr_data, _ = _c_float_array(csr.data)
         csr_indices = csr.indices.astype(np.int32, copy=False)
@@ -1530,7 +1543,7 @@ class _InnerPredictor:
         start_iteration: int,
         num_iteration: int,
         predict_type: int,
-    ) -> Tuple[np.ndarray, int]:
+    ) -> Tuple[_LGBM_PredictSparseReturnType, int]:
         """Predict for a CSR data."""
         if predict_type == _C_API_PREDICT_CONTRIB:
             return self.__inner_predict_csr_sparse(
@@ -1543,7 +1556,15 @@ class _InnerPredictor:
         if nrow > _MAX_INT32:
             sections = [0] + list(np.arange(_MAX_INT32, nrow, _MAX_INT32)) + [nrow]
             # __get_num_preds() cannot work with nrow > MAX_INT32, so calculate overall number of predictions piecemeal
-            n_preds = [self.__get_num_preds(start_iteration, num_iteration, i, predict_type) for i in np.diff(sections)]
+            n_preds = [
+                self.__get_num_preds(
+                    start_iteration=start_iteration,
+                    num_iteration=num_iteration,
+                    nrow=int(i),
+                    predict_type=predict_type,
+                )
+                for i in np.diff(sections)
+            ]
             n_preds_sections = np.array([0] + n_preds, dtype=np.intp).cumsum()
             preds = np.empty(sum(n_preds), dtype=np.float64)
             for (start_idx, end_idx), (start_idx_pred, end_idx_pred) in zip(
@@ -1573,7 +1594,7 @@ class _InnerPredictor:
         start_iteration: int,
         num_iteration: int,
         predict_type: int,
-    ) -> Tuple[Union[List[scipy.sparse.csc_matrix], List[scipy.sparse.csr_matrix]], int]:
+    ) -> Tuple[_LGBM_PredictSparseReturnType, int]:
         ptr_indptr, type_ptr_indptr, __ = _c_int_array(csc.indptr)
         ptr_data, type_ptr_data, _ = _c_float_array(csc.data)
         csc_indices = csc.indices.astype(np.int32, copy=False)
@@ -1631,7 +1652,7 @@ class _InnerPredictor:
         start_iteration: int,
         num_iteration: int,
         predict_type: int,
-    ) -> Tuple[np.ndarray, int]:
+    ) -> Tuple[_LGBM_PredictSparseReturnType, int]:
         """Predict for a CSC data."""
         nrow = csc.shape[0]
         if nrow > _MAX_INT32:
@@ -4324,7 +4345,7 @@ class Booster:
         feval : callable, list of callable, or None, optional (default=None)
             Customized evaluation function.
             Each evaluation function should accept two parameters: preds, eval_data,
-            and return (eval_name, eval_result, is_higher_better) or list of such tuples.
+            and return (metric_name, metric_value, maximize) or list of such tuples.
 
                 preds : numpy 1-D array or numpy 2-D array (for multi-class task)
                     The predicted values.
@@ -4333,17 +4354,17 @@ class Booster:
                     e.g. they are raw margin instead of probability of positive class for binary task in this case.
                 eval_data : Dataset
                     A ``Dataset`` to evaluate.
-                eval_name : str
-                    The name of evaluation function (without whitespace).
-                eval_result : float
-                    The eval result.
-                is_higher_better : bool
-                    Is eval result higher better, e.g. AUC is ``is_higher_better``.
+                metric_name : str
+                    Unique identifier for the metric (e.g. "custom_adjusted_mse").
+                metric_value : float
+                    Value of the evaluation metric.
+                maximize : bool
+                    Are higher values better? e.g. ``True`` for AUC and ``False`` for binary error.
 
         Returns
         -------
         result : list
-            List with (dataset_name, eval_name, eval_result, is_higher_better) tuples.
+            List with (dataset_name, metric_name, metric_value, maximize) tuples.
         """
         if not isinstance(data, Dataset):
             raise TypeError("Can only eval for Dataset instance")
@@ -4373,7 +4394,7 @@ class Booster:
         feval : callable, list of callable, or None, optional (default=None)
             Customized evaluation function.
             Each evaluation function should accept two parameters: preds, eval_data,
-            and return (eval_name, eval_result, is_higher_better) or list of such tuples.
+            and return (metric_name, metric_value, maximize) or list of such tuples.
 
                 preds : numpy 1-D array or numpy 2-D array (for multi-class task)
                     The predicted values.
@@ -4382,17 +4403,17 @@ class Booster:
                     e.g. they are raw margin instead of probability of positive class for binary task in this case.
                 eval_data : Dataset
                     The training dataset.
-                eval_name : str
-                    The name of evaluation function (without whitespace).
-                eval_result : float
-                    The eval result.
-                is_higher_better : bool
-                    Is eval result higher better, e.g. AUC is ``is_higher_better``.
+                metric_name : str
+                    Unique identifier for the metric (e.g. "custom_adjusted_mse").
+                metric_value : float
+                    Value of the evaluation metric.
+                maximize : bool
+                    Are higher values better? e.g. ``True`` for AUC and ``False`` for binary error.
 
         Returns
         -------
         result : list
-            List with (train_dataset_name, eval_name, eval_result, is_higher_better) tuples.
+            List with (train_dataset_name, metric_name, metric_value, maximize) tuples.
         """
         return self.__inner_eval(data_name=self._train_data_name, data_idx=0, feval=feval)
 
@@ -4407,7 +4428,7 @@ class Booster:
         feval : callable, list of callable, or None, optional (default=None)
             Customized evaluation function.
             Each evaluation function should accept two parameters: preds, eval_data,
-            and return (eval_name, eval_result, is_higher_better) or list of such tuples.
+            and return (metric_name, metric_value, maximize) or list of such tuples.
 
                 preds : numpy 1-D array or numpy 2-D array (for multi-class task)
                     The predicted values.
@@ -4416,17 +4437,17 @@ class Booster:
                     e.g. they are raw margin instead of probability of positive class for binary task in this case.
                 eval_data : Dataset
                     The validation dataset.
-                eval_name : str
-                    The name of evaluation function (without whitespace).
-                eval_result : float
-                    The eval result.
-                is_higher_better : bool
-                    Is eval result higher better, e.g. AUC is ``is_higher_better``.
+                metric_name : str
+                    Unique identifier for the metric (e.g. "custom_adjusted_mse").
+                metric_value : float
+                    Value of the evaluation metric.
+                maximize : bool
+                    Are higher values better? e.g. ``True`` for AUC and ``False`` for binary error.
 
         Returns
         -------
         result : list
-            List with (validation_dataset_name, eval_name, eval_result, is_higher_better) tuples.
+            List with (validation_dataset_name, metric_name, metric_value, maximize) tuples.
         """
         return [
             item
@@ -5194,11 +5215,11 @@ class Booster:
                     continue
                 feval_ret = eval_function(self.__inner_predict(data_idx=data_idx), cur_data)
                 if isinstance(feval_ret, list):
-                    for eval_name, val, is_higher_better in feval_ret:
-                        ret.append((data_name, eval_name, val, is_higher_better))
+                    for metric_name, metric_value, maximize in feval_ret:
+                        ret.append((data_name, metric_name, metric_value, maximize))
                 else:
-                    eval_name, val, is_higher_better = feval_ret
-                    ret.append((data_name, eval_name, val, is_higher_better))
+                    metric_name, metric_value, maximize = feval_ret
+                    ret.append((data_name, metric_name, metric_value, maximize))
         return ret
 
     def __inner_predict(self, *, data_idx: int) -> np.ndarray:

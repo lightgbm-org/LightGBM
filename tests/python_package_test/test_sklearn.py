@@ -13,6 +13,7 @@ import pytest
 import scipy.sparse
 from scipy.stats import spearmanr
 from sklearn.base import clone
+from sklearn.calibration import CalibratedClassifierCV
 from sklearn.datasets import load_svmlight_file, make_blobs, make_multilabel_classification
 from sklearn.ensemble import StackingClassifier, StackingRegressor
 from sklearn.metrics import accuracy_score, log_loss, mean_squared_error, r2_score
@@ -41,6 +42,7 @@ from .utils import (
     load_digits,
     load_iris,
     load_linnerud,
+    logistic_sigmoid,
     make_ranking,
     make_synthetic_regression,
     np_assert_array_equal,
@@ -973,6 +975,67 @@ def test_predict():
     np.testing.assert_allclose(res_class_sklearn, y_train)
 
 
+def test_decision_function_and_predict_proba_consistency():
+    # binary
+    X, y = load_breast_cancer(return_X_y=True)
+    X_train, X_test, y_train, _ = train_test_split(X, y, test_size=0.2, random_state=42)
+    clf = lgb.LGBMClassifier(n_estimators=10, random_state=42, verbose=-1).fit(X_train, y_train)
+    preds_raw = clf.decision_function(X_test)
+    np.testing.assert_allclose(preds_raw, clf.predict(X_test, raw_score=True))
+    np.testing.assert_allclose(logistic_sigmoid(preds_raw), clf.predict_proba(X_test)[:, 1])
+
+    # multiclass
+    X, y = load_iris(return_X_y=True)
+    X_train, X_test, y_train, _ = train_test_split(X, y, test_size=0.2, random_state=42)
+    clf = lgb.LGBMClassifier(n_estimators=10, random_state=42, verbose=-1).fit(X_train, y_train)
+    preds_raw = clf.decision_function(X_test)
+    np.testing.assert_allclose(preds_raw, clf.predict(X_test, raw_score=True))
+    np.testing.assert_allclose(softmax(preds_raw), clf.predict_proba(X_test))
+
+
+@pytest.mark.parametrize("method", ["sigmoid", "isotonic"])
+def test_calibrated_classifier_cv(method):
+    # binary
+    X, y = load_breast_cancer(return_X_y=True)
+    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+    deterministic_params = {
+        "deterministic": True,
+        "force_col_wise": True,
+        "n_jobs": 1,
+        "seed": 312,
+    }
+    clf = CalibratedClassifierCV(
+        lgb.LGBMClassifier(n_estimators=10, verbose=-1, **deterministic_params),
+        method=method,
+        cv=3,
+    )
+    clf.fit(X_train, y_train)
+    proba = clf.predict_proba(X_test)
+    assert proba.shape == (X_test.shape[0], 2)
+    np.testing.assert_array_less(proba, 1.0 + 1e-9)
+    np.testing.assert_array_less(-1e-9, proba)
+    np.testing.assert_allclose(proba.sum(axis=1), 1.0)
+    score = accuracy_score(y_test, clf.predict(X_test))
+    assert 0.8 <= score <= 1.0
+
+    # multiclass
+    X, y = load_iris(return_X_y=True)
+    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+    clf = CalibratedClassifierCV(
+        lgb.LGBMClassifier(n_estimators=10, verbose=-1, **deterministic_params),
+        method=method,
+        cv=3,
+    )
+    clf.fit(X_train, y_train)
+    proba = clf.predict_proba(X_test)
+    assert proba.shape == (X_test.shape[0], 3)
+    np.testing.assert_array_less(proba, 1.0 + 1e-9)
+    np.testing.assert_array_less(-1e-9, proba)
+    np.testing.assert_allclose(proba.sum(axis=1), 1.0)
+    score = accuracy_score(y_test, clf.predict(X_test))
+    assert 0.8 <= score <= 1.0
+
+
 def test_predict_with_params_from_init():
     X, y = load_iris(return_X_y=True)
     X_train, X_test, y_train, _ = train_test_split(X, y, test_size=0.2, random_state=42)
@@ -1897,7 +1960,7 @@ def test_predict_rejects_inputs_with_incorrect_number_of_features(predict_disabl
         assert preds.shape[0] == y.shape[0]
 
 
-def run_minimal_test(X_type, y_type, g_type, task, rng):
+def _run_minimal_test(*, X_type, y_type, g_type, task, rng):
     X, y, g = _create_data(task, n_samples=2_000)
     weights = np.abs(rng.standard_normal(size=(y.shape[0],)))
 
@@ -1987,6 +2050,7 @@ def run_minimal_test(X_type, y_type, g_type, task, rng):
         params_fit["eval_group"] = [g]
     model.fit(**params_fit)
 
+    # --- prediction accuracy --#
     preds = model.predict(X)
     if task == "binary-classification":
         assert accuracy_score(y, preds) >= 0.99
@@ -1998,6 +2062,38 @@ def run_minimal_test(X_type, y_type, g_type, task, rng):
         assert spearmanr(preds, y).correlation >= 0.99
     else:
         raise ValueError(f"Unrecognized task: '{task}'")
+
+    # --- prediction dtypes ---#
+
+    # default predictions:
+    #
+    #  * classification: int32 or int64
+    #  * ranking: float64
+    #  * regression: float64
+    #
+    if task.endswith("classification"):
+        # preds go through LabelEncoder.inverse_transform() and have the same
+        # dtype as model.classes_ (expected to be an integer type, but exact size
+        # varies across numpy versions and operating systems)
+        assert preds.dtype == model.classes_.dtype
+        assert preds.dtype in (np.int32, np.int64)
+    else:
+        assert preds.dtype == np.float64
+
+    # raw predictions: always float64
+    preds_raw = model.predict(X, raw_score=True)
+    assert preds_raw.dtype == np.float64
+
+    # pred_contrib: always float64
+    if X_type.startswith("scipy"):
+        assert all(arr.dtype == np.float64 for arr in model.predict(X, pred_contrib=True))
+    else:
+        preds_contrib = model.predict(X, pred_contrib=True)
+        assert preds_contrib.dtype == np.float64
+
+    # pred_leavs: always int32
+    preds_leaves = model.predict(X, pred_leaf=True)
+    assert preds_leaves.dtype == np.int32
 
 
 @pytest.mark.parametrize("X_type", all_x_types)
@@ -2014,7 +2110,7 @@ def test_classification_and_regression_minimally_work_with_all_accepted_data_typ
     if any(t.startswith("pa_") for t in [X_type, y_type]) and not PYARROW_INSTALLED:
         pytest.skip("pyarrow is not installed")
 
-    run_minimal_test(X_type=X_type, y_type=y_type, g_type="numpy", task=task, rng=rng)
+    _run_minimal_test(X_type=X_type, y_type=y_type, g_type="numpy", task=task, rng=rng)
 
 
 @pytest.mark.parametrize("X_type", all_x_types)
@@ -2031,7 +2127,7 @@ def test_ranking_minimally_works_with_all_accepted_data_types(
     if any(t.startswith("pa_") for t in [X_type, y_type, g_type]) and not PYARROW_INSTALLED:
         pytest.skip("pyarrow is not installed")
 
-    run_minimal_test(X_type=X_type, y_type=y_type, g_type=g_type, task="ranking", rng=rng)
+    _run_minimal_test(X_type=X_type, y_type=y_type, g_type=g_type, task="ranking", rng=rng)
 
 
 def test_classifier_fit_detects_classes_every_time():

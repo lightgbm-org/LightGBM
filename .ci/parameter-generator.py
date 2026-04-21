@@ -282,7 +282,8 @@ def gen_parameter_code(
     alias = get_alias(infos)
     names_with_aliases = defaultdict(list)
     str_to_write = r"""/*!
- * Copyright (c) 2018 Microsoft Corporation. All rights reserved.
+ * Copyright (c) 2018-2026 Microsoft Corporation. All rights reserved.
+ * Copyright (c) 2018-2026 The LightGBM developers. All rights reserved.
  * Licensed under the MIT License. See LICENSE file in the project root for license information.
  *
  * \note
