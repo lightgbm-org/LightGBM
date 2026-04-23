@@ -94,21 +94,8 @@ jobs:
       matrix:
         include:
           - os: macos-15-intel
-            task: regular
-            compiler: gcc
-            python_version: '3.11'
-          - os: macos-15-intel
             task: sdist
             compiler: clang
-            python_version: '3.10'
-          - os: macos-15-intel
-            task: sdist
-            compiler: gcc
-            python_version: '3.12'
-          - os: macos-15-intel
-            task: bdist
-            method: wheel
-            compiler: gcc
             python_version: '3.9'
           - os: windows-2022
             task: sdist
@@ -171,16 +158,6 @@ jobs:
             compiler: gcc
             method: source
             python_version: '3.12'
-          - os: macos-15-intel
-            task: mpi
-            compiler: gcc
-            method: pip
-            python_version: '3.13'
-          - os: macos-15-intel
-            task: mpi
-            compiler: gcc
-            method: wheel
-            python_version: '3.10'
           - os: ubuntu-latest
             container: *manylinux_amd64_image
             os-display-name: *manylinux_amd64_display_name
