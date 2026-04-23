@@ -153,7 +153,7 @@ jobs:
           ############
           # MPI jobs #
           ############
-          - os: macos-14
+          - os: macos-15-intel
             task: mpi
             compiler: gcc
             method: source
