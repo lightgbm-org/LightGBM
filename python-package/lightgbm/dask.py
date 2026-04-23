@@ -573,7 +573,10 @@ def _train(
     #   * 'num_threads': overridden to match nthreads on each Dask process
     for param_alias in _ConfigAliases.get("num_machines", "num_threads"):
         if param_alias in params:
-            _log_warning(f"Parameter {param_alias} will be ignored.")
+            # Only warn if user-set parameter will be overwritten
+            val = params[param_alias]
+            if val not in (-1, None):
+                _log_warning(f"Parameter {param_alias}={val} will be ignored. This is automatically adjusted to match the Dask cluster. To suppress this warning, pass {param_alias}=-1 or remove {param_alias} entirely.")
             params.pop(param_alias)
 
     # Split arrays/dataframes into parts. Arrange parts into dicts to enforce co-locality
