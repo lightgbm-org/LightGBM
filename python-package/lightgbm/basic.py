@@ -3115,7 +3115,8 @@ class Dataset:
         # Check if the weight contains values other than one
         if weight is not None:
             if _is_pyarrow_array(weight):
-                if pa_compute.all(pa_compute.equal(weight, 1)).as_py():
+                # TODO: remove 'type: ignore[attr-defined]' when https://github.com/apache/arrow/issues/49831 is resolved.
+                if pa_compute.all(pa_compute.equal(weight, 1)).as_py():  # type: ignore[attr-defined]
                     weight = None
             elif np.all(weight == 1):
                 weight = None
