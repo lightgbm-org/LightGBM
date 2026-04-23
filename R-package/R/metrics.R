@@ -33,6 +33,8 @@
             , "cross_entropy" = FALSE
             , "cross_entropy_lambda" = FALSE
             , "kullback_leibler" = FALSE
+            , "survival_cox_nll" = FALSE
+            , "concordance_index" = TRUE
         )
     )
 }

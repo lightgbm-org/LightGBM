@@ -61,6 +61,10 @@ Examples include:
     - Plot split value histogram
     - Plot one specified tree
     - Plot one specified tree with Graphviz
+- [survival_example.py](https://github.com/lightgbm-org/LightGBM/blob/master/examples/python-guide/survival_example.py)
+    - Construct Dataset
+    - Use objective `survival_cox` for Cox proportional hazards survival analysis
+    - Evaluate with `survival_cox_nll` and `concordance_index` metrics
 - [dataset_from_multi_hdf5.py](https://github.com/lightgbm-org/LightGBM/blob/master/examples/python-guide/dataset_from_multi_hdf5.py)
   - Construct Dataset from multiple HDF5 files
   - Avoid loading all data into memory

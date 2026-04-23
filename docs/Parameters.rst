@@ -116,7 +116,7 @@ Core Parameters
 
    -  **Note**: can be used only in CLI version; for language-specific packages you can use the correspondent functions
 
--  ``objective`` :raw-html:`<a id="objective" title="Permalink to this parameter" href="#objective">&#x1F517;&#xFE0E;</a>`, default = ``regression``, type = enum, options: ``regression``, ``regression_l1``, ``huber``, ``fair``, ``poisson``, ``quantile``, ``mape``, ``gamma``, ``tweedie``, ``binary``, ``multiclass``, ``multiclassova``, ``cross_entropy``, ``cross_entropy_lambda``, ``lambdarank``, ``rank_xendcg``, aliases: ``objective_type``, ``app``, ``application``, ``loss``
+-  ``objective`` :raw-html:`<a id="objective" title="Permalink to this parameter" href="#objective">&#x1F517;&#xFE0E;</a>`, default = ``regression``, type = enum, options: ``regression``, ``regression_l1``, ``huber``, ``fair``, ``poisson``, ``quantile``, ``mape``, ``gamma``, ``tweedie``, ``binary``, ``multiclass``, ``multiclassova``, ``cross_entropy``, ``cross_entropy_lambda``, ``lambdarank``, ``rank_xendcg``, ``survival_cox``, aliases: ``objective_type``, ``app``, ``application``, ``loss``
 
    -  regression application
 
@@ -169,6 +169,12 @@ Core Parameters
       -  ``rank_xendcg`` is faster than and achieves the similar performance as ``lambdarank``
 
       -  label should be ``int`` type, and larger number represents the higher relevance (e.g. 0:bad, 1:fair, 2:good, 3:perfect)
+
+   -  survival analysis application
+
+      -  ``survival_cox``, `Cox proportional hazards <https://en.wikipedia.org/wiki/Proportional_hazards_model>`__ partial likelihood with Breslow's method for ties, aliases: ``cox``, ``cox_ph``
+
+      -  label encodes censoring via sign: positive value = event time, negative value = censored time
 
    -  custom objective function (gradients and hessians not computed directly by LightGBM)
 
@@ -1278,6 +1284,10 @@ Metric Parameters
       -  ``cross_entropy_lambda``, "intensity-weighted" cross-entropy, aliases: ``xentlambda``
 
       -  ``kullback_leibler``, `Kullback-Leibler divergence <https://en.wikipedia.org/wiki/Kullback%E2%80%93Leibler_divergence>`__, aliases: ``kldiv``
+
+      -  ``survival_cox_nll``, negative partial log-likelihood for `Cox proportional hazards <https://en.wikipedia.org/wiki/Proportional_hazards_model>`__ model, aliases: ``cox_nll``
+
+      -  ``concordance_index``, `Harrell's concordance index <https://doi.org/10.1002/(SICI)1097-0258(19960229)15:4%3C361::AID-SIM168%3E3.0.CO;2-4>`__ for survival models, aliases: ``c_index``
 
    -  support multiple metrics, separated by ``,``
 

@@ -38,6 +38,7 @@ from .utils import (
     load_digits,
     load_iris,
     logistic_sigmoid,
+    make_survival,
     make_synthetic_regression,
     mse_obj,
     np_assert_array_equal,
@@ -440,6 +441,53 @@ def test_categorical_non_zero_inputs(use_quantized_grad):
     ret = roc_auc_score(y_train, pred)
     assert ret > 0.999
     assert evals_result["valid_0"]["auc"][-1] == pytest.approx(ret)
+
+
+def test_suvival_cox():
+    X, y = make_survival()
+    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.25, random_state=0)
+    lgb_train = lgb.Dataset(X_train, label=y_train)
+    lgb_eval = lgb.Dataset(X_test, label=y_test, reference=lgb_train)
+    evals_result = {}
+    params = {
+        "objective": "survival_cox",
+        "metric": ["survival_cox_nll", "concordance_index"],
+        "verbose": -1,
+        "num_leaves": 8,
+        "seed": 708,
+        "num_threads": 1,
+        "deterministic": True,
+        "force_row_wise": True,
+    }
+    lgb.train(
+        params,
+        lgb_train,
+        num_boost_round=10,
+        valid_sets=[lgb_eval],
+        valid_names=["val"],
+        callbacks=[lgb.record_evaluation(evals_result)],
+    )
+    assert set(evals_result["val"].keys()) == {"survival_cox_nll", "concordance_index"}
+
+    losses = np.asarray(evals_result["val"]["survival_cox_nll"])
+    c_indices = np.asarray(evals_result["val"]["concordance_index"])
+
+    assert len(losses) == len(c_indices) == 10
+    assert np.all(np.isfinite(losses))
+    assert np.all(np.isfinite(c_indices))
+
+    # Test that metrics are in a reasonable range for this problem.
+    assert np.all((3.7 < losses) & (losses < 4.1))
+    assert np.all((0.6 < c_indices) & (c_indices < 0.8))
+
+    # Test that validation loss generally improves (last < first).
+    assert losses[0] > losses[-1]
+
+    # Test that concordance index and loss improves for at least half the rounds.
+    loss_improvements = np.sum(np.diff(losses) < 0)
+    ci_improvements = np.sum(np.diff(c_indices) > 0)
+    assert loss_improvements >= 5
+    assert ci_improvements >= 5
 
 
 def test_multiclass():
