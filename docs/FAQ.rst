@@ -20,6 +20,8 @@ If your request is time-sensitive or more than a month goes by without a respons
 -  `@shiyu1994 <https://github.com/shiyu1994>`__ **Yu Shi**
 -  `@jameslamb <https://github.com/jameslamb>`__ **James Lamb**
 -  `@jmoralez <https://github.com/jmoralez>`__ **José Morales**
+-  `@borchero <https://github.com/borchero>`__ **Oliver Borchert**
+-  `@mayer79 <https://github.com/mayer79>`__ **Michael Mayer**
 
 --------------
 
