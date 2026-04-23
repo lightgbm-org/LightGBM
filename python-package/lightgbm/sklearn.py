@@ -48,7 +48,7 @@ from .compat import (
     pa_Table,
     pd_DataFrame,
 )
-from .engine import train
+from .engine import _make_n_folds, train
 
 if TYPE_CHECKING:
     from .compat import _sklearn_Tags
@@ -555,6 +555,9 @@ class LGBMModel(_LGBMModelBase):
         random_state: Optional[Union[int, np.random.RandomState, np.random.Generator]] = None,
         n_jobs: Optional[int] = None,
         importance_type: str = "split",
+        *,
+        early_stopping: Union[bool, int] = False,
+        validation_fraction: float = 0.1,
         **kwargs: Any,
     ):
         r"""Construct a gradient boosting model.
@@ -635,6 +638,17 @@ class LGBMModel(_LGBMModelBase):
             The type of feature importance to be filled into ``feature_importances_``.
             If 'split', result contains numbers of times the feature is used in a model.
             If 'gain', result contains total gains of splits which use the feature.
+        early_stopping : bool, optional (default=False) Whether to enable scikit-learn-style early
+            stopping. If set to ``True` and no other validation set is passed to ``fit()``, a new
+            validation set will be created by randomly sampling ``validation_fraction`` rows from
+            the training data ``X`` passed to ``fit()``. Training will stop if the validation score
+            does not improve for a specific number of rounds (controlled by ``n_iter_no_change``).
+            This parameter is here for compatibility with ``scikit-learn``'s
+            ``HistGradientBoosting`` estimators. it does not affect other ``lightgbm``-specific
+            early stopping mechanisms, like passing the ``lgb.early_stopping`` callback and
+            validation sets to the ``eval_set`` argument of `fit()`.
+        validation_fraction : float (default=0.1)
+            Proportion of training data to set aside as validation data for early stopping.
         **kwargs
             Other parameters for the model.
             Check http://lightgbm.readthedocs.io/en/latest/Parameters.html for more parameters.
@@ -699,6 +713,8 @@ class LGBMModel(_LGBMModelBase):
         self.random_state = random_state
         self.n_jobs = n_jobs
         self.importance_type = importance_type
+        self.early_stopping = early_stopping
+        self.validation_fraction = validation_fraction
         self._Booster: Optional[Booster] = None
         self._evals_result: _EvalResultDict = {}
         self._best_score: _LGBM_BoosterBestScoreType = {}
@@ -910,6 +926,7 @@ class LGBMModel(_LGBMModelBase):
         params.pop("importance_type", None)
         params.pop("n_estimators", None)
         params.pop("class_weight", None)
+        params.pop("validation_fraction", None)
 
         if isinstance(params["random_state"], np.random.RandomState):
             params["random_state"] = params["random_state"].randint(np.iinfo(np.int32).max)
@@ -947,7 +964,28 @@ class LGBMModel(_LGBMModelBase):
             params = _choose_param_value("num_threads", params, self.n_jobs)
             params["num_threads"] = self._process_n_jobs(params["num_threads"])
 
-        return params
+        if not isinstance(self.early_stopping, bool) and isinstance(self.early_stopping, int):
+            _log_warning(
+                f"Found 'early_stopping={self.early_stopping}' passed through keyword arguments. "
+                "Future versions of 'lightgbm' will not allow this, as scikit-learn expects keyword argument "
+                "'early_stopping' to be a boolean indicating whether or not to perform early stopping with "
+                "a randomly-sampled validation set. To set the number of early stopping rounds, and suppress "
+                f"this warning, pass early_stopping_rounds={self.early_stopping} instead."
+            )
+            params = _choose_param_value(
+                main_param_name="early_stopping_round", params=params, default_value=self.early_stopping
+            )
+
+        params.pop("early_stopping", None)
+
+        if isinstance(self.early_stopping, bool) and self.early_stopping is True:
+            default_early_stopping_round = 10
+        else:
+            default_early_stopping_round = None
+
+        return _choose_param_value(
+            main_param_name="early_stopping_round", params=params, default_value=default_early_stopping_round
+        )
 
     def _process_n_jobs(self, n_jobs: Optional[int]) -> int:
         """Convert special values of n_jobs to their actual values according to the formulas that apply.
@@ -1111,6 +1149,24 @@ class LGBMModel(_LGBMModelBase):
                     )
 
                 valid_sets.append(valid_set)
+
+        elif self.early_stopping is True:
+            n_splits = max(int(np.ceil(1 / self.validation_fraction)), 2)
+            stratified = isinstance(self, LGBMClassifier)
+            cvfolds = _make_n_folds(
+                full_data=train_set,
+                folds=None,
+                nfold=n_splits,
+                params=params,
+                seed=self.random_state,
+                stratified=stratified,
+                shuffle=True,
+            )
+            train_idx, val_idx = next(cvfolds)
+            valid_set = train_set.subset(sorted(val_idx))
+            train_set = train_set.subset(sorted(train_idx))
+            valid_set = valid_set.construct()
+            valid_sets = [valid_set]
 
         if isinstance(init_model, LGBMModel):
             init_model = init_model.booster_

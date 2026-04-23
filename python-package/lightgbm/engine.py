@@ -526,11 +526,9 @@ def _make_n_folds(
     nfold: int,
     params: Dict[str, Any],
     seed: int,
-    fpreproc: Optional[_LGBM_PreprocFunction],
     stratified: bool,
     shuffle: bool,
-    eval_train_metric: bool,
-) -> CVBooster:
+) -> Iterable[Tuple[np.ndarray, np.ndarray]]:
     """Make a n-fold list of Booster from random indices."""
     full_data = full_data.construct()
     num_data = full_data.num_data()
@@ -575,7 +573,16 @@ def _make_n_folds(
             test_id = [randidx[i : i + kstep] for i in range(0, num_data, kstep)]
             train_id = [np.concatenate([test_id[i] for i in range(nfold) if k != i]) for k in range(nfold)]
             folds = zip(train_id, test_id)
+    return folds
 
+
+def _make_cvbooster(
+    full_data: Dataset,
+    params: Dict[str, Any],
+    folds: Iterable[Tuple[np.ndarray, np.ndarray]],
+    fpreproc: Optional[_LGBM_PreprocFunction],
+    eval_train_metric: bool,
+) -> CVBooster:
     ret = CVBooster()
     for train_idx, test_idx in folds:
         train_set = full_data.subset(sorted(train_idx))
@@ -790,16 +797,17 @@ def cv(
     train_set._update_params(params)._set_predictor(predictor)
 
     results = defaultdict(list)
-    cvbooster = _make_n_folds(
+    cvfolds = _make_n_folds(
         full_data=train_set,
         folds=folds,
         nfold=nfold,
         params=params,
         seed=seed,
-        fpreproc=fpreproc,
         stratified=stratified,
         shuffle=shuffle,
-        eval_train_metric=eval_train_metric,
+    )
+    cvbooster = _make_cvbooster(
+        full_data=train_set, params=params, folds=cvfolds, fpreproc=fpreproc, eval_train_metric=eval_train_metric
     )
 
     # setup callbacks
