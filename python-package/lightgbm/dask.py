@@ -571,8 +571,13 @@ def _train(
     # Some passed-in parameters can be removed:
     #   * 'num_machines': set automatically from Dask worker list
     #   * 'num_threads': overridden to match nthreads on each Dask process
+    num_threads_aliases = _ConfigAliases.get("num_threads")
     for param_alias in _ConfigAliases.get("num_machines", "num_threads"):
         if param_alias in params:
+            # ``None`` and ``-1`` are defaults in sklearn-compatible constructors.
+            if param_alias in num_threads_aliases and params[param_alias] in {None, -1}:
+                params.pop(param_alias)
+                continue
             _log_warning(f"Parameter {param_alias} will be ignored.")
             params.pop(param_alias)
 
