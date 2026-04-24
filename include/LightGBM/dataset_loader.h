@@ -102,6 +102,8 @@ class DatasetLoader {
   std::vector<std::string> feature_names_;
   /*! \brief Mapper from real feature index to used index*/
   std::unordered_set<int> categorical_features_;
+  /*! \brief Mapper from parser feature index to Dataset feature index; ignored columns map to -1 */
+  std::vector<int> raw_feature_idx_to_local_idx_;
   /*! \brief Whether to store raw feature values */
   bool store_raw_;
 };
