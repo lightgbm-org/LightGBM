@@ -4867,3 +4867,22 @@ def test_equal_predict_from_row_major_and_col_major_data():
     preds_col = bst.predict(X_col)
 
     np.testing.assert_allclose(preds_row, preds_col)
+
+
+@pytest.mark.skipif(getenv("TASK", "") != "cuda", reason="Only run this test for CUDA builds")
+def test_cuda_discrete_data_many_features():
+    """Test for issue #6803: SIGFPE with discrete data when n_unique_values * n_features exceeds threshold."""
+    # Test case from the issue: 5 discrete values × 600 features
+    # This used to cause SIGFPE due to division by zero in max_num_column_per_partition_
+    np.random.seed(42)
+    X = np.random.randint(0, 5, (50000, 600)).astype(np.float32)
+    y = np.random.uniform(0, 1, 50000).astype(np.float32)
+
+    # This should not crash with SIGFPE
+    model = lgb.LGBMRegressor(device='cuda', n_estimators=10, verbose=-1)
+    model.fit(X, y)
+
+    # Verify predictions work
+    preds = model.predict(X[:100])
+    assert preds.shape[0] == 100
+    assert not np.any(np.isnan(preds))

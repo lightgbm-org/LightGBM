@@ -264,6 +264,10 @@ void CUDARowData::DivideCUDAFeatureGroups(const Dataset* train_data, TrainingSha
       max_num_column_per_partition_ = num_column;
     }
   }
+  // Ensure max_num_column_per_partition_ is at least 1 to avoid division by zero
+  if (max_num_column_per_partition_ == 0) {
+    max_num_column_per_partition_ = 1;
+  }
 
   cuda_feature_partition_column_index_offsets_.InitFromHostVector(feature_partition_column_index_offsets_);
   cuda_column_hist_offsets_.InitFromHostVector(column_hist_offsets_);
@@ -352,6 +356,10 @@ void CUDARowData::GetSparseDataPartitioned(
     if (thread_max_elements_per_row[thread_index] > max_num_column_per_partition_) {
       max_num_column_per_partition_ = thread_max_elements_per_row[thread_index];
     }
+  }
+  // Ensure max_num_column_per_partition_ is at least 1 to avoid division by zero
+  if (max_num_column_per_partition_ == 0) {
+    max_num_column_per_partition_ = 1;
   }
 }
 
