@@ -4811,6 +4811,15 @@ def test_train_raises_informative_error_for_params_of_wrong_type():
         lgb.train(params, dtrain)
 
 
+@pytest.mark.parametrize("unknown_metric", ["nonsense", "not_a_metric", "msa"])
+def test_train_raises_informative_error_for_unknown_metric(unknown_metric):
+    X, y = load_breast_cancer(return_X_y=True)
+    dtrain = lgb.Dataset(X, label=y)
+    params = {"objective": "binary", "metric": unknown_metric, "verbose": -1}
+    with pytest.raises(lgb.basic.LightGBMError, match=f"Unknown metric type: {unknown_metric}"):
+        lgb.train(params, dtrain, num_boost_round=1, valid_sets=[dtrain])
+
+
 def test_quantized_training():
     X, y = make_synthetic_regression()
     ds = lgb.Dataset(X, label=y)
