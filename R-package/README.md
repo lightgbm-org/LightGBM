@@ -431,7 +431,7 @@ docker run \
 
 # install dependencies
 RDscript${R_CUSTOMIZATION} \
-  -e "install.packages(c('R6', 'data.table', 'jsonlite', 'knitr', 'markdown', 'Matrix', 'RhpcBLASctl', 'testthat'), repos = 'https://cran.r-project.org', Ncpus = parallel::detectCores())"
+  -e "install.packages(c('R6', 'data.table', 'DiagrammeR', 'jsonlite', 'knitr', 'markdown', 'Matrix', 'RhpcBLASctl', 'testthat'), repos = 'https://cran.r-project.org', Ncpus = parallel::detectCores())"
 
 # install lightgbm
 sh build-cran-package.sh --r-executable=RD${R_CUSTOMIZATION}
@@ -462,7 +462,7 @@ docker run \
     -it \
         wch1/r-debug
 
-RDscriptvalgrind -e "install.packages(c('R6', 'data.table', 'jsonlite', 'knitr', 'markdown', 'Matrix', 'RhpcBLASctl', 'testthat'), repos = 'https://cran.rstudio.com', Ncpus = parallel::detectCores())"
+RDscriptvalgrind -e "install.packages(c('R6', 'data.table', 'DiagrammeR', 'jsonlite', 'knitr', 'markdown', 'Matrix', 'RhpcBLASctl', 'testthat'), repos = 'https://cran.rstudio.com', Ncpus = parallel::detectCores())"
 
 sh build-cran-package.sh \
     --r-executable=RDvalgrind

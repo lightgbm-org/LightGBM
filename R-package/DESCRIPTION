@@ -45,6 +45,7 @@ NeedsCompilation: yes
 Biarch: true
 VignetteBuilder: knitr
 Suggests:
+    DiagrammeR,
     knitr,
     markdown,
     processx,

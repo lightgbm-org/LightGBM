@@ -97,6 +97,7 @@ reference:
       - '`lgb.interpret`'
       - '`lgb.plot.importance`'
       - '`lgb.plot.interpretation`'
+      - '`lgb.plot.tree`'
       - '`print.lgb.Booster`'
       - '`summary.lgb.Booster`'
   - title: Multithreading Control
