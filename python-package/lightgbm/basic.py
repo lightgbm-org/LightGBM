@@ -12,6 +12,7 @@ import abc
 import ctypes
 import inspect
 import json
+import sys
 import warnings
 from collections import OrderedDict
 from copy import deepcopy
@@ -61,6 +62,8 @@ __all__ = [
     "LGBMDeprecationWarning",
     "LightGBMError",
     "register_logger",
+    "register_leveled_logger",
+    "unregister_leveled_logger",
     "Sequence",
 ]
 
@@ -228,9 +231,32 @@ class _DummyLogger:
         warnings.warn(msg, stacklevel=3)
 
 
+class _DummyLeveledLogger:
+    def debug(self, msg: str) -> None:
+        print(msg)  # noqa: T201
+
+    def info(self, msg: str) -> None:
+        print(msg)  # noqa: T201
+
+    def warning(self, msg: str) -> None:
+        print(msg)  # noqa: T201
+
+    def error(self, msg: str) -> None:
+        print(msg, file=sys.stderr)  # noqa: T201
+
+
 _LOGGER: Any = _DummyLogger()
 _INFO_METHOD_NAME = "info"
 _WARNING_METHOD_NAME = "warning"
+
+_LEVELED_LOGGER: Any = _DummyLeveledLogger()
+_LEVELED_DEBUG_METHOD_NAME = "debug"
+_LEVELED_INFO_METHOD_NAME = "info"
+_LEVELED_WARNING_METHOD_NAME = "warning"
+_LEVELED_ERROR_METHOD_NAME = "error"
+
+# Type for leveled callback — avoid recreating on every register_leveled_logger() call
+_LEVELED_CALLBACK_TYPE = ctypes.CFUNCTYPE(None, ctypes.c_int, ctypes.c_char_p)
 
 
 def _has_method(logger: Any, method_name: str) -> bool:
@@ -262,6 +288,132 @@ def register_logger(
     _WARNING_METHOD_NAME = warning_method_name
 
 
+def register_leveled_logger(
+    logger: Any,
+    debug_method_name: str = "debug",
+    info_method_name: str = "info",
+    warning_method_name: str = "warning",
+    error_method_name: str = "error",
+) -> None:
+    """Register custom logger for use with the leveled log callback.
+
+    **Note:** OpenMP worker threads will bypass the callback (log only on main thread).
+
+    This function registers both the Python-side logger object and activates the C++ leveled
+    callback in the native library. The leveled callback routes each log message to the appropriate
+    logger method based on its level (debug, info, warning, or error).
+
+    Parameters
+    ----------
+    logger : Any
+        Custom logger. Must provide all four configured methods.
+    debug_method_name : str, optional (default="debug")
+        Method used to log debug messages.
+    info_method_name : str, optional (default="info")
+        Method used to log info messages.
+    warning_method_name : str, optional (default="warning")
+        Method used to log warning messages.
+    error_method_name : str, optional (default="error")
+        Method used to log error (fatal) messages.
+
+    Notes
+    -----
+    The leveled callback is per-thread (registered on the calling thread only) and takes
+    precedence over the legacy callback on that thread. OpenMP worker threads have their own
+    TLS slot and will bypass this callback entirely. This function is safe to call multiple times;
+    subsequent calls will update both the Python-side logger and the C++ registration.
+
+    When deregistering (via ``unregister_leveled_logger()``), the legacy callback registered
+    by ``register_logger()`` becomes visible again on this thread — it was never suspended,
+    only shadowed by the leveled callback.
+
+    **Fatal messages (from internal errors)**: The ``error_method_name`` callback will receive
+    messages with level `C_API_LOG_LEVEL_FATAL`, but these messages will also be re-raised
+    as ``LightGBMError`` exceptions by the C++ layer.
+
+    Thread safety:
+    This function is not thread-safe for concurrent calls. Calls should be made from a single
+    thread, typically during application initialization before training begins.
+    """
+    for method_name in (debug_method_name, info_method_name, warning_method_name, error_method_name):
+        if not _has_method(logger, method_name):
+            raise TypeError(f"Logger must provide '{method_name}' method")
+
+    global _LEVELED_LOGGER, _LEVELED_DEBUG_METHOD_NAME, _LEVELED_INFO_METHOD_NAME
+    global _LEVELED_WARNING_METHOD_NAME, _LEVELED_ERROR_METHOD_NAME
+    _LEVELED_LOGGER = logger
+    _LEVELED_DEBUG_METHOD_NAME = debug_method_name
+    _LEVELED_INFO_METHOD_NAME = info_method_name
+    _LEVELED_WARNING_METHOD_NAME = warning_method_name
+    _LEVELED_ERROR_METHOD_NAME = error_method_name
+
+    # Register the C++ leveled callback (safely handling re-registration)
+    try:
+        _LIB.LGBM_RegisterLogCallbackWithLevel.restype = ctypes.c_int
+        _LIB.LGBM_RegisterLogCallbackWithLevel.argtypes = [_LEVELED_CALLBACK_TYPE]
+    except AttributeError:
+        warnings.warn(
+            "The loaded lib_lightgbm does not support leveled logging "
+            "(symbol LGBM_RegisterLogCallbackWithLevel not found). "
+            "Python-side logger was set but log messages will not be routed from C++.",
+            stacklevel=2,
+        )
+        return
+
+    # Unregister old callback first to avoid use-after-free
+    try:
+        _LIB.LGBM_UnregisterLogCallbackWithLevel.restype = ctypes.c_int
+        # Unregister any existing callback; ignore return value — a non-zero result
+        # simply means no callback was registered yet, which is not an error here.
+        _LIB.LGBM_UnregisterLogCallbackWithLevel()
+    except AttributeError:
+        pass  # Older builds may not have unregister; proceed anyway
+
+    _LIB.callback_with_level = _LEVELED_CALLBACK_TYPE(_log_callback_with_level)  # type: ignore[attr-defined]
+    if _LIB.LGBM_RegisterLogCallbackWithLevel(_LIB.callback_with_level) != 0:
+        raise LightGBMError(_LIB.LGBM_GetLastError().decode("utf-8"))
+
+
+def unregister_leveled_logger() -> None:
+    """Unregister the leveled log callback.
+
+    This function resets the leveled callback pointer in the C++ layer, restoring
+    the legacy callback routing previously registered by ``register_logger()``.
+    This is useful for cleanup in multi-threaded scenarios or in test fixtures to avoid
+    dangling function pointers after the callback's lifetime ends.
+
+    Notes
+    -----
+    Calling this function is optional. If not called, the leveled callback remains active
+    and processes all log messages (on threads where it was registered).
+    """
+    try:
+        _LIB.LGBM_UnregisterLogCallbackWithLevel.restype = ctypes.c_int
+        _LIB.LGBM_UnregisterLogCallbackWithLevel.argtypes = []
+        if _LIB.LGBM_UnregisterLogCallbackWithLevel() != 0:
+            raise LightGBMError(_LIB.LGBM_GetLastError().decode("utf-8"))
+    except AttributeError:
+        # Older builds without unregister support; silently succeed
+        pass
+
+    # Always clear the Python-side reference so the ctypes thunk can be GC'd.
+    # This must be outside the try/except above because the AttributeError handler
+    # for a missing LGBM_UnregisterLogCallbackWithLevel symbol would skip it.
+    _LIB.callback_with_level = None  # type: ignore[attr-defined]
+
+    # Reset Python-side globals so the old logger can be GC'd
+    global _LEVELED_LOGGER, _LEVELED_DEBUG_METHOD_NAME, _LEVELED_INFO_METHOD_NAME
+    global _LEVELED_WARNING_METHOD_NAME, _LEVELED_ERROR_METHOD_NAME
+    _LEVELED_LOGGER = _DummyLeveledLogger()
+    _LEVELED_DEBUG_METHOD_NAME = "debug"
+    _LEVELED_INFO_METHOD_NAME = "info"
+    _LEVELED_WARNING_METHOD_NAME = "warning"
+    _LEVELED_ERROR_METHOD_NAME = "error"
+
+
+# _normalize_native_string, _log_native, and _log_callback below reassemble the 3-chunk
+# messages from LGBM_RegisterLogCallback. Kept intact; superseded on threads where
+# LGBM_RegisterLogCallbackWithLevel is active (see LGBM_RegisterLogCallbackWithLevel in include/LightGBM/c_api.h).
 def _normalize_native_string(func: Callable[[str], None]) -> Callable[[str], None]:
     """Join log messages from native library which come by chunks."""
     msg_normalized: List[str] = []
@@ -297,6 +449,38 @@ def _log_callback(msg: bytes) -> None:
     _log_native(str(msg.decode("utf-8")))
 
 
+def _log_callback_with_level(level: int, msg: bytes) -> None:
+    """Redirect logs from native library into Python, routing by log level."""
+    # Atomic snapshot of all globals under GIL (single tuple assignment is atomic).
+    # This prevents AttributeError if concurrent re-registration occurs.
+    logger, debug_name, info_name, warning_name, error_name = (
+        _LEVELED_LOGGER,
+        _LEVELED_DEBUG_METHOD_NAME,
+        _LEVELED_INFO_METHOD_NAME,
+        _LEVELED_WARNING_METHOD_NAME,
+        _LEVELED_ERROR_METHOD_NAME,
+    )
+
+    text = msg.decode("utf-8", errors="replace")
+    try:
+        if level == -1:  # C_API_LOG_LEVEL_FATAL
+            getattr(logger, error_name)(text)
+        elif level == 0:  # C_API_LOG_LEVEL_WARNING
+            getattr(logger, warning_name)(text)
+        elif level == 1:  # C_API_LOG_LEVEL_INFO
+            getattr(logger, info_name)(text)
+        elif level == 2:  # C_API_LOG_LEVEL_DEBUG
+            getattr(logger, debug_name)(text)
+        else:  # unknown future level — fall back to info
+            getattr(logger, info_name)(text)
+    except Exception as exc:
+        # Cannot re-raise: exceptions raised inside ctypes callbacks cannot propagate to C++.
+        warnings.warn(
+            f"LightGBM leveled logger raised an exception and was suppressed: {exc}",
+            stacklevel=1,
+        )
+
+
 # connect the Python logger to logging in lib_lightgbm
 if environ.get("LIGHTGBM_BUILD_DOC", "False") != "True":
     _LIB.LGBM_GetLastError.restype = ctypes.c_char_p
@@ -304,7 +488,6 @@ if environ.get("LIGHTGBM_BUILD_DOC", "False") != "True":
     _LIB.callback = callback(_log_callback)  # type: ignore[attr-defined]
     if _LIB.LGBM_RegisterLogCallback(_LIB.callback) != 0:
         raise LightGBMError(_LIB.LGBM_GetLastError().decode("utf-8"))
-
 
 _NUMERIC_TYPES = (int, float, bool)
 

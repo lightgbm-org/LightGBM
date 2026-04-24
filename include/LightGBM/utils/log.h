@@ -89,6 +89,7 @@ enum class LogLevel : int {
 class Log {
  public:
   using Callback = void (*)(const char *);
+  using LeveledCallback = void (*)(int, const char *);
   /*!
    * \brief Resets the minimal log level. It is INFO by default.
    * \param level The new minimal log level.
@@ -96,6 +97,8 @@ class Log {
   static void ResetLogLevel(LogLevel level) { GetLevel() = level; }
 
   static void ResetCallBack(Callback callback) { GetLogCallBack() = callback; }
+
+  static void ResetCallBackWithLevel(LeveledCallback callback) { GetLogCallBackWithLevel() = callback; }
 
   static void Debug(const char *format, ...) {
     va_list val;
@@ -121,7 +124,7 @@ class Log {
     char str_buf[kBufSize];
     va_start(val, format);
 #ifdef _MSC_VER
-    vsnprintf_s(str_buf, kBufSize, format, val);
+    vsnprintf_s(str_buf, kBufSize, _TRUNCATE, format, val);
 #else
     vsnprintf(str_buf, kBufSize, format, val);
 #endif
@@ -130,8 +133,13 @@ class Log {
 // R code should write back to R's error stream,
 // otherwise to stderr
 #ifndef LGB_R_BUILD
-    fprintf(stderr, "[LightGBM] [Fatal] %s\n", str_buf);
-    fflush(stderr);
+    if (GetLogCallBackWithLevel() != nullptr) {
+      GetLogCallBackWithLevel()(static_cast<int>(LogLevel::Fatal), str_buf);
+      // leveled callback is sole output on this thread — old callback and stderr suppressed
+    } else {
+      fprintf(stderr, "[LightGBM] [Fatal] %s\n", str_buf);
+      fflush(stderr);
+    }
 #else
     REprintf("[LightGBM] [Fatal] %s\n", str_buf);
     R_FlushConsole();
@@ -140,13 +148,39 @@ class Log {
   }
 
  private:
+  // a trick to use static variable in header file.
+  // May be not good, but avoid to use an additional cpp file
+  static LogLevel &GetLevel() {
+    static THREAD_LOCAL LogLevel level = LogLevel::Info;
+    return level;
+  }
+
+  static Callback &GetLogCallBack() {
+    static THREAD_LOCAL Callback callback = nullptr;
+    return callback;
+  }
+
+  static LeveledCallback &GetLogCallBackWithLevel() {
+    static THREAD_LOCAL LeveledCallback callback = nullptr;
+    return callback;
+  }
+
   static void Write(LogLevel level, const char *level_str, const char *format,
                     va_list val) {
     if (level <= GetLevel()) {  // omit the message with low level
 // R code should write back to R's output stream,
 // otherwise to stdout
 #ifndef LGB_R_BUILD
-      if (GetLogCallBack() == nullptr) {
+      if (GetLogCallBackWithLevel() != nullptr) {
+        const size_t kBufSize = 1024;
+        char buf[kBufSize];
+#ifdef _MSC_VER
+        vsnprintf_s(buf, kBufSize, _TRUNCATE, format, val);
+#else
+        vsnprintf(buf, kBufSize, format, val);
+#endif
+        GetLogCallBackWithLevel()(static_cast<int>(level), buf);
+      } else if (GetLogCallBack() == nullptr) {
         printf("[LightGBM] [%s] ", level_str);
         vprintf(format, val);
         printf("\n");
@@ -167,18 +201,6 @@ class Log {
       R_FlushConsole();
 #endif
     }
-  }
-
-  // a trick to use static variable in header file.
-  // May be not good, but avoid to use an additional cpp file
-  static LogLevel &GetLevel() {
-    static THREAD_LOCAL LogLevel level = LogLevel::Info;
-    return level;
-  }
-
-  static Callback &GetLogCallBack() {
-    static THREAD_LOCAL Callback callback = nullptr;
-    return callback;
   }
 };
 
