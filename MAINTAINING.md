@@ -54,7 +54,7 @@ gh release upload \
 Where:
 
 * `COMMIT_ID` = full commit hash of the commit on `master` corresponding to the release
-* `TAG` = the tag for the release (e.g. `v4.6.0`)
+* `TAG` = the tag for the release (e.g. `v4.7.0`)
 
 ### Step 6: Complete All Other Post-merge Release Steps
 

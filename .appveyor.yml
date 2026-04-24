@@ -1,4 +1,4 @@
-version: 4.6.0.99.{build}
+version: 4.7.0.{build}
 
 image: Visual Studio 2017
 platform: x64
