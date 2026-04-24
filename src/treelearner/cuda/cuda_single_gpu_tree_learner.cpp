@@ -271,6 +271,8 @@ Tree* CUDASingleGPUTreeLearner::Train(const score_t* gradients,
         smaller_leaf_index_, larger_leaf_index_,
         global_num_data_in_smaller_leaf, global_num_data_in_larger_leaf,
         sum_hessians_in_smaller_leaf, sum_hessians_in_larger_leaf,
+        tree->host_leaf_depth(smaller_leaf_index_),
+        tree->host_leaf_depth(larger_leaf_index_),
         cuda_gradient_discretizer_->grad_scale_ptr(),
         cuda_gradient_discretizer_->hess_scale_ptr(),
         smaller_leaf_num_bits_bin,
@@ -282,6 +284,8 @@ Tree* CUDASingleGPUTreeLearner::Train(const score_t* gradients,
         smaller_leaf_index_, larger_leaf_index_,
         global_num_data_in_smaller_leaf, global_num_data_in_larger_leaf,
         sum_hessians_in_smaller_leaf, sum_hessians_in_larger_leaf,
+        tree->host_leaf_depth(smaller_leaf_index_),
+        tree->host_leaf_depth(larger_leaf_index_),
         nullptr, nullptr, 0, 0);
     }
 

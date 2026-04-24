@@ -25,6 +25,8 @@ num_threads_per_block_add_prediction_to_score_(1024) {
     cuda_cat_boundaries_inner_.Resize(max_leaves);
   }
   InitCUDAMemory();
+  host_leaf_depth_.resize(max_leaves_, -1);
+  host_leaf_depth_[0] = 1;
 }
 
 CUDATree::CUDATree(const Tree* host_tree):
@@ -90,6 +92,10 @@ int CUDATree::Split(const int leaf_index,
            const CUDASplitInfo* cuda_split_info) {
   LaunchSplitKernel(leaf_index, real_feature_index, real_threshold, missing_type, cuda_split_info);
   RecordBranchFeatures(leaf_index, num_leaves_, real_feature_index);
+
+  ++host_leaf_depth_[leaf_index];
+  host_leaf_depth_[num_leaves_] = host_leaf_depth_[leaf_index];
+
   ++num_leaves_;
   return num_leaves_ - 1;
 }

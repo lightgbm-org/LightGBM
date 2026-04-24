@@ -69,6 +69,8 @@ class CUDABestSplitFinder {
     const data_size_t num_data_in_larger_leaf,
     const double sum_hessians_in_smaller_leaf,
     const double sum_hessians_in_larger_leaf,
+    const int smaller_leaf_depth,
+    const int larger_leaf_depth,
     const score_t* grad_scale,
     const score_t* hess_scale,
     const uint8_t smaller_num_bits_in_histogram_bins,
@@ -187,6 +189,7 @@ class CUDABestSplitFinder {
   data_size_t min_data_in_leaf_;
   double min_sum_hessian_in_leaf_;
   double min_gain_to_split_;
+  int max_depth_;
   double cat_smooth_;
   double cat_l2_;
   int max_cat_threshold_;

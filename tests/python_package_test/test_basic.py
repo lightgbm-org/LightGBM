@@ -957,6 +957,34 @@ def test_feature_names_are_set_correctly_when_no_feature_names_passed_into_Datas
     assert ds.construct().feature_name == ["Column_0", "Column_1", "Column_2"]
 
 
+def test_max_depth_is_enforced():
+    params = {
+        "objective": "binary",
+        "min_data": 10,
+        "num_leaves": 15,
+        "verbose": -1,
+        "num_threads": 1,
+        "max_bin": 255,
+        "gpu_use_dp": True,
+        "deterministic": True,
+        "random_state": 2,
+    }
+    X, y = make_blobs(n_samples=1_000, n_features=1, centers=2, random_state=2)
+    model = lgb.LGBMClassifier(**params)
+    model.fit(X, y)
+    fitted_max_depth = model.booster_.trees_to_dataframe()["node_depth"].max()
+    assert fitted_max_depth == 9, (
+        "This data generation and model fitting procedure should be deterministic within backends. "
+        "Both cpu and cuda should result in models with maximal tree depth 9."
+    )
+    # set a constraining value of max_depth, i.e. lower than 9
+    constrained_model = lgb.LGBMClassifier(max_depth=6, **params)
+    constrained_model.fit(X, y)
+    assert constrained_model.booster_.trees_to_dataframe()["node_depth"].max() <= 7, (
+        "Trained model contains splits deeper than max_depth = 6"
+    )
+
+
 # NOTE: this intentionally contains values where num_leaves <, ==, and > (max_depth^2)
 @pytest.mark.parametrize(("max_depth", "num_leaves"), [(-1, 3), (-1, 50), (5, 3), (5, 31), (5, 32), (8, 3), (8, 31)])
 def test_max_depth_warning_is_not_raised_if_num_leaves_is_also_provided(capsys, num_leaves, max_depth):

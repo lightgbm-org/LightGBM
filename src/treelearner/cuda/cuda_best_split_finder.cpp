@@ -28,6 +28,7 @@ CUDABestSplitFinder::CUDABestSplitFinder(
   min_data_in_leaf_(config->min_data_in_leaf),
   min_sum_hessian_in_leaf_(config->min_sum_hessian_in_leaf),
   min_gain_to_split_(config->min_gain_to_split),
+  max_depth_(config->max_depth),
   cat_smooth_(config->cat_smooth),
   cat_l2_(config->cat_l2),
   max_cat_threshold_(config->max_cat_threshold),
@@ -311,14 +312,18 @@ void CUDABestSplitFinder::FindBestSplitsForLeaf(
   const data_size_t num_data_in_larger_leaf,
   const double sum_hessians_in_smaller_leaf,
   const double sum_hessians_in_larger_leaf,
+  const int smaller_leaf_depth,
+  const int larger_leaf_depth,
   const score_t* grad_scale,
   const score_t* hess_scale,
   const uint8_t smaller_num_bits_in_histogram_bins,
   const uint8_t larger_num_bits_in_histogram_bins) {
   const bool is_smaller_leaf_valid = (num_data_in_smaller_leaf > min_data_in_leaf_ &&
-    sum_hessians_in_smaller_leaf > min_sum_hessian_in_leaf_);
+    sum_hessians_in_smaller_leaf > min_sum_hessian_in_leaf_ &&
+    ((max_depth_ > 0 && smaller_leaf_depth > 0 && smaller_leaf_depth <= max_depth_) || (max_depth_ <= 0)));
   const bool is_larger_leaf_valid = (num_data_in_larger_leaf > min_data_in_leaf_ &&
-    sum_hessians_in_larger_leaf > min_sum_hessian_in_leaf_ && larger_leaf_index >= 0);
+    sum_hessians_in_larger_leaf > min_sum_hessian_in_leaf_ && larger_leaf_index >= 0 &&
+    ((max_depth_ > 0 && larger_leaf_depth > 0 && larger_leaf_depth <= max_depth_) || (max_depth_ <= 0)));
   if (grad_scale != nullptr && hess_scale != nullptr) {
     LaunchFindBestSplitsDiscretizedForLeafKernel(smaller_leaf_splits, larger_leaf_splits,
       smaller_leaf_index, larger_leaf_index, is_smaller_leaf_valid, is_larger_leaf_valid,
