@@ -1457,6 +1457,17 @@ def test_dask_methods_and_sklearn_equivalents_have_similar_signatures(methods):
         assert dask_params[param].default == sklearn_params[param].default, error_msg
 
 
+@pytest.mark.parametrize("dask_cls", [lgb.DaskLGBMClassifier, lgb.DaskLGBMRegressor, lgb.DaskLGBMRanker])
+def test_dask_fit_rejects_prebuilt_dataset(dask_cls):
+    rng = np.random.default_rng(42)
+    X = rng.random((100, 4))
+    y = rng.integers(0, 2, 100)
+    ds = lgb.Dataset(X, label=y)
+    msg = re.escape("Passing a pre-built lightgbm.Dataset as X is not supported by DaskLGBM estimators")
+    with pytest.raises(lgb.basic.LightGBMError, match=msg):
+        dask_cls(n_estimators=2, num_leaves=5, verbose=-1).fit(ds)
+
+
 @pytest.mark.parametrize("task", tasks)
 def test_training_succeeds_when_data_is_dataframe_and_label_is_column_array(task, cluster):
     with Client(cluster):

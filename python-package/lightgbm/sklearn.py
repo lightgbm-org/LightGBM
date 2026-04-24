@@ -152,6 +152,64 @@ def _get_weight_from_constructed_dataset(dataset: Dataset) -> Optional[np.ndarra
     return weight
 
 
+def _snapshot_mutable_fields(dataset: Dataset) -> Dict[str, Optional[np.ndarray]]:
+    # snapshot fields fit() may overwrite, so they can be restored after train()
+    def _copy_or_none(value: Any) -> Optional[np.ndarray]:
+        return np.asarray(value).copy() if value is not None else None
+
+    return {
+        "label": _copy_or_none(dataset.get_label()),
+        "weight": _copy_or_none(dataset.get_weight()),
+        "group": _copy_or_none(dataset.get_group()),
+        "init_score": _copy_or_none(dataset.get_init_score()),
+    }
+
+
+def _restore_mutable_fields(dataset: Dataset, snapshot: Dict[str, Optional[np.ndarray]]) -> None:
+    # reset the Python attr too so the lazy-cached get_*() reflects the C++ clear
+    if snapshot["label"] is not None:
+        dataset.set_label(snapshot["label"])
+    if snapshot["weight"] is not None:
+        dataset.set_weight(snapshot["weight"])
+    else:
+        dataset.weight = None
+        dataset.set_field("weight", None)
+    if snapshot["group"] is not None:
+        dataset.set_group(snapshot["group"])
+    else:
+        dataset.group = None
+        dataset.set_field("group", None)
+    if snapshot["init_score"] is not None:
+        dataset.set_init_score(snapshot["init_score"])
+    else:
+        dataset.init_score = None
+        dataset.set_field("init_score", None)
+
+
+def _best_effort_restore(dataset: Dataset, snapshot: Dict[str, Optional[np.ndarray]], context: str) -> None:
+    # restore that swallows any error rather than mask the caller's primary exception;
+    # failures are surfaced via _log_warning so the user sees them in the log
+    try:
+        _restore_mutable_fields(dataset, snapshot)
+    except Exception as restore_err:  # noqa: BLE001
+        _log_warning(f"Failed to restore a {context} Dataset field after fit: {restore_err}")
+
+
+def _set_eval_label(
+    dataset: Dataset,
+    label: Any,
+    snapshots: List[Tuple[Dataset, Dict[str, Optional[np.ndarray]]]],
+) -> None:
+    # roll back on failure
+    dataset.construct()
+    snapshots.append((dataset, _snapshot_mutable_fields(dataset)))
+    try:
+        dataset.set_label(label)
+    except BaseException:
+        _best_effort_restore(dataset, snapshots.pop()[1], "eval")
+        raise
+
+
 class _ObjectiveFunctionWrapper:
     """Proxy class for objective function."""
 
@@ -390,6 +448,18 @@ _lgbmmodel_doc_fit = """
     -------
     self : LGBMModel
         Returns self.
+
+    Notes
+    -----
+    When ``X`` is a pre-built ``lightgbm.Dataset``, ``y`` may be ``None``;
+    ``y`` / ``sample_weight`` / ``group`` / ``init_score`` passed to ``fit()``
+    are applied for the fit and rolled back on return. Binning parameters on the
+    estimator (``max_bin``, ``min_data_in_bin``, etc.) are ignored because the
+    Dataset's binning is frozen at construction time; build validation
+    Datasets with ``reference=<training Dataset>`` to share it. The
+    sklearn-level validation that runs on the array path
+    (``ensure_min_samples``, ``_LGBMCheckSampleWeight``, etc.) is not
+    re-applied, matching ``lightgbm.train()``.
     """
 
 _lgbmmodel_doc_custom_eval_note = """
@@ -515,9 +585,18 @@ def _validate_eval_set_Xy(
             return [eval_set]
         else:
             return eval_set
-    if (eval_X is None) != (eval_y is None):
+    eval_X_is_all_datasets = isinstance(eval_X, Dataset) or (
+        isinstance(eval_X, (list, tuple)) and len(eval_X) > 0 and all(isinstance(e, Dataset) for e in eval_X)
+    )
+    if (eval_X is None) != (eval_y is None) and not (eval_y is None and eval_X_is_all_datasets):
         raise ValueError("You must specify eval_X and eval_y, not just one of them.")
     if eval_set is None and eval_X is not None:
+        if eval_X_is_all_datasets and eval_y is None:
+            if isinstance(eval_X, (list, tuple)):
+                eval_set = [(e, None) for e in eval_X]
+            else:
+                eval_set = [(eval_X, None)]
+            return eval_set
         if isinstance(eval_X, tuple) != isinstance(eval_y, tuple):
             raise ValueError("If eval_X is a tuple, y_val must be a tuple of same length, and vice versa.")
         if isinstance(eval_X, tuple) and isinstance(eval_y, tuple):
@@ -969,50 +1048,17 @@ class LGBMModel(_LGBMModelBase):
             n_jobs = max(_LGBMCpuCount(only_physical_cores=False) + 1 + n_jobs, 1)
         return n_jobs
 
-    def fit(
+    def _build_train_set_from_array(
         self,
         X: _LGBM_ScikitMatrixLike,
-        y: _LGBM_LabelType,
-        sample_weight: Optional[_LGBM_WeightType] = None,
-        init_score: Optional[_LGBM_InitScoreType] = None,
-        group: Optional[_LGBM_GroupType] = None,
-        eval_set: Optional[List[_LGBM_ScikitValidSet]] = None,
-        eval_names: Optional[List[str]] = None,
-        eval_sample_weight: Optional[List[_LGBM_WeightType]] = None,
-        eval_class_weight: Optional[List[float]] = None,
-        eval_init_score: Optional[List[_LGBM_InitScoreType]] = None,
-        eval_group: Optional[List[_LGBM_GroupType]] = None,
-        eval_metric: Optional[_LGBM_ScikitEvalMetricType] = None,
-        feature_name: _LGBM_FeatureNameConfiguration = "auto",
-        categorical_feature: _LGBM_CategoricalFeatureConfiguration = "auto",
-        callbacks: Optional[List[Callable]] = None,
-        init_model: Optional[Union[str, Path, Booster, "LGBMModel"]] = None,
-        *,
-        eval_X: Optional[Union[_LGBM_ScikitMatrixLike, Tuple[_LGBM_ScikitMatrixLike]]] = None,
-        eval_y: Optional[Union[_LGBM_LabelType, Tuple[_LGBM_LabelType]]] = None,
-    ) -> "LGBMModel":
-        """Docstring is set after definition, using a template."""
-        params = self._process_params(stage="fit")
-
-        # Do not modify original args in fit function
-        # Refer to https://github.com/lightgbm-org/LightGBM/pull/2619
-        eval_metric_list: List[Union[str, _LGBM_ScikitCustomEvalFunction]]
-        if eval_metric is None:
-            eval_metric_list = []
-        elif isinstance(eval_metric, list):
-            eval_metric_list = copy.deepcopy(eval_metric)
-        else:
-            eval_metric_list = [copy.deepcopy(eval_metric)]
-
-        # Separate built-in from callable evaluation metrics
-        eval_metrics_callable = [_EvalFunctionWrapper(f) for f in eval_metric_list if callable(f)]
-        eval_metrics_builtin = [m for m in eval_metric_list if isinstance(m, str)]
-
-        # concatenate metric from params (or default if not provided in params) and eval_metric
-        params["metric"] = [params["metric"]] if isinstance(params["metric"], (str, type(None))) else params["metric"]
-        params["metric"] = [e for e in eval_metrics_builtin if e not in params["metric"]] + params["metric"]
-        params["metric"] = [metric for metric in params["metric"] if metric is not None]
-
+        y: Optional[_LGBM_LabelType],
+        sample_weight: Optional[_LGBM_WeightType],
+        group: Optional[_LGBM_GroupType],
+        init_score: Optional[_LGBM_InitScoreType],
+        categorical_feature: _LGBM_CategoricalFeatureConfiguration,
+        feature_name: _LGBM_FeatureNameConfiguration,
+        params: Dict[str, Any],
+    ) -> Dataset:
         if not isinstance(X, (pd_DataFrame, pa_Table)):
             _X, _y = _LGBMValidateData(
                 self,
@@ -1046,7 +1092,7 @@ class LGBMModel(_LGBMModelBase):
             else:
                 sample_weight = np.multiply(sample_weight, class_sample_weight)
 
-        train_set = Dataset(
+        return Dataset(
             data=_X,
             label=_y,
             weight=sample_weight,
@@ -1056,6 +1102,105 @@ class LGBMModel(_LGBMModelBase):
             feature_name=feature_name,
             params=params,
         )
+
+    def fit(
+        self,
+        X: _LGBM_ScikitMatrixLike,
+        y: Optional[_LGBM_LabelType] = None,
+        sample_weight: Optional[_LGBM_WeightType] = None,
+        init_score: Optional[_LGBM_InitScoreType] = None,
+        group: Optional[_LGBM_GroupType] = None,
+        eval_set: Optional[List[_LGBM_ScikitValidSet]] = None,
+        eval_names: Optional[List[str]] = None,
+        eval_sample_weight: Optional[List[_LGBM_WeightType]] = None,
+        eval_class_weight: Optional[List[float]] = None,
+        eval_init_score: Optional[List[_LGBM_InitScoreType]] = None,
+        eval_group: Optional[List[_LGBM_GroupType]] = None,
+        eval_metric: Optional[_LGBM_ScikitEvalMetricType] = None,
+        feature_name: _LGBM_FeatureNameConfiguration = "auto",
+        categorical_feature: _LGBM_CategoricalFeatureConfiguration = "auto",
+        callbacks: Optional[List[Callable]] = None,
+        init_model: Optional[Union[str, Path, Booster, "LGBMModel"]] = None,
+        *,
+        eval_X: Optional[Union[_LGBM_ScikitMatrixLike, Tuple[_LGBM_ScikitMatrixLike]]] = None,
+        eval_y: Optional[Union[_LGBM_LabelType, Tuple[_LGBM_LabelType]]] = None,
+    ) -> "LGBMModel":
+        """Docstring is set after definition, using a template."""
+        params = self._process_params(stage="fit")
+
+        dataset_snapshots: List[Tuple[Dataset, Dict[str, Optional[np.ndarray]]]] = []
+
+        # Do not modify original args in fit function
+        # Refer to https://github.com/lightgbm-org/LightGBM/pull/2619
+        eval_metric_list: List[Union[str, _LGBM_ScikitCustomEvalFunction]]
+        if eval_metric is None:
+            eval_metric_list = []
+        elif isinstance(eval_metric, list):
+            eval_metric_list = copy.deepcopy(eval_metric)
+        else:
+            eval_metric_list = [copy.deepcopy(eval_metric)]
+
+        # Separate built-in from callable evaluation metrics
+        eval_metrics_callable = [_EvalFunctionWrapper(f) for f in eval_metric_list if callable(f)]
+        eval_metrics_builtin = [m for m in eval_metric_list if isinstance(m, str)]
+
+        # concatenate metric from params (or default if not provided in params) and eval_metric
+        params["metric"] = [params["metric"]] if isinstance(params["metric"], (str, type(None))) else params["metric"]
+        params["metric"] = [e for e in eval_metrics_builtin if e not in params["metric"]] + params["metric"]
+        params["metric"] = [metric for metric in params["metric"] if metric is not None]
+
+        if isinstance(X, Dataset):
+            if categorical_feature != "auto":
+                raise ValueError(
+                    "When X is a pre-built Dataset, 'categorical_feature' must be set on the "
+                    "Dataset at construction time, not passed to fit()"
+                )
+            if feature_name != "auto":
+                raise ValueError(
+                    "When X is a pre-built Dataset, 'feature_name' must be set on the "
+                    "Dataset at construction time, not passed to fit()"
+                )
+            train_set = X
+            # detect labelless Dataset before construct() populates .label with C++ default zeros,
+            # which would silently train on all-zero targets
+            if y is None and train_set.label is None and train_set._handle is None:
+                raise ValueError(
+                    "The pre-built Dataset has no label and no 'y' was passed to fit() "
+                    "(call .construct() first if labels are loaded from a file)"
+                )
+            # construct now so n_features_in_ is known and label can be read back for class weight
+            train_set.construct()
+            self.n_features_in_ = train_set.num_feature()
+            # snapshot + try/except: mutations below must roll back on failure so the user's
+            # Dataset is not left half-written if e.g. set_label raises on a length mismatch
+            dataset_snapshots.append((train_set, _snapshot_mutable_fields(train_set)))
+            try:
+                if y is not None:
+                    train_set.set_label(y)
+                if group is not None:
+                    train_set.set_group(group)
+                if init_score is not None:
+                    train_set.set_init_score(init_score)
+
+                if self._class_weight is None:
+                    self._class_weight = self.class_weight
+                if self._class_weight is not None:
+                    y_for_class_weight = _get_label_from_constructed_dataset(train_set) if y is None else y
+                    class_sample_weight = _LGBMComputeSampleWeight(self._class_weight, y_for_class_weight)
+                    if sample_weight is None or len(sample_weight) == 0:
+                        sample_weight = class_sample_weight
+                    else:
+                        sample_weight = np.multiply(sample_weight, class_sample_weight)
+
+                if sample_weight is not None:
+                    train_set.set_weight(sample_weight)
+            except BaseException:
+                _best_effort_restore(train_set, dataset_snapshots.pop()[1], "training")
+                raise
+        else:
+            train_set = self._build_train_set_from_array(
+                X, y, sample_weight, group, init_score, categorical_feature, feature_name, params
+            )
 
         valid_sets: List[Dataset] = []
         eval_set = _validate_eval_set_Xy(eval_set=eval_set, eval_X=eval_X, eval_y=eval_y)
@@ -1068,8 +1213,30 @@ class LGBMModel(_LGBMModelBase):
                     )
 
             for i, valid_data in enumerate(eval_set):
-                # reduce cost for prediction training data
-                if valid_data[0] is X and valid_data[1] is y:
+                if isinstance(valid_data, Dataset):
+                    valid_x = valid_data
+                    valid_y = None
+                elif isinstance(valid_data, tuple) and len(valid_data) == 1:
+                    valid_x = valid_data[0]
+                    valid_y = None
+                elif isinstance(valid_data, tuple) and len(valid_data) == 2:
+                    valid_x, valid_y = valid_data
+                else:
+                    raise ValueError(
+                        f"eval_set entries must be a Dataset or a 1- or 2-tuple; got {type(valid_data).__name__}"
+                    )
+
+                if isinstance(valid_x, Dataset):
+                    if valid_x is not train_set and valid_x.reference is None:
+                        _log_warning(
+                            f"Validation Dataset at index {i} has no 'reference' to the training Dataset; "
+                            f"pass reference=train_set when constructing it to use the same binning"
+                        )
+                    if valid_y is not None:
+                        _set_eval_label(valid_x, valid_y, dataset_snapshots)
+                    valid_set = valid_x
+                elif valid_x is X and valid_y is y:
+                    # reduce cost for prediction training data
                     valid_set = train_set
                 else:
                     valid_weight = _extract_evaluation_meta_data(
@@ -1085,7 +1252,7 @@ class LGBMModel(_LGBMModelBase):
                     if valid_class_weight is not None:
                         if isinstance(valid_class_weight, dict) and self._class_map is not None:
                             valid_class_weight = {self._class_map[k]: v for k, v in valid_class_weight.items()}
-                        valid_class_sample_weight = _LGBMComputeSampleWeight(valid_class_weight, valid_data[1])
+                        valid_class_sample_weight = _LGBMComputeSampleWeight(valid_class_weight, valid_y)
                         if valid_weight is None or len(valid_weight) == 0:
                             valid_weight = valid_class_sample_weight
                         else:
@@ -1101,8 +1268,8 @@ class LGBMModel(_LGBMModelBase):
                         i=i,
                     )
                     valid_set = Dataset(
-                        data=valid_data[0],
-                        label=valid_data[1],
+                        data=valid_x,
+                        label=valid_y,
                         weight=valid_weight,
                         group=valid_group,
                         init_score=valid_init_score,
@@ -1123,38 +1290,43 @@ class LGBMModel(_LGBMModelBase):
         evals_result: _EvalResultDict = {}
         callbacks.append(record_evaluation(evals_result))
 
-        self._Booster = train(
-            params=params,
-            train_set=train_set,
-            num_boost_round=self.n_estimators,
-            valid_sets=valid_sets,
-            valid_names=eval_names,
-            feval=eval_metrics_callable,  # type: ignore[arg-type]
-            init_model=init_model,
-            callbacks=callbacks,
-        )
+        try:
+            self._Booster = train(
+                params=params,
+                train_set=train_set,
+                num_boost_round=self.n_estimators,
+                valid_sets=valid_sets,
+                valid_names=eval_names,
+                feval=eval_metrics_callable,  # type: ignore[arg-type]
+                init_model=init_model,
+                callbacks=callbacks,
+            )
 
-        # This populates the property self.n_features_, the number of features in the fitted model,
-        # and so should only be set after fitting.
-        #
-        # The related property self._n_features_in, which populates self.n_features_in_,
-        # is set BEFORE fitting.
-        self._n_features = self._Booster.num_feature()
+            # This populates the property self.n_features_, the number of features in the fitted model,
+            # and so should only be set after fitting.
+            #
+            # The related property self._n_features_in, which populates self.n_features_in_,
+            # is set BEFORE fitting.
+            self._n_features = self._Booster.num_feature()
 
-        self._evals_result = evals_result
-        self._best_iteration = self._Booster.best_iteration
-        self._best_score = self._Booster.best_score
+            self._evals_result = evals_result
+            self._best_iteration = self._Booster.best_iteration
+            self._best_score = self._Booster.best_score
 
-        self.fitted_ = True
+            self.fitted_ = True
 
-        # free dataset
-        self._Booster.free_dataset()
-        del train_set, valid_sets
+            # free dataset
+            self._Booster.free_dataset()
+            del train_set, valid_sets
+        finally:
+            # restore any user-passed Dataset fields we mutated via set_*, so fit is non-mutating
+            for snap_ds, snapshot in dataset_snapshots:
+                _best_effort_restore(snap_ds, snapshot, "training")
         return self
 
     fit.__doc__ = (
         _lgbmmodel_doc_fit.format(
-            X_shape="numpy array, pandas DataFrame, pyarrow Table, scipy.sparse, list of lists of int or float of shape = [n_samples, n_features]",
+            X_shape="numpy array, pandas DataFrame, pyarrow Table, scipy.sparse, list of lists of int or float of shape = [n_samples, n_features], or pre-built lightgbm.Dataset",
             y_shape="numpy array, pandas DataFrame, pandas Series, list of int or float, pyarrow Array, pyarrow ChunkedArray of shape = [n_samples]",
             sample_weight_shape="numpy array, pandas Series, list of int or float, pyarrow Array, pyarrow ChunkedArray of shape = [n_samples] or None, optional (default=None)",
             init_score_shape="numpy array, pandas DataFrame, pandas Series, list of int or float, list of lists, pyarrow Array, pyarrow ChunkedArray, pyarrow Table of shape = [n_samples] or shape = [n_samples * n_classes] (for multi-class task) or shape = [n_samples, n_classes] (for multi-class task) or None, optional (default=None)",
@@ -1458,7 +1630,7 @@ class LGBMRegressor(_LGBMRegressorBase, LGBMModel):
     def fit(  # type: ignore[override]
         self,
         X: _LGBM_ScikitMatrixLike,
-        y: _LGBM_LabelType,
+        y: Optional[_LGBM_LabelType] = None,
         sample_weight: Optional[_LGBM_WeightType] = None,
         init_score: Optional[_LGBM_InitScoreType] = None,
         eval_set: Optional[List[_LGBM_ScikitValidSet]] = None,
@@ -1577,7 +1749,7 @@ class LGBMClassifier(_LGBMClassifierBase, LGBMModel):
     def fit(  # type: ignore[override]
         self,
         X: _LGBM_ScikitMatrixLike,
-        y: _LGBM_LabelType,
+        y: Optional[_LGBM_LabelType] = None,
         sample_weight: Optional[_LGBM_WeightType] = None,
         init_score: Optional[_LGBM_InitScoreType] = None,
         eval_set: Optional[List[_LGBM_ScikitValidSet]] = None,
@@ -1595,6 +1767,9 @@ class LGBMClassifier(_LGBMClassifierBase, LGBMModel):
         eval_y: Optional[Union[_LGBM_LabelType, Tuple[_LGBM_LabelType]]] = None,
     ) -> "LGBMClassifier":
         """Docstring is inherited from the LGBMModel."""
+        if y is None and isinstance(X, Dataset):
+            X.construct()
+            y = _get_label_from_constructed_dataset(X)
         _LGBMAssertAllFinite(y)
         _LGBMCheckClassificationTargets(y)
         self._le = _LGBMLabelEncoder().fit(y)
@@ -1633,34 +1808,50 @@ class LGBMClassifier(_LGBMClassifierBase, LGBMModel):
 
         # do not modify args, as it causes errors in model selection tools
         valid_sets: Optional[List[_LGBM_ScikitValidSet]] = None
+        eval_dataset_snapshots: List[Tuple[Dataset, Dict[str, Optional[np.ndarray]]]] = []
         if eval_set is not None:
             if isinstance(eval_set, tuple):
                 eval_set = [eval_set]
             valid_sets = []
-            for valid_x, valid_y in eval_set:
-                if valid_x is X and valid_y is y:
+            for valid_data in eval_set:
+                if isinstance(valid_data, Dataset):
+                    valid_sets.append(valid_data)  # type: ignore[arg-type]
+                    continue
+                if isinstance(valid_data, tuple) and len(valid_data) == 1:
+                    valid_sets.append(valid_data[0])  # type: ignore[arg-type]
+                    continue
+                valid_x, valid_y = valid_data[0], valid_data[1]
+                if isinstance(valid_x, Dataset):
+                    if valid_y is not None:
+                        _set_eval_label(valid_x, self._le.transform(valid_y), eval_dataset_snapshots)
+                    valid_sets.append(valid_x)  # type: ignore[arg-type]
+                elif valid_x is X and valid_y is y:
                     valid_sets.append((valid_x, _y))
                 else:
                     valid_sets.append((valid_x, self._le.transform(valid_y)))
 
-        super().fit(
-            X,
-            _y,
-            sample_weight=sample_weight,
-            init_score=init_score,
-            eval_set=valid_sets,
-            eval_names=eval_names,
-            eval_X=eval_X,
-            eval_y=eval_y,
-            eval_sample_weight=eval_sample_weight,
-            eval_class_weight=eval_class_weight,
-            eval_init_score=eval_init_score,
-            eval_metric=eval_metric,
-            feature_name=feature_name,
-            categorical_feature=categorical_feature,
-            callbacks=callbacks,
-            init_model=init_model,
-        )
+        try:
+            super().fit(
+                X,
+                _y,
+                sample_weight=sample_weight,
+                init_score=init_score,
+                eval_set=valid_sets,
+                eval_names=eval_names,
+                eval_X=eval_X,
+                eval_y=eval_y,
+                eval_sample_weight=eval_sample_weight,
+                eval_class_weight=eval_class_weight,
+                eval_init_score=eval_init_score,
+                eval_metric=eval_metric,
+                feature_name=feature_name,
+                categorical_feature=categorical_feature,
+                callbacks=callbacks,
+                init_model=init_model,
+            )
+        finally:
+            for snap_ds, snapshot in eval_dataset_snapshots:
+                _best_effort_restore(snap_ds, snapshot, "eval")
         return self
 
     _base_doc = LGBMModel.fit.__doc__.replace("self : LGBMModel", "self : LGBMClassifier")  # type: ignore
@@ -1875,7 +2066,7 @@ class LGBMRanker(LGBMModel):
     def fit(  # type: ignore[override]
         self,
         X: _LGBM_ScikitMatrixLike,
-        y: _LGBM_LabelType,
+        y: Optional[_LGBM_LabelType] = None,
         sample_weight: Optional[_LGBM_WeightType] = None,
         init_score: Optional[_LGBM_InitScoreType] = None,
         group: Optional[_LGBM_GroupType] = None,
@@ -1895,11 +2086,39 @@ class LGBMRanker(LGBMModel):
         eval_y: Optional[Union[_LGBM_LabelType, Tuple[_LGBM_LabelType]]] = None,
     ) -> "LGBMRanker":
         """Docstring is inherited from the LGBMModel."""
-        # check group data
-        if group is None:
+        group_is_set_on_dataset = isinstance(X, Dataset) and X.group is not None
+        if group is None and not group_is_set_on_dataset:
             raise ValueError("Should set group for ranking task")
 
-        if eval_group is None and (eval_set is not None or eval_X is not None or eval_y is not None):
+        if isinstance(X, Dataset):
+            # eval_group= kwarg does not apply to pre-built eval Datasets; each must carry group itself.
+            # raw-array eval entries still need eval_group= just like the array path.
+            eval_datasets: List[Dataset] = []
+            has_non_dataset_eval = False
+            if eval_set is not None:
+                for entry in eval_set:
+                    candidate = entry[0] if isinstance(entry, tuple) else entry
+                    if isinstance(candidate, Dataset):
+                        eval_datasets.append(candidate)
+                    else:
+                        has_non_dataset_eval = True
+            if isinstance(eval_X, Dataset):
+                eval_datasets.append(eval_X)
+            elif isinstance(eval_X, (list, tuple)):
+                for x in eval_X:
+                    if isinstance(x, Dataset):
+                        eval_datasets.append(x)
+                    else:
+                        has_non_dataset_eval = True
+            elif eval_X is not None:
+                has_non_dataset_eval = True
+            if any(d.group is None for d in eval_datasets):
+                raise ValueError(
+                    "Each ranker eval Dataset must carry 'group' (eval_group= does not apply to pre-built Datasets)"
+                )
+            if has_non_dataset_eval and eval_group is None:
+                raise ValueError("eval_group cannot be None if any of eval_set, eval_X, or eval_y are provided")
+        elif eval_group is None and (eval_set is not None or eval_X is not None or eval_y is not None):
             raise ValueError("eval_group cannot be None if any of eval_set, eval_X, or eval_y are provided")
 
         self._eval_at = eval_at

@@ -2260,3 +2260,446 @@ def test_eval_X_eval_y_eval_set_equivalence():
     assert gbm2.evals_result_["valid_0"]["l2"] != gbm2.evals_result_["valid_1"]["l2"], (
         "Evaluation results for the 2 validation sets are not different. This might mean they weren't both used."
     )
+
+
+def _fit_array_path(task, X, y, g, **extra):
+    m = task_to_model_factory[task](n_estimators=5, num_leaves=5, verbose=-1, random_state=42)
+    if task == "ranking":
+        m.fit(X, y, group=g, **extra)
+    else:
+        m.fit(X, y, **extra)
+    return m
+
+
+def _fit_dataset_path(task, ds, **extra):
+    m = task_to_model_factory[task](n_estimators=5, num_leaves=5, verbose=-1, random_state=42)
+    m.fit(ds, **extra)
+    return m
+
+
+@pytest.mark.parametrize("task", all_tasks)
+def test_fit_prebuilt_dataset_output_matches_array_path(task):
+    X, y, g = _create_data(task=task, n_samples=200)
+    ds = lgb.Dataset(X, label=y, group=g)
+    m_ds = _fit_dataset_path(task, ds)
+    m_ar = _fit_array_path(task, X, y, g)
+    assert m_ds.fitted_
+    assert m_ds.n_features_in_ == X.shape[1]
+    assert m_ds.booster_.num_feature() == X.shape[1]
+    np.testing.assert_allclose(m_ds.predict(X), m_ar.predict(X), atol=1e-10)
+
+
+@pytest.mark.parametrize("task", all_tasks)
+def test_fit_prebuilt_dataset_sets_feature_names_in(task):
+    X, y, g = _create_data(task=task, n_samples=200)
+    names = [f"feat_{i}" for i in range(X.shape[1])]
+    ds = lgb.Dataset(X, label=y, group=g, feature_name=names)
+    m = _fit_dataset_path(task, ds)
+    np.testing.assert_array_equal(m.feature_names_in_, np.array(names))
+
+
+@pytest.mark.parametrize("task", all_tasks)
+def test_fit_prebuilt_dataset_set_label_matches_array_path(task, rng_fixed_seed):
+    X, y1, g = _create_data(task=task, n_samples=200)
+    if task.endswith("classification"):
+        y2 = rng_fixed_seed.integers(int(y1.min()), int(y1.max()) + 1, y1.shape)
+    else:
+        y2 = rng_fixed_seed.random(len(y1)).astype(y1.dtype, copy=False)
+    ds = lgb.Dataset(X, label=y1, group=g)
+    ds.set_label(y2)
+    m_ds = _fit_dataset_path(task, ds)
+    m_ar = _fit_array_path(task, X, y2, g)
+    np.testing.assert_allclose(m_ds.predict(X), m_ar.predict(X), atol=1e-10)
+
+
+@pytest.mark.parametrize("task", all_tasks)
+def test_fit_prebuilt_dataset_weight_matches_sample_weight(task, rng_fixed_seed):
+    X, y, g = _create_data(task=task, n_samples=200)
+    w = rng_fixed_seed.random(len(y))
+    ds = lgb.Dataset(X, label=y, group=g, weight=w)
+    m_ds = _fit_dataset_path(task, ds)
+    m_ar = _fit_array_path(task, X, y, g, sample_weight=w)
+    np.testing.assert_allclose(m_ds.predict(X), m_ar.predict(X), atol=1e-10)
+
+
+@pytest.mark.parametrize("task", all_tasks)
+def test_fit_prebuilt_dataset_init_score_kwarg_matches_array_path(task):
+    X, y, g = _create_data(task=task, n_samples=200)
+    if task == "multiclass-classification":
+        init_score = np.tile(np.array([0.1, 0.2, 0.7]), (X.shape[0], 1)).ravel()
+    else:
+        init_score = np.full_like(y, float(np.mean(y)), dtype=np.float64)
+    ds = lgb.Dataset(X, label=y, group=g)
+    m_ds = _fit_dataset_path(task, ds, init_score=init_score)
+    m_ar = _fit_array_path(task, X, y, g, init_score=init_score)
+    np.testing.assert_allclose(m_ds.predict(X), m_ar.predict(X), atol=1e-10)
+
+
+@pytest.mark.parametrize(
+    ("field", "kwarg_name", "model_cls", "task"),
+    [
+        ("weight", "sample_weight", lgb.LGBMRegressor, "regression"),
+        ("init_score", "init_score", lgb.LGBMRegressor, "regression"),
+        ("group", "group", lgb.LGBMRanker, "ranking"),
+    ],
+)
+def test_fit_prebuilt_dataset_clears_added_field_after_fit(field, kwarg_name, model_cls, task, rng_fixed_seed):
+    # fields added via fit kwargs must not stick on a Dataset that had them unset pre-fit:
+    # _restore_mutable_fields clears each via set_field(name, None).
+    X, y, g = _create_data(task=task, n_samples=200)
+    if field == "weight":
+        value = rng_fixed_seed.random(len(y))
+    elif field == "init_score":
+        value = np.full_like(y, float(np.mean(y)), dtype=np.float64)
+    else:
+        value = g
+    ds = lgb.Dataset(X, label=y)
+    ds.construct()
+    getter = getattr(ds, f"get_{field}")
+    assert getter() is None
+    m = model_cls(n_estimators=5, num_leaves=5, verbose=-1, random_state=42).fit(ds, **{kwarg_name: value})
+    assert m.fitted_
+    assert getter() is None
+
+
+def test_fit_prebuilt_dataset_eval_clears_added_weight_after_fit():
+    # eval Dataset with no pre-fit weight: when its label is overridden via eval_X/eval_y,
+    # the snapshot+restore loop in _set_eval_label must keep it weight-less.
+    X, y, _ = _create_data(task="regression", n_samples=200)
+    X_val, y_val, _ = _create_data(task="regression", n_samples=100)
+    ds = lgb.Dataset(X, label=y)
+    ds_val = lgb.Dataset(X_val, label=np.zeros_like(y_val), reference=ds)
+    ds_val.construct()
+    assert ds_val.get_weight() is None
+    m = lgb.LGBMRegressor(n_estimators=5, num_leaves=5, verbose=-1, random_state=42).fit(
+        ds, eval_X=ds_val, eval_y=y_val
+    )
+    assert m.fitted_
+    assert ds_val.get_weight() is None
+
+
+def test_fit_prebuilt_dataset_feature_name_kwarg_raises():
+    # guard is task-agnostic: it fires before any estimator-specific logic runs
+    X, y, _ = _create_data(task="regression", n_samples=100)
+    ds = lgb.Dataset(X, label=y)
+    names = [f"f{i}" for i in range(X.shape[1])]
+    msg = re.escape(
+        "When X is a pre-built Dataset, 'feature_name' must be set on the "
+        "Dataset at construction time, not passed to fit()"
+    )
+    with pytest.raises(ValueError, match=msg):
+        lgb.LGBMRegressor(n_estimators=5, num_leaves=5, verbose=-1, random_state=42).fit(ds, feature_name=names)
+
+
+def test_fit_prebuilt_dataset_categorical_feature_kwarg_raises():
+    X, y, _ = _create_data(task="regression", n_samples=100)
+    ds = lgb.Dataset(X, label=y)
+    msg = re.escape(
+        "When X is a pre-built Dataset, 'categorical_feature' must be set on the "
+        "Dataset at construction time, not passed to fit()"
+    )
+    with pytest.raises(ValueError, match=msg):
+        lgb.LGBMRegressor(n_estimators=5, num_leaves=5, verbose=-1, random_state=42).fit(ds, categorical_feature=[0])
+
+
+@pytest.mark.parametrize("eval_form", ["bare_dataset", "one_tuple", "two_tuple_none", "two_tuple_y"])
+@pytest.mark.parametrize("task", all_tasks)
+def test_fit_prebuilt_dataset_eval_set_shorthands(task, eval_form):
+    X, y, g = _create_data(task=task, n_samples=200)
+    X_val, y_val, g_val = _create_data(task=task, n_samples=100)
+    ds = lgb.Dataset(X, label=y, group=g)
+    ds_val = lgb.Dataset(X_val, label=y_val, group=g_val, reference=ds)
+    if eval_form == "bare_dataset":
+        eval_entry = ds_val
+    elif eval_form == "one_tuple":
+        eval_entry = (ds_val,)
+    elif eval_form == "two_tuple_none":
+        eval_entry = (ds_val, None)
+    else:
+        eval_entry = (ds_val, y_val)
+    m = task_to_model_factory[task](n_estimators=5, num_leaves=5, verbose=-1, random_state=42)
+    with pytest.warns(LGBMDeprecationWarning, match="The argument 'eval_set' is deprecated.*"):
+        m.fit(ds, eval_set=[eval_entry])
+    assert "valid_0" in m.evals_result_
+    first_metric = next(iter(m.evals_result_["valid_0"].values()))
+    assert len(first_metric) == 5
+    # all 4 shorthand forms must yield the same predictions as the canonical eval_X path
+    baseline = task_to_model_factory[task](n_estimators=5, num_leaves=5, verbose=-1, random_state=42).fit(
+        ds, eval_X=ds_val
+    )
+    np.testing.assert_allclose(m.predict(X), baseline.predict(X), atol=1e-10)
+
+
+@pytest.mark.parametrize("task", all_tasks)
+def test_fit_prebuilt_dataset_eval_X_single_dataset_without_eval_y(task):
+    X, y, g = _create_data(task=task, n_samples=200)
+    X_val, y_val, g_val = _create_data(task=task, n_samples=100)
+    ds = lgb.Dataset(X, label=y, group=g)
+    ds_val = lgb.Dataset(X_val, label=y_val, group=g_val, reference=ds)
+    m = task_to_model_factory[task](n_estimators=5, num_leaves=5, verbose=-1, random_state=42)
+    m.fit(ds, eval_X=ds_val)
+    first_metric = next(iter(m.evals_result_["valid_0"].values()))
+    assert len(first_metric) == 5
+    assert all(np.isfinite(first_metric))
+
+
+@pytest.mark.parametrize("container", [tuple, list])
+@pytest.mark.parametrize("task", all_tasks)
+def test_fit_prebuilt_dataset_eval_X_collection_of_datasets(task, container):
+    X, y, g = _create_data(task=task, n_samples=200)
+    X_val, y_val, g_val = _create_data(task=task, n_samples=100)
+    ds = lgb.Dataset(X, label=y, group=g)
+    ds_val1 = lgb.Dataset(X_val, label=y_val, group=g_val, reference=ds)
+    ds_val2 = lgb.Dataset(X_val * 2, label=y_val, group=g_val, reference=ds)
+    m = task_to_model_factory[task](n_estimators=5, num_leaves=5, verbose=-1, random_state=42)
+    m.fit(ds, eval_X=container([ds_val1, ds_val2]))
+    assert set(m.evals_result_.keys()) == {"valid_0", "valid_1"}
+
+
+@pytest.mark.parametrize("task", all_tasks)
+def test_fit_prebuilt_dataset_eval_X_without_reference_warns(task):
+    X, y, g = _create_data(task=task, n_samples=200)
+    X_val, y_val, g_val = _create_data(task=task, n_samples=100)
+    ds = lgb.Dataset(X, label=y, group=g)
+    ds_val = lgb.Dataset(X_val, label=y_val, group=g_val)
+    msg = re.escape("no 'reference' to the training Dataset")
+    with pytest.warns(UserWarning, match=msg):
+        task_to_model_factory[task](n_estimators=5, num_leaves=5, verbose=-1, random_state=42).fit(ds, eval_X=ds_val)
+
+
+@pytest.mark.parametrize("task", all_tasks)
+def test_fit_prebuilt_dataset_eval_set_tuple_without_reference_warns(task):
+    X, y, g = _create_data(task=task, n_samples=200)
+    X_val, y_val, g_val = _create_data(task=task, n_samples=100)
+    ds = lgb.Dataset(X, label=y, group=g)
+    ds_val = lgb.Dataset(X_val, label=y_val, group=g_val)
+    m = task_to_model_factory[task](n_estimators=5, num_leaves=5, verbose=-1, random_state=42)
+    msg = re.escape("no 'reference' to the training Dataset")
+    with pytest.warns(UserWarning, match=msg):
+        m.fit(ds, eval_set=[(ds_val,)])
+
+
+@pytest.mark.parametrize("task", all_tasks)
+def test_fit_prebuilt_dataset_early_stopping_with_eval_dataset(task):
+    X, y, g = _create_data(task=task, n_samples=300)
+    X_val, y_val, g_val = _create_data(task=task, n_samples=60)
+    ds = lgb.Dataset(X, label=y, group=g)
+    ds_val = lgb.Dataset(X_val, label=y_val, group=g_val, reference=ds)
+    n_estimators = 20
+    m = task_to_model_factory[task](n_estimators=n_estimators, num_leaves=5, verbose=-1, random_state=42)
+    m.fit(ds, eval_X=ds_val, callbacks=[lgb.early_stopping(2, verbose=False)])
+    first_metric = next(iter(m.evals_result_["valid_0"].values()))
+    assert 1 <= m.best_iteration_ <= n_estimators
+    assert m.n_iter_ <= n_estimators
+    assert m.best_iteration_ <= len(first_metric)
+
+
+@pytest.mark.parametrize("task", all_tasks)
+def test_fit_prebuilt_dataset_repeated_fit_is_idempotent(task):
+    # re-fitting the same estimator on the same Dataset must produce identical
+    # predictions; guards against class_weight / sample_weight compounding or
+    # any in-place Dataset mutation that would accumulate across fits
+    X, y, g = _create_data(task=task, n_samples=200)
+    ds = lgb.Dataset(X, label=y, group=g)
+    extra = {"class_weight": "balanced"} if task.endswith("classification") else {}
+    model_cls = task_to_model_factory[task]
+    m1 = model_cls(n_estimators=5, num_leaves=5, verbose=-1, random_state=42, **extra).fit(ds)
+    p1 = m1.predict(X)
+    m2 = model_cls(n_estimators=5, num_leaves=5, verbose=-1, random_state=42, **extra).fit(ds)
+    p2 = m2.predict(X)
+    np.testing.assert_allclose(p1, p2, atol=1e-10)
+
+
+@pytest.mark.parametrize("task", ["binary-classification", "multiclass-classification"])
+def test_fit_classifier_prebuilt_dataset_derives_classes_from_label(task):
+    X, y, _ = _create_data(task=task, n_samples=200)
+    ds = lgb.Dataset(X, label=y)
+    m = lgb.LGBMClassifier(n_estimators=5, num_leaves=5, verbose=-1, random_state=42).fit(ds)
+    # classes_ carries the Dataset's float32 label dtype; value equality is what matters here
+    np.testing.assert_array_equal(m.classes_, np.unique(y).astype(m.classes_.dtype))
+    assert m.n_classes_ == len(np.unique(y))
+    assert m.booster_.num_feature() == X.shape[1]
+
+
+def test_fit_classifier_prebuilt_dataset_does_not_mutate_label():
+    # classifier internally label-encodes for training; the user-facing Dataset.label
+    # must be left untouched (would surprise callers that reuse the Dataset elsewhere)
+    X, y, _ = _create_data(task="multiclass-classification", n_samples=200)
+    original_label = np.array([5, 10, 15])[y % 3]  # non-consecutive ints, exercise encoder
+    ds = lgb.Dataset(X, label=original_label)
+    ds.construct()
+    before = ds.get_label().copy()
+    lgb.LGBMClassifier(n_estimators=5, num_leaves=5, verbose=-1, random_state=42).fit(ds)
+    np.testing.assert_array_equal(ds.get_label(), before)
+
+
+@pytest.mark.parametrize("task", ["binary-classification", "multiclass-classification"])
+def test_fit_classifier_prebuilt_dataset_class_weight_does_not_mutate_ds_weight(task):
+    # class_weight path writes composed weight onto the Dataset; verify the user-facing
+    # ds.weight is restored to its pre-fit value
+    X, y, _ = _create_data(task=task, n_samples=200)
+    w0 = np.linspace(0.1, 2.0, len(y))
+    ds = lgb.Dataset(X, label=y, weight=w0)
+    ds.construct()
+    before = ds.get_weight().copy()
+    lgb.LGBMClassifier(n_estimators=5, num_leaves=5, verbose=-1, random_state=42, class_weight="balanced").fit(ds)
+    np.testing.assert_allclose(ds.get_weight(), before, atol=1e-10)
+
+
+def test_fit_prebuilt_dataset_sample_weight_kwarg_does_not_mutate_ds_weight():
+    X, y, _ = _create_data(task="regression", n_samples=200)
+    w0 = np.linspace(0.1, 2.0, len(y))
+    ds = lgb.Dataset(X, label=y, weight=w0)
+    ds.construct()
+    before = ds.get_weight().copy()
+    w_new = np.ones_like(w0) * 0.5
+    lgb.LGBMRegressor(n_estimators=5, num_leaves=5, verbose=-1, random_state=42).fit(ds, sample_weight=w_new)
+    np.testing.assert_allclose(ds.get_weight(), before, atol=1e-10)
+
+
+def test_fit_ranker_prebuilt_dataset_group_kwarg_does_not_mutate_ds_group():
+    X, y, g = _create_data(task="ranking", n_samples=200)
+    ds = lgb.Dataset(X, label=y, group=g)
+    ds.construct()
+    before = ds.get_group().copy()
+    g_new = np.array([10] * 20)
+    lgb.LGBMRanker(n_estimators=5, num_leaves=5, verbose=-1, random_state=42).fit(ds, group=g_new)
+    np.testing.assert_array_equal(ds.get_group(), before)
+
+
+def test_fit_prebuilt_dataset_init_score_kwarg_does_not_mutate_ds_init_score():
+    X, y, _ = _create_data(task="regression", n_samples=200)
+    init0 = np.full_like(y, 0.3, dtype=np.float64)
+    ds = lgb.Dataset(X, label=y, init_score=init0)
+    ds.construct()
+    before = ds.get_init_score().copy()
+    init_new = np.full_like(y, 0.7, dtype=np.float64)
+    lgb.LGBMRegressor(n_estimators=5, num_leaves=5, verbose=-1, random_state=42).fit(ds, init_score=init_new)
+    np.testing.assert_allclose(ds.get_init_score(), before, atol=1e-10)
+
+
+def test_fit_classifier_prebuilt_dataset_eval_does_not_mutate_eval_label():
+    # classifier encodes (ds_val, y_val) tuples before passing to train(); verify the
+    # original eval Dataset label is restored after fit
+    X, y, _ = _create_data(task="binary-classification", n_samples=200)
+    X_val, y_val, _ = _create_data(task="binary-classification", n_samples=100)
+    original_val_label = np.array([5, 10])[y_val % 2]
+    ds = lgb.Dataset(X, label=y)
+    ds_val = lgb.Dataset(X_val, label=original_val_label, reference=ds)
+    ds_val.construct()
+    before = ds_val.get_label().copy()
+    lgb.LGBMClassifier(n_estimators=5, num_leaves=5, verbose=-1, random_state=42).fit(ds, eval_X=ds_val, eval_y=y_val)
+    np.testing.assert_array_equal(ds_val.get_label(), before)
+
+
+def test_fit_prebuilt_dataset_set_weight_via_fit_kwarg_matches_array_path(rng_fixed_seed):
+    # explicitly exercise the fit(ds, sample_weight=w) code path (complements the
+    # roundtrip test which only uses Dataset(weight=...) at construction time)
+    X, y, _ = _create_data(task="regression", n_samples=200)
+    w = rng_fixed_seed.random(len(y))
+    ds = lgb.Dataset(X, label=y)
+    m_ds = lgb.LGBMRegressor(n_estimators=5, num_leaves=5, verbose=-1, random_state=42).fit(ds, sample_weight=w)
+    m_ar = lgb.LGBMRegressor(n_estimators=5, num_leaves=5, verbose=-1, random_state=42).fit(X, y, sample_weight=w)
+    np.testing.assert_allclose(m_ds.predict(X), m_ar.predict(X), atol=1e-10)
+
+
+def test_fit_prebuilt_dataset_restores_label_on_exception():
+    # a fit() that fails mid-training must still leave the user's Dataset in its
+    # pre-fit state (snapshot/restore runs in the finally clause)
+    X, y, _ = _create_data(task="binary-classification", n_samples=100)
+    original_label = np.array([5, 10])[y % 2]
+    ds = lgb.Dataset(X, label=original_label)
+    ds.construct()
+    before = ds.get_label().copy()
+    # init_model pointing at a non-existent file fires inside train() after the
+    # Dataset has already been mutated to encoded labels
+    with pytest.raises((FileNotFoundError, lgb.basic.LightGBMError), match="not-a-real-path"):
+        lgb.LGBMClassifier(n_estimators=5, num_leaves=5, verbose=-1, random_state=42).fit(
+            ds, init_model="not-a-real-path.txt"
+        )
+    np.testing.assert_array_equal(ds.get_label(), before)
+
+
+def test_fit_prebuilt_dataset_restores_label_on_bad_set_label():
+    # a length-mismatched y passed to fit() must roll back the snapshot so the
+    # user's Dataset label is not left half-written after the set_label raises
+    X, y, _ = _create_data(task="regression", n_samples=100)
+    original_label = y.copy()
+    ds = lgb.Dataset(X, label=original_label)
+    ds.construct()
+    before = ds.get_label().copy()
+    with pytest.raises(lgb.basic.LightGBMError, match="Length"):
+        lgb.LGBMRegressor(n_estimators=5, num_leaves=5, verbose=-1, random_state=42).fit(
+            ds, y=np.zeros(50)
+        )  # length 50 != 100
+    np.testing.assert_array_equal(ds.get_label(), before)
+
+
+def test_fit_prebuilt_dataset_without_label_raises_when_y_not_given():
+    # Dataset built without a label + fit(ds) with no y should raise a clear error
+    # instead of silently training on C++-default zero labels
+    X, _, _ = _create_data(task="regression", n_samples=100)
+    ds = lgb.Dataset(X)
+    msg = re.escape("The pre-built Dataset has no label and no 'y' was passed to fit()")
+    with pytest.raises(ValueError, match=msg):
+        lgb.LGBMRegressor(n_estimators=5, num_leaves=5, verbose=-1, random_state=42).fit(ds)
+
+
+@pytest.mark.parametrize("class_weight", ["balanced", {0: 1.0, 1: 2.0}])
+def test_fit_classifier_prebuilt_dataset_class_weight_without_y(class_weight):
+    X, y, _ = _create_data(task="binary-classification", n_samples=200)
+    ds = lgb.Dataset(X, label=y)
+    m_ds = lgb.LGBMClassifier(n_estimators=5, num_leaves=5, verbose=-1, random_state=42, class_weight=class_weight).fit(
+        ds
+    )
+    m_ar = lgb.LGBMClassifier(n_estimators=5, num_leaves=5, verbose=-1, random_state=42, class_weight=class_weight).fit(
+        X, y
+    )
+    np.testing.assert_allclose(m_ds.predict_proba(X), m_ar.predict_proba(X), atol=1e-10)
+
+
+def test_fit_ranker_prebuilt_dataset_no_group_anywhere_raises():
+    X, y, _ = _create_data(task="regression", n_samples=100)
+    ds = lgb.Dataset(X, label=y)
+    msg = re.escape("Should set group for ranking task")
+    with pytest.raises(ValueError, match=msg):
+        lgb.LGBMRanker(n_estimators=5, num_leaves=5, verbose=-1, random_state=42).fit(ds)
+
+
+def test_fit_ranker_prebuilt_dataset_allows_eval_group_none():
+    X, y, g = _create_data(task="ranking", n_samples=200)
+    X_val, y_val, g_val = _create_data(task="ranking", n_samples=100)
+    ds = lgb.Dataset(X, label=y, group=g)
+    ds_val = lgb.Dataset(X_val, label=y_val, group=g_val, reference=ds)
+    m = lgb.LGBMRanker(n_estimators=5, num_leaves=5, verbose=-1, random_state=42)
+    m.fit(ds, eval_X=ds_val)
+    assert m.fitted_
+    assert "valid_0" in m.evals_result_
+
+
+def test_fit_ranker_prebuilt_dataset_eval_X_without_group_raises():
+    X, y, g = _create_data(task="ranking", n_samples=200)
+    X_val, y_val, _ = _create_data(task="ranking", n_samples=100)
+    ds = lgb.Dataset(X, label=y, group=g)
+    ds_val = lgb.Dataset(X_val, label=y_val, reference=ds)  # no group
+    msg = re.escape("Each ranker eval Dataset must carry 'group'")
+    with pytest.raises(ValueError, match=msg):
+        lgb.LGBMRanker(n_estimators=5, num_leaves=5, verbose=-1, random_state=42).fit(ds, eval_X=ds_val)
+
+
+def test_fit_ranker_prebuilt_dataset_eval_X_array_without_eval_group_raises():
+    # X=Dataset + raw-array eval entry still requires eval_group= (same rule as the array path)
+    X, y, g = _create_data(task="ranking", n_samples=200)
+    X_val, y_val, _ = _create_data(task="ranking", n_samples=100)
+    ds = lgb.Dataset(X, label=y, group=g)
+    msg = re.escape("eval_group cannot be None")
+    with pytest.raises(ValueError, match=msg):
+        lgb.LGBMRanker(n_estimators=5, num_leaves=5, verbose=-1, random_state=42).fit(ds, eval_X=X_val, eval_y=y_val)
+
+
+def test_fit_ranker_prebuilt_dataset_group_kwarg_sets_group_on_dataset():
+    X, y, g = _create_data(task="ranking", n_samples=200)
+    ds = lgb.Dataset(X, label=y)  # no group on the Dataset
+    m_ds = lgb.LGBMRanker(n_estimators=5, num_leaves=5, verbose=-1, random_state=42).fit(ds, group=g)
+    m_ar = lgb.LGBMRanker(n_estimators=5, num_leaves=5, verbose=-1, random_state=42).fit(X, y, group=g)
+    np.testing.assert_allclose(m_ds.predict(X), m_ar.predict(X), atol=1e-10)

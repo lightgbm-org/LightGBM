@@ -19,7 +19,7 @@ from urllib.parse import urlparse
 import numpy as np
 import scipy.sparse as ss
 
-from .basic import LightGBMError, _choose_param_value, _ConfigAliases, _log_info, _log_warning
+from .basic import Dataset, LightGBMError, _choose_param_value, _ConfigAliases, _log_info, _log_warning
 from .compat import (
     DASK_INSTALLED,
     PANDAS_INSTALLED,
@@ -1080,7 +1080,7 @@ class _DaskLGBMModel:
         *,
         model_factory: Type[LGBMModel],
         X: _DaskMatrixLike,
-        y: _DaskCollection,
+        y: Optional[_DaskCollection] = None,
         sample_weight: Optional[_DaskVectorLike] = None,
         init_score: Optional[_DaskCollection] = None,
         group: Optional[_DaskVectorLike] = None,
@@ -1096,6 +1096,8 @@ class _DaskLGBMModel:
         eval_at: Optional[Union[List[int], Tuple[int, ...]]] = None,
         **kwargs: Any,
     ) -> "_DaskLGBMModel":
+        if isinstance(X, Dataset):
+            raise LightGBMError("Passing a pre-built lightgbm.Dataset as X is not supported by DaskLGBM estimators")
         if not DASK_INSTALLED:
             raise LightGBMError("dask is required for lightgbm.dask")
         if not all((DASK_INSTALLED, PANDAS_INSTALLED, SKLEARN_INSTALLED)):
@@ -1104,6 +1106,7 @@ class _DaskLGBMModel:
         params = self.get_params(True)  # type: ignore[attr-defined]
         params.pop("client", None)
 
+        assert y is not None, "DaskLGBM requires y (the Dataset-only path is rejected above)"
         model = _train(
             client=_get_dask_client(self.client),
             data=X,
@@ -1219,7 +1222,7 @@ class DaskLGBMClassifier(LGBMClassifier, _DaskLGBMModel):
     def fit(  # type: ignore[override]
         self,
         X: _DaskMatrixLike,
-        y: _DaskCollection,
+        y: Optional[_DaskCollection] = None,
         sample_weight: Optional[_DaskVectorLike] = None,
         init_score: Optional[_DaskCollection] = None,
         eval_set: Optional[List[Tuple[_DaskMatrixLike, _DaskCollection]]] = None,
@@ -1427,7 +1430,7 @@ class DaskLGBMRegressor(LGBMRegressor, _DaskLGBMModel):
     def fit(  # type: ignore[override]
         self,
         X: _DaskMatrixLike,
-        y: _DaskCollection,
+        y: Optional[_DaskCollection] = None,
         sample_weight: Optional[_DaskVectorLike] = None,
         init_score: Optional[_DaskVectorLike] = None,
         eval_set: Optional[List[Tuple[_DaskMatrixLike, _DaskCollection]]] = None,
@@ -1600,7 +1603,7 @@ class DaskLGBMRanker(LGBMRanker, _DaskLGBMModel):
     def fit(  # type: ignore[override]
         self,
         X: _DaskMatrixLike,
-        y: _DaskCollection,
+        y: Optional[_DaskCollection] = None,
         sample_weight: Optional[_DaskVectorLike] = None,
         init_score: Optional[_DaskVectorLike] = None,
         group: Optional[_DaskVectorLike] = None,
