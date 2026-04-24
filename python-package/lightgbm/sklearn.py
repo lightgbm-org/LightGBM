@@ -255,8 +255,8 @@ class _EvalFunctionWrapper:
             ``func(y_true, y_pred)``,
             ``func(y_true, y_pred, weight)``
             or ``func(y_true, y_pred, weight, group)``
-            and returns (eval_name, eval_result, is_higher_better) or
-            list of (eval_name, eval_result, is_higher_better):
+            and returns (metric_name, metric_value, maximize) or
+            list of (metric_name, metric_value, maximize):
 
                 y_true : numpy 1-D array of shape = [n_samples]
                     The target values.
@@ -272,12 +272,12 @@ class _EvalFunctionWrapper:
                     sum(group) = n_samples.
                     For example, if you have a 100-document dataset with ``group = [10, 20, 40, 10, 10, 10]``, that means that you have 6 groups,
                     where the first 10 records are in the first group, records 11-30 are in the second group, records 31-70 are in the third group, etc.
-                eval_name : str
-                    The name of evaluation function (without whitespace).
-                eval_result : float
-                    The eval result.
-                is_higher_better : bool
-                    Is eval result higher better, e.g. AUC is ``is_higher_better``.
+                metric_name : str
+                    Unique identifier for the metric (e.g. "custom_adjusted_mse").
+                metric_value : float
+                    Value of the evaluation metric.
+                maximize : bool
+                    Are higher values better? e.g. ``True`` for AUC and ``False`` for binary error.
         """
         self.func = func
 
@@ -297,12 +297,12 @@ class _EvalFunctionWrapper:
 
         Returns
         -------
-        eval_name : str
-            The name of evaluation function (without whitespace).
-        eval_result : float
-            The eval result.
-        is_higher_better : bool
-            Is eval result higher better, e.g. AUC is ``is_higher_better``.
+        metric_name : str
+            Unique identifier for the metric (e.g. "custom_adjusted_mse").
+        metric_value : float
+            Value of the evaluation metric.
+        maximize : bool
+            Are higher values better? e.g. ``True`` for AUC and ``False`` for binary error.
         """
         labels = _get_label_from_constructed_dataset(dataset)
         argc = len(signature(self.func).parameters)
@@ -347,7 +347,8 @@ _lgbmmodel_doc_fit = """
             A list of (X, y) tuple pairs to use as validation sets.
             Use ``eval_X`` and ``eval_y`` instead.
     eval_names : list of str, or None, optional (default=None)
-        Names of eval_set.
+        Unique identifiers for each evaluation dataset.
+        Should be the same length as ``eval_set`` / ``eval_X``.
     eval_sample_weight : {eval_sample_weight_shape}
         Weights of eval data. Weights should be non-negative.
     eval_class_weight : list or None, optional (default=None)
@@ -397,8 +398,8 @@ _lgbmmodel_doc_custom_eval_note = """
     Custom eval function expects a callable with following signatures:
     ``func(y_true, y_pred)``, ``func(y_true, y_pred, weight)`` or
     ``func(y_true, y_pred, weight, group)``
-    and returns (eval_name, eval_result, is_higher_better) or
-    list of (eval_name, eval_result, is_higher_better):
+    and returns (metric_name, metric_value, maximize) or
+    list of (metric_name, metric_value, maximize):
 
         y_true : numpy 1-D array of shape = [n_samples]
             The target values.
@@ -414,12 +415,12 @@ _lgbmmodel_doc_custom_eval_note = """
             sum(group) = n_samples.
             For example, if you have a 100-document dataset with ``group = [10, 20, 40, 10, 10, 10]``, that means that you have 6 groups,
             where the first 10 records are in the first group, records 11-30 are in the second group, records 31-70 are in the third group, etc.
-        eval_name : str
-            The name of evaluation function (without whitespace).
-        eval_result : float
-            The eval result.
-        is_higher_better : bool
-            Is eval result higher better, e.g. AUC is ``is_higher_better``.
+        metric_name : str
+            Unique identifier for the metric (e.g. "custom_adjusted_mse").
+        metric_value : float
+            Value of the evaluation metric.
+        maximize : bool
+            Are higher values better? e.g. ``True`` for AUC and ``False`` for binary error.
 """
 
 _lgbmmodel_doc_predict = """

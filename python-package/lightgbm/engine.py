@@ -135,7 +135,7 @@ def train(
     feval : callable, list of callable, or None, optional (default=None)
         Customized evaluation function.
         Each evaluation function should accept two parameters: preds, eval_data,
-        and return (eval_name, eval_result, is_higher_better) or list of such tuples.
+        and return (metric_name, metric_value, maximize) or list of such tuples.
 
             preds : numpy 1-D array or numpy 2-D array (for multi-class task)
                 The predicted values.
@@ -144,12 +144,12 @@ def train(
                 e.g. they are raw margin instead of probability of positive class for binary task in this case.
             eval_data : Dataset
                 A ``Dataset`` to evaluate.
-            eval_name : str
-                The name of evaluation function (without whitespaces).
-            eval_result : float
-                The eval result.
-            is_higher_better : bool
-                Is eval result higher better, e.g. AUC is ``is_higher_better``.
+            metric_name : str
+                Unique identifier for the metric (e.g. "custom_adjusted_mse").
+            metric_value : float
+                Value of the evaluation metric.
+            maximize : bool
+                Are higher values better? e.g. ``True`` for AUC and ``False`` for binary error.
 
         To ignore the default metric corresponding to the used objective,
         set the ``metric`` parameter to the string ``"None"`` in ``params``.
@@ -346,8 +346,8 @@ def train(
             evaluation_result_list = [item[:4] for item in earlyStopException.best_score]
             break
     booster.best_score = defaultdict(OrderedDict)
-    for dataset_name, eval_name, score, _ in evaluation_result_list:
-        booster.best_score[dataset_name][eval_name] = score
+    for dataset_name, metric_name, metric_value, _ in evaluation_result_list:
+        booster.best_score[dataset_name][metric_name] = metric_value
     if not keep_training_booster:
         booster.model_from_string(booster.model_to_string()).free_dataset()
     return booster
@@ -600,7 +600,7 @@ def _agg_cv_result(
     # build up 2 maps, of the form:
     #
     # OrderedDict{
-    #     (<dataset_name>, <metric_name>): <is_higher_better>
+    #     (<dataset_name>, <metric_name>): <maximize>
     # }
     #
     # OrderedDict{
@@ -610,16 +610,16 @@ def _agg_cv_result(
     metric_types: Dict[Tuple[str, str], bool] = OrderedDict()
     metric_values: Dict[Tuple[str, str], List[float]] = OrderedDict()
     for one_result in raw_results:
-        for dataset_name, metric_name, metric_value, is_higher_better in one_result:
+        for dataset_name, metric_name, metric_value, maximize in one_result:
             key = (dataset_name, metric_name)
-            metric_types[key] = is_higher_better
+            metric_types[key] = maximize
             metric_values.setdefault(key, [])
             metric_values[key].append(metric_value)
 
     # turn that into a list of tuples of the form:
     #
     # [
-    #     (<dataset_name>, <metric_name>, mean(<values>), <is_higher_better>, std_dev(<values>))
+    #     (<dataset_name>, <metric_name>, mean(<values>), <maximize>, std_dev(<values>))
     # ]
     return [(k[0], k[1], float(np.mean(v)), metric_types[k], float(np.std(v))) for k, v in metric_values.items()]
 
@@ -670,7 +670,7 @@ def cv(
     feval : callable, list of callable, or None, optional (default=None)
         Customized evaluation function.
         Each evaluation function should accept two parameters: preds, eval_data,
-        and return (eval_name, eval_result, is_higher_better) or list of such tuples.
+        and return (metric_name, metric_value, maximize) or list of such tuples.
 
             preds : numpy 1-D array or numpy 2-D array (for multi-class task)
                 The predicted values.
@@ -679,12 +679,12 @@ def cv(
                 e.g. they are raw margin instead of probability of positive class for binary task in this case.
             eval_data : Dataset
                 A ``Dataset`` to evaluate.
-            eval_name : str
-                The name of evaluation function (without whitespace).
-            eval_result : float
-                The eval result.
-            is_higher_better : bool
-                Is eval result higher better, e.g. AUC is ``is_higher_better``.
+            metric_name : str
+                Unique identifier for the metric (e.g. "custom_adjusted_mse").
+            metric_value : float
+                Value of the evaluation metric.
+            maximize : bool
+                Are higher values better? e.g. ``True`` for AUC and ``False`` for binary error.
 
         To ignore the default metric corresponding to the used objective,
         set ``metrics`` to the string ``"None"``.

@@ -8,20 +8,15 @@ on:
         description: |
           Branch in lightgbm-org/LightGBM to update.
 
+# automatically cancel in-progress builds if another commit is pushed
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+# default to 0 permissions
+# (job-level overrides add the minimal permissions needed)
 permissions:
-  actions: none
-  checks: none
-  contents: write
-  deployments: none
-  discussions: none
-  id-token: write
-  issues: none
-  packages: none
-  pages: none
-  pull-requests: read
-  repository-projects: none
-  security-events: none
-  statuses: none
+  contents: none
 
 jobs:
   r-configure:
@@ -29,6 +24,10 @@ jobs:
     timeout-minutes: 60
     runs-on: ubuntu-latest
     container: "ubuntu:22.04"
+    permissions:
+      contents: write
+      id-token: write
+      pull-requests: read
     steps:
       - name: Install essential software before checkout
         run: |

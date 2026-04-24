@@ -52,6 +52,7 @@ from .utils import (
 
 SKLEARN_MAJOR, SKLEARN_MINOR, *_ = _sklearn_version.split(".")
 SKLEARN_VERSION_GTE_1_6 = (int(SKLEARN_MAJOR), int(SKLEARN_MINOR)) >= (1, 6)
+SKLEARN_VERSION_GTE_1_7 = (int(SKLEARN_MAJOR), int(SKLEARN_MINOR)) >= (1, 7)
 
 decreasing_generator = itertools.count(0, -1)
 estimator_classes = (lgb.LGBMModel, lgb.LGBMClassifier, lgb.LGBMRegressor, lgb.LGBMRanker)
@@ -453,7 +454,15 @@ def test_classifier_chain():
     X, y = make_multilabel_classification(n_samples=100, n_features=20, n_classes=n_outputs, random_state=0)
     X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.1, random_state=42)
     order = [2, 0, 1]
-    clf = ClassifierChain(base_estimator=lgb.LGBMClassifier(n_estimators=10), order=order, random_state=42)
+    # 'base_estimator' parameter was deprecated in scikit-learn 1.7 and removed in 1.9
+    #
+    #  * https://github.com/scikit-learn/scikit-learn/pull/30152
+    #  * https://github.com/scikit-learn/scikit-learn/pull/33750
+    #
+    if SKLEARN_VERSION_GTE_1_7:
+        clf = ClassifierChain(estimator=lgb.LGBMClassifier(n_estimators=10), order=order, random_state=42)
+    else:
+        clf = ClassifierChain(base_estimator=lgb.LGBMClassifier(n_estimators=10), order=order, random_state=42)
     clf.fit(X_train, y_train)
     score = clf.score(X_test, y_test)
     assert score >= 0.2
@@ -470,7 +479,15 @@ def test_regressor_chain():
     X, y = bunch["data"], bunch["target"]
     X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.1, random_state=42)
     order = [2, 0, 1]
-    reg = RegressorChain(base_estimator=lgb.LGBMRegressor(n_estimators=10), order=order, random_state=42)
+    # 'base_estimator' parameter was deprecated in scikit-learn 1.7 and removed in 1.9
+    #
+    #  * https://github.com/scikit-learn/scikit-learn/pull/30152
+    #  * https://github.com/scikit-learn/scikit-learn/pull/33750
+    #
+    if SKLEARN_VERSION_GTE_1_7:
+        reg = RegressorChain(estimator=lgb.LGBMRegressor(n_estimators=10), order=order, random_state=42)
+    else:
+        reg = RegressorChain(base_estimator=lgb.LGBMRegressor(n_estimators=10), order=order, random_state=42)
     reg.fit(X_train, y_train)
     y_pred = reg.predict(X_test)
     _, score, _ = mse(y_test, y_pred)

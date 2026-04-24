@@ -482,7 +482,8 @@ def _train(
         lightgbm estimator is not trained using any chunks of a particular eval set, its corresponding component
         of ``evals_result_`` and ``best_score_`` will be empty dictionaries.
     eval_names : list of str, or None, optional (default=None)
-        Names of eval_set.
+        Unique identifiers for each evaluation dataset.
+        Should be the same length as ``eval_set`` / ``eval_X``.
     eval_X : Dask Array or Dask DataFrame, tuple thereof or None, optional (default=None)
         Feature matrix or tuple thereof, e.g. ``(X_val0, X_val1)``, to use as validation sets.
     eval_y : Dask Array or Dask DataFrame or Dask Series, tuple thereof or None, optional (default=None)

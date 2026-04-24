@@ -566,7 +566,7 @@ class FeatureGroup {
     }
   }
 
-  uint32_t feature_max_bin(const int sub_feature_index) {
+  uint32_t feature_max_bin(const int sub_feature_index) const {
     if (!is_multi_val_) {
       return bin_offsets_[sub_feature_index + 1] - 1;
     } else {
@@ -575,7 +575,7 @@ class FeatureGroup {
     }
   }
 
-  uint32_t feature_min_bin(const int sub_feature_index) {
+  uint32_t feature_min_bin(const int sub_feature_index) const {
     if (!is_multi_val_) {
       return bin_offsets_[sub_feature_index];
     } else {

@@ -7,6 +7,15 @@ on:
   schedule:
     - cron: '0 8 * * *'
 
+# only 1 job running in the repo at any time
+concurrency:
+  group: lock
+
+# default to 0 permissions
+# (job-level overrides add the minimal permissions needed)
+permissions:
+  contents: none
+
 env:
   COMPILER: gcc
   OS_NAME: 'linux'
@@ -16,6 +25,8 @@ jobs:
   check-links:
     timeout-minutes: 60
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     steps:
       - name: Checkout repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
