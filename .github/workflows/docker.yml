@@ -8,6 +8,13 @@ on:
     branches:
       - master
   workflow_dispatch:
+    inputs:
+      test-gpu:
+        type: boolean
+        default: false
+        description: |
+          If true, also run tests for GPU images.
+          False by default, because it requires GPU runners that cost money.
 
 # automatically cancel in-progress builds if another commit is pushed
 concurrency:
@@ -39,7 +46,7 @@ jobs:
         run: |
           docker build \
             -t lightgbm:cli \
-            --build-arg LIGHTGBM_GIT_REF=${LIGHTGBM_GIT_REF} \
+            --build-arg LIGHTGBM_GIT_REF="${LIGHTGBM_GIT_REF}" \
             --build-arg LIGHTGBM_GIT_URL=https://github.com/${{ github.repository }} \
             - < ./docker/dockerfile-cli
       - name: dockerfile-cli (test)
@@ -55,7 +62,7 @@ jobs:
         run: |
           docker build \
             -t lightgbm:r \
-            --build-arg LIGHTGBM_GIT_REF=${LIGHTGBM_GIT_REF} \
+            --build-arg LIGHTGBM_GIT_REF="${LIGHTGBM_GIT_REF}" \
             --build-arg LIGHTGBM_GIT_URL=https://github.com/${{ github.repository }} \
             - < ./docker/dockerfile-r
       - name: dockerfile-r (test)
@@ -70,7 +77,7 @@ jobs:
         run: |
           docker build \
             -t lightgbm:python \
-            --build-arg LIGHTGBM_GIT_REF=${LIGHTGBM_GIT_REF} \
+            --build-arg LIGHTGBM_GIT_REF="${LIGHTGBM_GIT_REF}" \
             --build-arg LIGHTGBM_GIT_URL=https://github.com/${{ github.repository }} \
             - < ./docker/dockerfile-python
       - name: dockerfile-python (test)
@@ -81,7 +88,8 @@ jobs:
             python -c "import lightgbm; print(f'lightgbm version: {lightgbm.__version__}')"
   build-gpu:
     name: build (GPU)
-    runs-on: LightGBM-GPU
+    # ref: https://docs.github.com/en/actions/concepts/runners/about-larger-runners#specifications-for-gpu-larger-runners
+    runs-on: github-hosted-linux-gpu-amd64
     permissions:
       contents: read
     steps:
@@ -98,16 +106,23 @@ jobs:
         run: |
           docker build \
             -t lightgbm:gpu \
-            --build-arg LIGHTGBM_GIT_REF=${LIGHTGBM_GIT_REF} \
+            --build-arg LIGHTGBM_GIT_REF="${LIGHTGBM_GIT_REF}" \
             --build-arg LIGHTGBM_GIT_URL=https://github.com/${{ github.repository }} \
             - < ./docker/gpu/dockerfile.gpu
+      - name: dockerfile.gpu (test)
+        run: |
+          docker run \
+            --entrypoint="" \
+            --rm \
+            -t lightgbm:gpu \
+            python -c "import lightgbm; print(f'lightgbm version: {lightgbm.__version__}')"
       - name: dockerfile-cli-only.gpu (build)
         env:
           LIGHTGBM_GIT_REF: ${{ github.head_ref }}
         run: |
           docker build \
             -t lightgbm:cli-only.gpu
-            --build-arg LIGHTGBM_GIT_REF=${LIGHTGBM_GIT_REF} \
+            --build-arg LIGHTGBM_GIT_REF="${LIGHTGBM_GIT_REF}" \
             --build-arg LIGHTGBM_GIT_URL=https://github.com/${{ github.repository }} \
             - < ./docker/gpu/dockerfile-cli-only.gpu
       - name: dockerfile-cli-only.gpu (test)
@@ -123,10 +138,11 @@ jobs:
         run: |
           docker build \
             -t lightgbm:cli-only-distroless.gpu \
-            --build-arg LIGHTGBM_GIT_REF=${LIGHTGBM_GIT_REF} \
+            --build-arg LIGHTGBM_GIT_REF="${LIGHTGBM_GIT_REF}" \
             --build-arg LIGHTGBM_GIT_URL=https://github.com/${{ github.repository }} \
             - < ./docker/gpu/dockerfile-cli-only-distroless.gpu
       - name: dockerfile-cli-only-distroless.gpu (test)
+        if: ${{ inputs.test-gpu }}
         run: |
           docker run \
             --entrypoint="" \
