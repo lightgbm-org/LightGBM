@@ -2,6 +2,7 @@
 """Scikit-learn wrapper interface for LightGBM."""
 
 import copy
+import warnings
 from inspect import signature
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Callable, Dict, List, Optional, Tuple, Union
@@ -13,6 +14,7 @@ from .basic import (
     _MULTICLASS_OBJECTIVES,
     Booster,
     Dataset,
+    LGBMDeprecationWarning,
     LightGBMError,
     _choose_param_value,
     _ConfigAliases,
@@ -23,11 +25,13 @@ from .basic import (
     _LGBM_GroupType,
     _LGBM_InitScoreType,
     _LGBM_LabelType,
+    _LGBM_PredictReturnType,
     _LGBM_WeightType,
     _log_warning,
 )
 from .callback import _EvalResultDict, record_evaluation
 from .compat import (
+    SKLEARN_CHECK_SAMPLE_WEIGHT_HAS_ALLOW_ZERO_WEIGHTS_ARG,
     SKLEARN_INSTALLED,
     LGBMNotFittedError,
     _LGBMAssertAllFinite,
@@ -122,7 +126,7 @@ def _get_group_from_constructed_dataset(dataset: Dataset) -> Optional[np.ndarray
     group = dataset.get_group()
     error_msg = (
         "Estimators in lightgbm.sklearn should only retrieve query groups from a constructed Dataset. "
-        "If you're seeing this message, it's a bug in lightgbm. Please report it at https://github.com/microsoft/LightGBM/issues."
+        "If you're seeing this message, it's a bug in lightgbm. Please report it at https://github.com/lightgbm-org/LightGBM/issues."
     )
     assert group is None or isinstance(group, np.ndarray), error_msg
     return group
@@ -132,7 +136,7 @@ def _get_label_from_constructed_dataset(dataset: Dataset) -> np.ndarray:
     label = dataset.get_label()
     error_msg = (
         "Estimators in lightgbm.sklearn should only retrieve labels from a constructed Dataset. "
-        "If you're seeing this message, it's a bug in lightgbm. Please report it at https://github.com/microsoft/LightGBM/issues."
+        "If you're seeing this message, it's a bug in lightgbm. Please report it at https://github.com/lightgbm-org/LightGBM/issues."
     )
     assert isinstance(label, np.ndarray), error_msg
     return label
@@ -142,7 +146,7 @@ def _get_weight_from_constructed_dataset(dataset: Dataset) -> Optional[np.ndarra
     weight = dataset.get_weight()
     error_msg = (
         "Estimators in lightgbm.sklearn should only retrieve weights from a constructed Dataset. "
-        "If you're seeing this message, it's a bug in lightgbm. Please report it at https://github.com/microsoft/LightGBM/issues."
+        "If you're seeing this message, it's a bug in lightgbm. Please report it at https://github.com/lightgbm-org/LightGBM/issues."
     )
     assert weight is None or isinstance(weight, np.ndarray), error_msg
     return weight
@@ -251,8 +255,8 @@ class _EvalFunctionWrapper:
             ``func(y_true, y_pred)``,
             ``func(y_true, y_pred, weight)``
             or ``func(y_true, y_pred, weight, group)``
-            and returns (eval_name, eval_result, is_higher_better) or
-            list of (eval_name, eval_result, is_higher_better):
+            and returns (metric_name, metric_value, maximize) or
+            list of (metric_name, metric_value, maximize):
 
                 y_true : numpy 1-D array of shape = [n_samples]
                     The target values.
@@ -268,12 +272,12 @@ class _EvalFunctionWrapper:
                     sum(group) = n_samples.
                     For example, if you have a 100-document dataset with ``group = [10, 20, 40, 10, 10, 10]``, that means that you have 6 groups,
                     where the first 10 records are in the first group, records 11-30 are in the second group, records 31-70 are in the third group, etc.
-                eval_name : str
-                    The name of evaluation function (without whitespace).
-                eval_result : float
-                    The eval result.
-                is_higher_better : bool
-                    Is eval result higher better, e.g. AUC is ``is_higher_better``.
+                metric_name : str
+                    Unique identifier for the metric (e.g. "custom_adjusted_mse").
+                metric_value : float
+                    Value of the evaluation metric.
+                maximize : bool
+                    Are higher values better? e.g. ``True`` for AUC and ``False`` for binary error.
         """
         self.func = func
 
@@ -293,12 +297,12 @@ class _EvalFunctionWrapper:
 
         Returns
         -------
-        eval_name : str
-            The name of evaluation function (without whitespace).
-        eval_result : float
-            The eval result.
-        is_higher_better : bool
-            Is eval result higher better, e.g. AUC is ``is_higher_better``.
+        metric_name : str
+            Unique identifier for the metric (e.g. "custom_adjusted_mse").
+        metric_value : float
+            Value of the evaluation metric.
+        maximize : bool
+            Are higher values better? e.g. ``True`` for AUC and ``False`` for binary error.
         """
         labels = _get_label_from_constructed_dataset(dataset)
         argc = len(signature(self.func).parameters)
@@ -339,9 +343,12 @@ _lgbmmodel_doc_fit = """
         For example, if you have a 100-document dataset with ``group = [10, 20, 40, 10, 10, 10]``, that means that you have 6 groups,
         where the first 10 records are in the first group, records 11-30 are in the second group, records 31-70 are in the third group, etc.
     eval_set : list or None, optional (default=None)
-        A list of (X, y) tuple pairs to use as validation sets.
+        .. deprecated:: 4.7.0
+            A list of (X, y) tuple pairs to use as validation sets.
+            Use ``eval_X`` and ``eval_y`` instead.
     eval_names : list of str, or None, optional (default=None)
-        Names of eval_set.
+        Unique identifiers for each evaluation dataset.
+        Should be the same length as ``eval_set`` / ``eval_X``.
     eval_sample_weight : {eval_sample_weight_shape}
         Weights of eval data. Weights should be non-negative.
     eval_class_weight : list or None, optional (default=None)
@@ -374,6 +381,10 @@ _lgbmmodel_doc_fit = """
         See Callbacks in Python API for more information.
     init_model : str, pathlib.Path, Booster, LGBMModel or None, optional (default=None)
         Filename of LightGBM model, Booster instance or LGBMModel instance used for continue training.
+    eval_X : {X_shape}, or tuple of such inputs, or None, optional (default=None)
+        Feature matrix or tuple thereof, e.g. ``(X_val0, X_val1)``, to use as validation sets.
+    eval_y : {y_shape}, or tuple of such inputs, or None, optional (default=None)
+        Target values or tuple thereof, e.g. ``(y_val0, y_val1)``, to use as validation sets.
 
     Returns
     -------
@@ -387,8 +398,8 @@ _lgbmmodel_doc_custom_eval_note = """
     Custom eval function expects a callable with following signatures:
     ``func(y_true, y_pred)``, ``func(y_true, y_pred, weight)`` or
     ``func(y_true, y_pred, weight, group)``
-    and returns (eval_name, eval_result, is_higher_better) or
-    list of (eval_name, eval_result, is_higher_better):
+    and returns (metric_name, metric_value, maximize) or
+    list of (metric_name, metric_value, maximize):
 
         y_true : numpy 1-D array of shape = [n_samples]
             The target values.
@@ -404,12 +415,12 @@ _lgbmmodel_doc_custom_eval_note = """
             sum(group) = n_samples.
             For example, if you have a 100-document dataset with ``group = [10, 20, 40, 10, 10, 10]``, that means that you have 6 groups,
             where the first 10 records are in the first group, records 11-30 are in the second group, records 31-70 are in the third group, etc.
-        eval_name : str
-            The name of evaluation function (without whitespace).
-        eval_result : float
-            The eval result.
-        is_higher_better : bool
-            Is eval result higher better, e.g. AUC is ``is_higher_better``.
+        metric_name : str
+            Unique identifier for the metric (e.g. "custom_adjusted_mse").
+        metric_value : float
+            Value of the evaluation metric.
+        maximize : bool
+            Are higher values better? e.g. ``True`` for AUC and ``False`` for binary error.
 """
 
 _lgbmmodel_doc_predict = """
@@ -481,6 +492,42 @@ def _extract_evaluation_meta_data(
         return collection.get(i, None)
     else:
         raise TypeError(f"{name} should be dict or list")
+
+
+def _validate_eval_set_Xy(
+    *,
+    eval_set: Optional[List[_LGBM_ScikitValidSet]],
+    eval_X: Optional[Union[_LGBM_ScikitMatrixLike, Tuple[_LGBM_ScikitMatrixLike]]],
+    eval_y: Optional[Union[_LGBM_LabelType, Tuple[_LGBM_LabelType]]],
+) -> Optional[List[_LGBM_ScikitValidSet]]:
+    """Validate eval args.
+
+    Returns
+    -------
+    eval_set
+    """
+    if eval_set is not None:
+        msg = "The argument 'eval_set' is deprecated, use 'eval_X' and 'eval_y' instead."
+        warnings.warn(msg, category=LGBMDeprecationWarning, stacklevel=2)
+        if eval_X is not None or eval_y is not None:
+            raise ValueError("Specify either 'eval_set' or 'eval_X' and 'eval_y', but not both.")
+        if isinstance(eval_set, tuple):
+            return [eval_set]
+        else:
+            return eval_set
+    if (eval_X is None) != (eval_y is None):
+        raise ValueError("You must specify eval_X and eval_y, not just one of them.")
+    if eval_set is None and eval_X is not None:
+        if isinstance(eval_X, tuple) != isinstance(eval_y, tuple):
+            raise ValueError("If eval_X is a tuple, y_val must be a tuple of same length, and vice versa.")
+        if isinstance(eval_X, tuple) and isinstance(eval_y, tuple):
+            if len(eval_X) != len(eval_y):
+                raise ValueError("If eval_X is a tuple, y_val must be a tuple of same length, and vice versa.")
+        if isinstance(eval_X, tuple) and isinstance(eval_y, tuple):
+            eval_set = list(zip(eval_X, eval_y))
+        else:
+            eval_set = [(eval_X, eval_y)]
+    return eval_set
 
 
 class LGBMModel(_LGBMModelBase):
@@ -670,28 +717,46 @@ class LGBMModel(_LGBMModelBase):
     # scikit-learn 1.6 introduced an __sklearn__tags() method intended to replace _more_tags().
     # _more_tags() can be removed whenever lightgbm's minimum supported scikit-learn version
     # is >=1.6.
-    # ref: https://github.com/microsoft/LightGBM/pull/6651
+    # ref: https://github.com/lightgbm-org/LightGBM/pull/6651
     def _more_tags(self) -> Dict[str, Any]:
         check_sample_weight_str = (
             "In LightGBM, setting a sample's weight to 0 can produce a different result than omitting the sample. "
             "Such samples intentionally still affect count-based measures like 'min_data_in_leaf' "
-            "(https://github.com/microsoft/LightGBM/issues/5626#issuecomment-1712706678) and the estimated distribution "
-            "of features for Dataset construction (see https://github.com/microsoft/LightGBM/issues/5553)."
+            "(https://github.com/lightgbm-org/LightGBM/issues/5626#issuecomment-1712706678) and the estimated distribution "
+            "of features for Dataset construction (see https://github.com/lightgbm-org/LightGBM/issues/5553)."
         )
         # "check_sample_weight_equivalence" can be removed when lightgbm's
         # minimum supported scikit-learn version is at least 1.6
         # ref: https://github.com/scikit-learn/scikit-learn/pull/30137
+        xfail_checks = {
+            "check_no_attributes_set_in_init": (
+                "scikit-learn incorrectly asserts that private attributes "
+                "cannot be set in __init__: "
+                "(see https://github.com/lightgbm-org/LightGBM/issues/2628)"
+            ),
+            "check_all_zero_sample_weights_error": (
+                "Beginning in scikit-learn 1.9, by default estimators are expected to reject "
+                "sample weight arrays that are all-0. LightGBM intentionally accepts such arrays. "
+                "LightGBM supports some operations where training on an all-0-weight input could make sense, "
+                "like batch updates with training continuation or manual model creation with forced splits."
+            ),
+            "check_sample_weight_equivalence": check_sample_weight_str,
+            "check_sample_weight_equivalence_on_dense_data": check_sample_weight_str,
+            "check_sample_weight_equivalence_on_sparse_data": check_sample_weight_str,
+        }
+        # "check_decision_proba_consistency" can be removed when lightgbm's
+        # minimum supported scikit-learn version is at least 1.2
+        sklearn_major, sklearn_minor, *_ = _sklearn_version.split(".")
+        if (int(sklearn_major), int(sklearn_minor)) < (1, 2):
+            xfail_checks["check_decision_proba_consistency"] = (
+                "decision_function() returns raw margins while predict_proba() applies sigmoid in C++ "
+                "independently, causing different tie structures after rounding. "
+                "scikit-learn >= 1.2 relaxed this check to accept monotonically consistent scores."
+            )
         return {
             "allow_nan": True,
             "X_types": ["2darray", "sparse", "1dlabels"],
-            "_xfail_checks": {
-                "check_no_attributes_set_in_init": "scikit-learn incorrectly asserts that private attributes "
-                "cannot be set in __init__: "
-                "(see https://github.com/microsoft/LightGBM/issues/2628)",
-                "check_sample_weight_equivalence": check_sample_weight_str,
-                "check_sample_weight_equivalence_on_dense_data": check_sample_weight_str,
-                "check_sample_weight_equivalence_on_sparse_data": check_sample_weight_str,
-            },
+            "_xfail_checks": xfail_checks,
         }
 
     @staticmethod
@@ -922,12 +987,15 @@ class LGBMModel(_LGBMModelBase):
         categorical_feature: _LGBM_CategoricalFeatureConfiguration = "auto",
         callbacks: Optional[List[Callable]] = None,
         init_model: Optional[Union[str, Path, Booster, "LGBMModel"]] = None,
+        *,
+        eval_X: Optional[Union[_LGBM_ScikitMatrixLike, Tuple[_LGBM_ScikitMatrixLike]]] = None,
+        eval_y: Optional[Union[_LGBM_LabelType, Tuple[_LGBM_LabelType]]] = None,
     ) -> "LGBMModel":
         """Docstring is set after definition, using a template."""
         params = self._process_params(stage="fit")
 
         # Do not modify original args in fit function
-        # Refer to https://github.com/microsoft/LightGBM/pull/2619
+        # Refer to https://github.com/lightgbm-org/LightGBM/pull/2619
         eval_metric_list: List[Union[str, _LGBM_ScikitCustomEvalFunction]]
         if eval_metric is None:
             eval_metric_list = []
@@ -959,7 +1027,10 @@ class LGBMModel(_LGBMModelBase):
                 ensure_min_samples=2,
             )
             if sample_weight is not None:
-                sample_weight = _LGBMCheckSampleWeight(sample_weight, _X)
+                if SKLEARN_CHECK_SAMPLE_WEIGHT_HAS_ALLOW_ZERO_WEIGHTS_ARG:
+                    sample_weight = _LGBMCheckSampleWeight(sample_weight, _X, allow_all_zero_weights=True)
+                else:
+                    sample_weight = _LGBMCheckSampleWeight(sample_weight, _X)
         else:
             _X, _y = X, y
 
@@ -987,9 +1058,15 @@ class LGBMModel(_LGBMModelBase):
         )
 
         valid_sets: List[Dataset] = []
+        eval_set = _validate_eval_set_Xy(eval_set=eval_set, eval_X=eval_X, eval_y=eval_y)
         if eval_set is not None:
-            if isinstance(eval_set, tuple):
-                eval_set = [eval_set]
+            # check eval_group (only relevant for ranking tasks)
+            if eval_group is not None:
+                if len(eval_group) != len(eval_set):
+                    raise ValueError(
+                        f"Length of eval_group ({len(eval_group)}) not equal to length of eval_set ({len(eval_set)})"
+                    )
+
             for i, valid_data in enumerate(eval_set):
                 # reduce cost for prediction training data
                 if valid_data[0] is X and valid_data[1] is y:
@@ -1100,7 +1177,7 @@ class LGBMModel(_LGBMModelBase):
         pred_contrib: bool = False,
         validate_features: bool = False,
         **kwargs: Any,
-    ):
+    ) -> _LGBM_PredictReturnType:
         """Docstring is set after definition, using a template."""
         if not self.__sklearn_is_fitted__():
             raise LGBMNotFittedError("Estimator not fitted, call fit before exploiting the model.")
@@ -1393,6 +1470,9 @@ class LGBMRegressor(_LGBMRegressorBase, LGBMModel):
         categorical_feature: _LGBM_CategoricalFeatureConfiguration = "auto",
         callbacks: Optional[List[Callable]] = None,
         init_model: Optional[Union[str, Path, Booster, LGBMModel]] = None,
+        *,
+        eval_X: Optional[Union[_LGBM_ScikitMatrixLike, Tuple[_LGBM_ScikitMatrixLike]]] = None,
+        eval_y: Optional[Union[_LGBM_LabelType, Tuple[_LGBM_LabelType]]] = None,
     ) -> "LGBMRegressor":
         """Docstring is inherited from the LGBMModel."""
         super().fit(
@@ -1401,6 +1481,8 @@ class LGBMRegressor(_LGBMRegressorBase, LGBMModel):
             sample_weight=sample_weight,
             init_score=init_score,
             eval_set=eval_set,
+            eval_X=eval_X,
+            eval_y=eval_y,
             eval_names=eval_names,
             eval_sample_weight=eval_sample_weight,
             eval_init_score=eval_init_score,
@@ -1487,8 +1569,9 @@ class LGBMClassifier(_LGBMClassifierBase, LGBMModel):
 
     def __sklearn_tags__(self) -> "_sklearn_Tags":
         tags = super().__sklearn_tags__()
-        tags.classifier_tags.multi_class = True
-        tags.classifier_tags.multi_label = False
+        if tags is not None:
+            tags.classifier_tags.multi_class = True
+            tags.classifier_tags.multi_label = False
         return tags
 
     def fit(  # type: ignore[override]
@@ -1507,6 +1590,9 @@ class LGBMClassifier(_LGBMClassifierBase, LGBMModel):
         categorical_feature: _LGBM_CategoricalFeatureConfiguration = "auto",
         callbacks: Optional[List[Callable]] = None,
         init_model: Optional[Union[str, Path, Booster, LGBMModel]] = None,
+        *,
+        eval_X: Optional[Union[_LGBM_ScikitMatrixLike, Tuple[_LGBM_ScikitMatrixLike]]] = None,
+        eval_y: Optional[Union[_LGBM_LabelType, Tuple[_LGBM_LabelType]]] = None,
     ) -> "LGBMClassifier":
         """Docstring is inherited from the LGBMModel."""
         _LGBMAssertAllFinite(y)
@@ -1564,6 +1650,8 @@ class LGBMClassifier(_LGBMClassifierBase, LGBMModel):
             init_score=init_score,
             eval_set=valid_sets,
             eval_names=eval_names,
+            eval_X=eval_X,
+            eval_y=eval_y,
             eval_sample_weight=eval_sample_weight,
             eval_class_weight=eval_class_weight,
             eval_init_score=eval_init_score,
@@ -1592,7 +1680,7 @@ class LGBMClassifier(_LGBMClassifierBase, LGBMModel):
         pred_contrib: bool = False,
         validate_features: bool = False,
         **kwargs: Any,
-    ):
+    ) -> _LGBM_PredictReturnType:
         """Docstring is inherited from the LGBMModel."""
         result = self.predict_proba(
             X=X,
@@ -1622,7 +1710,7 @@ class LGBMClassifier(_LGBMClassifierBase, LGBMModel):
         pred_contrib: bool = False,
         validate_features: bool = False,
         **kwargs: Any,
-    ):
+    ) -> _LGBM_PredictReturnType:
         """Docstring is set after definition, using a template."""
         result = super().predict(
             X=X,
@@ -1644,6 +1732,11 @@ class LGBMClassifier(_LGBMClassifierBase, LGBMModel):
         elif self.__is_multiclass or raw_score or pred_leaf or pred_contrib:  # type: ignore [operator]
             return result
         else:
+            error_msg = (
+                "predict() should return np.ndarray when pred_contrib=False. "
+                "If you're seeing this message, it's a bug in lightgbm. Please report it at https://github.com/lightgbm-org/LightGBM/issues."
+            )
+            assert isinstance(result, np.ndarray), error_msg
             return np.vstack((1.0 - result, result)).transpose()
 
     predict_proba.__doc__ = _lgbmmodel_doc_predict.format(
@@ -1654,6 +1747,49 @@ class LGBMClassifier(_LGBMClassifierBase, LGBMModel):
         X_leaves_shape="array-like of shape = [n_samples, n_trees] or shape = [n_samples, n_trees * n_classes]",
         X_SHAP_values_shape="array-like of shape = [n_samples, n_features + 1] or shape = [n_samples, (n_features + 1) * n_classes] or list with n_classes length of such objects",
     )
+
+    def decision_function(
+        self,
+        X: _LGBM_ScikitMatrixLike,
+        *,
+        start_iteration: int = 0,
+        num_iteration: Optional[int] = None,
+        validate_features: bool = False,
+        **kwargs: Any,
+    ) -> _LGBM_PredictReturnType:
+        """Return the raw margin score for each sample.
+
+        Parameters
+        ----------
+        X : numpy array, pandas DataFrame, scipy.sparse, list of lists of int or float of shape = [n_samples, n_features]
+            Input features matrix.
+        start_iteration : int, optional (default=0)
+            Start index of the iteration to predict.
+            If <= 0, starts from the first iteration.
+        num_iteration : int or None, optional (default=None)
+            Total number of iterations used in the prediction.
+            If None, if the best iteration exists and start_iteration <= 0, the best iteration is used;
+            otherwise, all iterations from ``start_iteration`` are used (no limits).
+            If <= 0, all iterations from ``start_iteration`` are used (no limits).
+        validate_features : bool, optional (default=False)
+            If True, ensure that the features used to predict match the ones used to train.
+            Used only if data is pandas DataFrame.
+        **kwargs
+            Other parameters forwarded to ``predict()``.
+
+        Returns
+        -------
+        raw_score : array-like of shape = [n_samples] or shape = [n_samples, n_classes]
+            The predicted values.
+        """
+        return super().predict(
+            X=X,
+            raw_score=True,
+            start_iteration=start_iteration,
+            num_iteration=num_iteration,
+            validate_features=validate_features,
+            **kwargs,
+        )
 
     @property
     def classes_(self) -> np.ndarray:
@@ -1754,27 +1890,17 @@ class LGBMRanker(LGBMModel):
         categorical_feature: _LGBM_CategoricalFeatureConfiguration = "auto",
         callbacks: Optional[List[Callable]] = None,
         init_model: Optional[Union[str, Path, Booster, LGBMModel]] = None,
+        *,
+        eval_X: Optional[Union[_LGBM_ScikitMatrixLike, Tuple[_LGBM_ScikitMatrixLike]]] = None,
+        eval_y: Optional[Union[_LGBM_LabelType, Tuple[_LGBM_LabelType]]] = None,
     ) -> "LGBMRanker":
         """Docstring is inherited from the LGBMModel."""
         # check group data
         if group is None:
             raise ValueError("Should set group for ranking task")
 
-        if eval_set is not None:
-            if eval_group is None:
-                raise ValueError("Eval_group cannot be None when eval_set is not None")
-            if len(eval_group) != len(eval_set):
-                raise ValueError("Length of eval_group should be equal to eval_set")
-            if (
-                isinstance(eval_group, dict)
-                and any(i not in eval_group or eval_group[i] is None for i in range(len(eval_group)))
-                or isinstance(eval_group, list)
-                and any(group is None for group in eval_group)
-            ):
-                raise ValueError(
-                    "Should set group for all eval datasets for ranking task; "
-                    "if you use dict, the index should start from 0"
-                )
+        if eval_group is None and (eval_set is not None or eval_X is not None or eval_y is not None):
+            raise ValueError("eval_group cannot be None if any of eval_set, eval_X, or eval_y are provided")
 
         self._eval_at = eval_at
         super().fit(
@@ -1785,6 +1911,8 @@ class LGBMRanker(LGBMModel):
             group=group,
             eval_set=eval_set,
             eval_names=eval_names,
+            eval_X=eval_X,
+            eval_y=eval_y,
             eval_sample_weight=eval_sample_weight,
             eval_init_score=eval_init_score,
             eval_group=eval_group,

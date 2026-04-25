@@ -1,10 +1,11 @@
 /*!
- * Copyright (c) 2016 Microsoft Corporation. All rights reserved.
+ * Copyright (c) 2016-2026 Microsoft Corporation. All rights reserved.
+ * Copyright (c) 2016-2026 The LightGBM developers. All rights reserved.
  * Licensed under the MIT License. See LICENSE file in the project root for
  * license information.
  */
-#ifndef LIGHTGBM_TREELEARNER_FEATURE_HISTOGRAM_HPP_
-#define LIGHTGBM_TREELEARNER_FEATURE_HISTOGRAM_HPP_
+#ifndef LIGHTGBM_SRC_TREELEARNER_FEATURE_HISTOGRAM_HPP_
+#define LIGHTGBM_SRC_TREELEARNER_FEATURE_HISTOGRAM_HPP_
 
 #include <LightGBM/bin.h>
 #include <LightGBM/dataset.h>
@@ -701,7 +702,7 @@ class FeatureHistogram {
   /*!
    * \brief True if this histogram can be splitted
    */
-  bool is_splittable() { return is_splittable_; }
+  bool is_splittable() const { return is_splittable_; }
 
   /*!
    * \brief Set splittable to this histogram
@@ -1594,4 +1595,4 @@ class HistogramPool {
 };
 
 }  // namespace LightGBM
-#endif  // LightGBM_TREELEARNER_FEATURE_HISTOGRAM_HPP_
+#endif  // LIGHTGBM_SRC_TREELEARNER_FEATURE_HISTOGRAM_HPP_

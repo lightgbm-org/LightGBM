@@ -1,0 +1,32 @@
+verbose = "info"
+no_progress = false
+cache = false
+scheme = ["http", "https", "file"]
+include_mail = false
+include_fragments = true
+no_ignore = true
+insecure = false
+require_https = true
+accept = ["100..=103", "200..=299"]
+user_agent = "curl/7.88.1"
+header = {"User-Agent" = "curl/7.88.1"}
+timeout = 30
+retry_wait_time = 10
+max_concurrency = 10
+# remove anchors from GitHub URLs to overcome https://github.com/lycheeverse/lychee/issues/1729
+remap = [
+    '(?P<host>^https://github\.com)/(?P<path>.*)#(?P<anchor>.*)$ $host/$path/',
+]
+exclude = [
+    '^https://www\.swig\.org/download\.html$',
+    '^https://proceedings\.neurips\.cc/.*',
+    '^https://www\.amd\.com/en/support\.html$',
+    '^https://www\.jstor\.org/stable/2281952$',
+    '^https://dl\.acm\.org/doi/10\.1145/3298689\.3347033$',
+    '^https://packages\.ubuntu\.com/search.*',
+    '^https://stackoverflow\.com/.*',
+    '^https://.*\.stackexchange\.com/.*',
+]
+exclude_path = [
+    "(^|/)docs/.*\\.rst",
+]

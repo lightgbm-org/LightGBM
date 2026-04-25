@@ -1,8 +1,22 @@
 name: R generate configure
 
 on:
-  repository_dispatch:
-    types: [gha_run_r_configure]
+  workflow_dispatch:
+    inputs:
+      pr-branch:
+        type: string
+        description: |
+          Branch in lightgbm-org/LightGBM to update.
+
+# automatically cancel in-progress builds if another commit is pushed
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+# default to 0 permissions
+# (job-level overrides add the minimal permissions needed)
+permissions:
+  contents: none
 
 jobs:
   r-configure:
@@ -10,6 +24,10 @@ jobs:
     timeout-minutes: 60
     runs-on: ubuntu-latest
     container: "ubuntu:22.04"
+    permissions:
+      contents: write
+      id-token: write
+      pull-requests: read
     steps:
       - name: Install essential software before checkout
         run: |
@@ -21,21 +39,22 @@ jobs:
         run: |
           git config --global --add safe.directory "${GITHUB_WORKSPACE}"
       - name: Checkout repository
-        uses: actions/checkout@v5
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
         with:
           fetch-depth: 5
-          submodules: true
-          repository: microsoft/LightGBM
-          ref: "refs/heads/${{ fromJSON(github.event.client_payload.pr_branch) }}"
-          token: ${{ secrets.WORKFLOW }}
+          submodules: false
+          repository: lightgbm-org/LightGBM
+          ref: "refs/heads/${{ inputs.pr-branch }}"
+          token: ${{ github.token }}
           persist-credentials: true
       - name: Update configure
         shell: bash
         run: ./R-package/recreate-configure.sh || exit 1
       - name: Push changes
         run: |
-          git config --global user.name "GitHub Actions Bot"
-          git config --global user.email "githubactionsbot@users.noreply.github.com"
+          # source for this user and email: https://github.com/orgs/community/discussions/160496
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
           git add "./R-package/configure"
           git commit --allow-empty -m "Auto-update configure"
           git push

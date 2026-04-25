@@ -1,14 +1,15 @@
 /*!
- * Copyright (c) 2021 Microsoft Corporation. All rights reserved.
+ * Copyright (c) 2021-2026 Microsoft Corporation. All rights reserved.
+ * Copyright (c) 2022-2026 The LightGBM developers. All rights reserved.
  * Licensed under the MIT License. See LICENSE file in the project root for
  * license information.
  * Modifications Copyright(C) 2023 Advanced Micro Devices, Inc. All rights reserved.
  */
 
-#ifdef USE_CUDA
+#ifndef LIGHTGBM_INCLUDE_LIGHTGBM_CUDA_CUDA_SPLIT_INFO_HPP_
+#define LIGHTGBM_INCLUDE_LIGHTGBM_CUDA_CUDA_SPLIT_INFO_HPP_
 
-#ifndef LIGHTGBM_CUDA_CUDA_SPLIT_INFO_HPP_
-#define LIGHTGBM_CUDA_CUDA_SPLIT_INFO_HPP_
+#ifdef USE_CUDA
 
 #include <LightGBM/meta.h>
 
@@ -103,6 +104,6 @@ class CUDASplitInfo {
 
 }  // namespace LightGBM
 
-#endif  // LIGHTGBM_CUDA_CUDA_SPLIT_INFO_HPP_
-
 #endif  // USE_CUDA
+
+#endif  // LIGHTGBM_INCLUDE_LIGHTGBM_CUDA_CUDA_SPLIT_INFO_HPP_

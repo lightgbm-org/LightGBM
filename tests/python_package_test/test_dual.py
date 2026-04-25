@@ -13,8 +13,8 @@ from .utils import load_breast_cancer
 
 
 @pytest.mark.skipif(
-    os.environ.get("LIGHTGBM_TEST_DUAL_CPU_GPU", None) is None,
-    reason="Only run if appropriate env variable is set",
+    os.environ.get("LIGHTGBM_TEST_DUAL_CPU_GPU", "0") != "1",
+    reason="Set LIGHTGBM_TEST_DUAL_CPU_GPU=1 to test using CPU and GPU training from the same package.",
 )
 def test_cpu_and_gpu_work():
     # If compiled appropriately, the same installation will support both GPU and CPU.

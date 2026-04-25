@@ -52,7 +52,7 @@ class EarlyStopException(Exception):
         best_iteration : int
             The best iteration stopped.
             0-based... pass ``best_iteration=2`` to indicate that the third iteration was the best one.
-        best_score : list of (eval_name, metric_name, eval_result, is_higher_better) tuple or (eval_name, metric_name, eval_result, is_higher_better, stdv) tuple
+        best_score : list of (dataset_name, metric_name, metric_value, maximize) tuple or (dataset_name, metric_name, metric_value, maximize, metric_std_dev) tuple
             Scores for each metric, on each validation set, as of the best iteration.
         """
         super().__init__()
@@ -147,7 +147,7 @@ class _RecordEvaluationCallback:
         if env.evaluation_result_list is None:
             raise RuntimeError(
                 "record_evaluation() callback enabled but no evaluation results found. This is a probably bug in LightGBM. "
-                "Please report it at https://github.com/microsoft/LightGBM/issues"
+                "Please report it at https://github.com/lightgbm-org/LightGBM/issues"
             )
         self.eval_result.clear()
         for item in env.evaluation_result_list:
@@ -165,7 +165,7 @@ class _RecordEvaluationCallback:
         if env.evaluation_result_list is None:
             raise RuntimeError(
                 "record_evaluation() callback enabled but no evaluation results found. This is a probably bug in LightGBM. "
-                "Please report it at https://github.com/microsoft/LightGBM/issues"
+                "Please report it at https://github.com/lightgbm-org/LightGBM/issues"
             )
         for item in env.evaluation_result_list:
             # for cv(), 'metric_value' is actually a mean of metric values over all CV folds
@@ -301,23 +301,23 @@ class _EarlyStoppingCallback:
         self.best_score: List[float] = []
         self.best_iter: List[int] = []
         self.best_score_list: List[_ListOfEvalResultTuples] = []
-        self.cmp_op: List[Callable[[float, float], bool]] = []
+        self.cmp_op: List[Callable[[float, float, float], bool]] = []
         self.first_metric = ""
 
-    def _gt_delta(self, curr_score: float, best_score: float, delta: float) -> bool:
+    def _gt_delta(self, *, curr_score: float, best_score: float, delta: float) -> bool:
         return curr_score > best_score + delta
 
-    def _lt_delta(self, curr_score: float, best_score: float, delta: float) -> bool:
+    def _lt_delta(self, *, curr_score: float, best_score: float, delta: float) -> bool:
         return curr_score < best_score - delta
 
-    def _is_train_set(self, dataset_name: str, env: CallbackEnv) -> bool:
+    def _is_train_set(self, *, dataset_name: str, env: CallbackEnv) -> bool:
         """Check, by name, if a given Dataset is the training data."""
         # for lgb.cv() with eval_train_metric=True, evaluation is also done on the training set
         # and those metrics are considered for early stopping
         if _is_using_cv(env) and dataset_name == "train":
             return True
 
-        # for lgb.train(), it's possible to pass the training data via valid_sets with any eval_name
+        # for lgb.train(), it's possible to pass the training data via valid_sets with any name
         if isinstance(env.model, Booster) and dataset_name == env.model._train_data_name:
             return True
 
@@ -397,7 +397,10 @@ class _EarlyStoppingCallback:
                 )
                 if self.first_metric_only:
                     _log_info(f"Evaluated only: {metric_name}")
-            raise EarlyStopException(self.best_iter[i], self.best_score_list[i])
+            raise EarlyStopException(
+                best_iteration=self.best_iter[i],
+                best_score=self.best_score_list[i],
+            )
 
     def __call__(self, env: CallbackEnv) -> None:
         if env.iteration == env.begin_iteration:
@@ -407,13 +410,15 @@ class _EarlyStoppingCallback:
         if env.evaluation_result_list is None:
             raise RuntimeError(
                 "early_stopping() callback enabled but no evaluation results found. This is a probably bug in LightGBM. "
-                "Please report it at https://github.com/microsoft/LightGBM/issues"
+                "Please report it at https://github.com/lightgbm-org/LightGBM/issues"
             )
         # self.best_score_list is initialized to an empty list
         first_time_updating_best_score_list = self.best_score_list == []
         for i in range(len(env.evaluation_result_list)):
             dataset_name, metric_name, metric_value, *_ = env.evaluation_result_list[i]
-            if first_time_updating_best_score_list or self.cmp_op[i](metric_value, self.best_score[i]):
+            if first_time_updating_best_score_list or self.cmp_op[i](  # type: ignore[call-arg]
+                curr_score=metric_value, best_score=self.best_score[i]
+            ):
                 self.best_score[i] = metric_value
                 self.best_iter[i] = env.iteration
                 if first_time_updating_best_score_list:
@@ -435,7 +440,10 @@ class _EarlyStoppingCallback:
                     _log_info(f"Early stopping, best iteration is:\n[{self.best_iter[i] + 1}]\t{eval_result_str}")
                     if self.first_metric_only:
                         _log_info(f"Evaluated only: {metric_name}")
-                raise EarlyStopException(self.best_iter[i], self.best_score_list[i])
+                raise EarlyStopException(
+                    best_iteration=self.best_iter[i],
+                    best_score=self.best_score_list[i],
+                )
             self._final_iteration_check(env=env, metric_name=metric_name, i=i)
 
 

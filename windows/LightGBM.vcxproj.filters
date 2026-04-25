@@ -347,8 +347,6 @@
     <ClCompile Include="..\src\treelearner\gradient_discretizer.cpp">
       <Filter>src\treelearner</Filter>
     </ClCompile>
-    <ClCompile Include="..\src\utils\openmp_wrapper.cpp">
-      <Filter>src\utils</Filter>
-    </ClCompile>
+    <ClCompile Include="..\src\utils\openmp_wrapper.cpp" />
   </ItemGroup>
 </Project>

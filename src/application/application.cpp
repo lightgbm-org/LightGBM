@@ -1,5 +1,6 @@
 /*!
- * Copyright (c) 2016 Microsoft Corporation. All rights reserved.
+ * Copyright (c) 2016-2026 Microsoft Corporation. All rights reserved.
+ * Copyright (c) 2016-2026 The LightGBM developers. All rights reserved.
  * Licensed under the MIT License. See LICENSE file in the project root for license information.
  */
 #include <LightGBM/application.h>
@@ -16,13 +17,16 @@
 #include <LightGBM/utils/openmp_wrapper.h>
 #include <LightGBM/utils/text_reader.h>
 
-#include <string>
 #include <chrono>
 #include <cstdio>
 #include <ctime>
 #include <fstream>
+#include <memory>
 #include <sstream>
+#include <string>
+#include <unordered_map>
 #include <utility>
+#include <vector>
 
 #include "predictor.hpp"
 
@@ -185,7 +189,7 @@ void Application::InitTrain() {
   // create boosting
   boosting_.reset(
     Boosting::CreateBoosting(config_.boosting,
-                             config_.input_model.c_str()));
+                             config_.input_model.c_str(), config_.device_type, config_.num_gpu));
   // create objective function
   objective_fun_.reset(
     ObjectiveFunction::CreateObjectiveFunction(config_.objective,
@@ -278,13 +282,13 @@ void Application::Predict() {
 
 void Application::InitPredict() {
   boosting_.reset(
-    Boosting::CreateBoosting("gbdt", config_.input_model.c_str()));
+    Boosting::CreateBoosting("gbdt", config_.input_model.c_str(), config_.device_type, config_.num_gpu));
   Log::Info("Finished initializing prediction, total used %d iterations", boosting_->GetCurrentIteration());
 }
 
 void Application::ConvertModel() {
   boosting_.reset(
-    Boosting::CreateBoosting(config_.boosting, config_.input_model.c_str()));
+    Boosting::CreateBoosting(config_.boosting, config_.input_model.c_str(), config_.device_type, config_.num_gpu));
   boosting_->SaveModelToIfElse(-1, config_.convert_model.c_str());
 }
 

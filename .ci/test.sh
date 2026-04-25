@@ -13,6 +13,9 @@ ARCH=$(uname -m)
 
 LGB_VER=$(head -n 1 "${BUILD_DIRECTORY}/VERSION.txt")
 
+# create the artifact upload directory if it doesn't exist yet
+mkdir -p "${BUILD_ARTIFACTSTAGINGDIRECTORY}"
+
 if [[ $OS_NAME == "macos" ]] && [[ $COMPILER == "gcc" ]]; then
     export CXX=g++-14
     export CC=gcc-14
@@ -44,6 +47,22 @@ fi
 
 if [[ "${TASK}" == "r-package" ]]; then
     bash "${BUILD_DIRECTORY}/.ci/test-r-package.sh" || exit 1
+    exit 0
+fi
+
+cd "${BUILD_DIRECTORY}"
+
+if [[ $TASK == "swig" ]]; then
+    cmake -B build -S . -DUSE_SWIG=ON
+    cmake --build build -j4 || exit 1
+    if [[ $OS_NAME == "linux" ]] && [[ $COMPILER == "gcc" ]]; then
+        objdump -T ./lib_lightgbm.so > ./objdump.log || exit 1
+        objdump -T ./lib_lightgbm_swig.so >> ./objdump.log || exit 1
+        ./.ci/check-dynamic-dependencies.sh ./objdump.log || exit 1
+    fi
+    if [[ $PRODUCES_ARTIFACTS == "true" ]]; then
+        cp ./build/lightgbmlib.jar "${BUILD_ARTIFACTSTAGINGDIRECTORY}/lightgbmlib_${OS_NAME}.jar"
+    fi
     exit 0
 fi
 
@@ -79,22 +98,6 @@ if [[ $TASK == "if-else" ]]; then
     ../../lightgbm config=predict.conf output_result=origin.pred
     ../../lightgbm config=predict.conf output_result=ifelse.pred
     python test.py
-    exit 0
-fi
-
-cd "${BUILD_DIRECTORY}"
-
-if [[ $TASK == "swig" ]]; then
-    cmake -B build -S . -DUSE_SWIG=ON
-    cmake --build build -j4 || exit 1
-    if [[ $OS_NAME == "linux" ]] && [[ $COMPILER == "gcc" ]]; then
-        objdump -T ./lib_lightgbm.so > ./objdump.log || exit 1
-        objdump -T ./lib_lightgbm_swig.so >> ./objdump.log || exit 1
-        python ./.ci/check-dynamic-dependencies.py ./objdump.log || exit 1
-    fi
-    if [[ $PRODUCES_ARTIFACTS == "true" ]]; then
-        cp ./build/lightgbmlib.jar "${BUILD_ARTIFACTSTAGINGDIRECTORY}/lightgbmlib_${OS_NAME}.jar"
-    fi
     exit 0
 fi
 
@@ -137,22 +140,37 @@ elif [[ $TASK == "bdist" ]]; then
             cp "$(echo "dist/lightgbm-${LGB_VER}-py3-none-macosx"*.whl)" "${BUILD_ARTIFACTSTAGINGDIRECTORY}" || exit 1
         fi
     else
-        if [[ $ARCH == "x86_64" ]]; then
-            PLATFORM="manylinux_2_28_x86_64"
-        else
-            PLATFORM="manylinux2014_$ARCH"
-        fi
         sh ./build-python.sh bdist_wheel --integrated-opencl || exit 1
-        # rename wheel, to fix scikit-build-core choosing the platform 'linux_aarch64' instead of
-        # a manylinux tag
-        mv \
-            ./dist/*.whl \
-            ./dist/tmp.whl || exit 1
-        mv \
-            ./dist/tmp.whl \
-            "./dist/lightgbm-${LGB_VER}-py3-none-${PLATFORM}.whl" || exit 1
+
+        # print some debugging logs about the wheel's GLIBC version and dependencies on shared libraries
+        pip install 'auditwheel>=6.5.1'
+        auditwheel show ./dist/lightgbm*.whl
+
+        # pass through 'auditwheel repair' to set the appropriate wheel tags.
+        #
+        # intentionally avoid vendoring libgomp, to reduce the risk of multiple OpenMP libraries
+        # being loaded in the same process.
+        auditwheel repair \
+            --exclude 'libgomp.so*' \
+            --lib-sdir '' \
+            --wheel-dir dist-fixed/ \
+            ./dist/lightgbm*.whl
+
+        # overwrite the original wheel with the new one
+        rm ./dist/lightgbm*.whl
+        mv ./dist-fixed/lightgbm*.whl ./dist
+
+        # check wheel properties
         sh .ci/check-python-dists.sh ./dist || exit 1
+
         if [[ $PRODUCES_ARTIFACTS == "true" ]]; then
+            # hard-code expected tag so CI will fail if 'auditwheel repair' has a surprising result (e.g. newer
+            # manylinux tag than we intended)
+            if [[ $ARCH == "x86_64" ]]; then
+                PLATFORM="manylinux_2_27_x86_64.manylinux_2_28_x86_64"
+            else
+                PLATFORM="manylinux2014_aarch64.manylinux_2_17_aarch64"
+            fi
             cp "dist/lightgbm-${LGB_VER}-py3-none-${PLATFORM}.whl" "${BUILD_ARTIFACTSTAGINGDIRECTORY}" || exit 1
         fi
         # Make sure we can do both CPU and GPU; see tests/python_package_test/test_dual.py
@@ -246,7 +264,7 @@ if [[ $TASK == "regular" ]]; then
         else
             if [[ $COMPILER == "gcc" ]]; then
                 objdump -T ./lib_lightgbm.so > ./objdump.log || exit 1
-                python ./.ci/check-dynamic-dependencies.py ./objdump.log || exit 1
+                ./.ci/check-dynamic-dependencies.sh ./objdump.log || exit 1
             fi
             cp ./lib_lightgbm.so "${BUILD_ARTIFACTSTAGINGDIRECTORY}/lib_lightgbm.so"
         fi

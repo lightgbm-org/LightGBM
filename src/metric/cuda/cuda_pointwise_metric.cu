@@ -1,5 +1,6 @@
 /*!
- * Copyright (c) 2022 Microsoft Corporation. All rights reserved.
+ * Copyright (c) 2022-2026 Microsoft Corporation. All rights reserved.
+ * Copyright (c) 2022-2026 The LightGBM developers. All rights reserved.
  * Licensed under the MIT License. See LICENSE file in the project root for
  * license information.
  * Modifications Copyright(C) 2023 Advanced Micro Devices, Inc. All rights reserved.
@@ -62,10 +63,10 @@ void CUDAPointwiseMetricInterface<HOST_METRIC, CUDA_METRIC>::LaunchEvalKernel(co
   }
 }
 
+// Regression metrics
 template void CUDAPointwiseMetricInterface<RMSEMetric, CUDARMSEMetric>::LaunchEvalKernel(const double* score, double* sum_loss, double* sum_weight) const;
 template void CUDAPointwiseMetricInterface<L2Metric, CUDAL2Metric>::LaunchEvalKernel(const double* score, double* sum_loss, double* sum_weight) const;
 template void CUDAPointwiseMetricInterface<QuantileMetric, CUDAQuantileMetric>::LaunchEvalKernel(const double* score, double* sum_loss, double* sum_weight) const;
-template void CUDAPointwiseMetricInterface<BinaryLoglossMetric, CUDABinaryLoglossMetric>::LaunchEvalKernel(const double* score, double* sum_loss, double* sum_weight) const;
 template void CUDAPointwiseMetricInterface<L1Metric, CUDAL1Metric>::LaunchEvalKernel(const double* score, double* sum_loss, double* sum_weight) const;
 template void CUDAPointwiseMetricInterface<HuberLossMetric, CUDAHuberLossMetric>::LaunchEvalKernel(const double* score, double* sum_loss, double* sum_weight) const;
 template void CUDAPointwiseMetricInterface<FairLossMetric, CUDAFairLossMetric>::LaunchEvalKernel(const double* score, double* sum_loss, double* sum_weight) const;
@@ -74,6 +75,10 @@ template void CUDAPointwiseMetricInterface<MAPEMetric, CUDAMAPEMetric>::LaunchEv
 template void CUDAPointwiseMetricInterface<GammaMetric, CUDAGammaMetric>::LaunchEvalKernel(const double* score, double* sum_loss, double* sum_weight) const;
 template void CUDAPointwiseMetricInterface<GammaDevianceMetric, CUDAGammaDevianceMetric>::LaunchEvalKernel(const double* score, double* sum_loss, double* sum_weight) const;
 template void CUDAPointwiseMetricInterface<TweedieMetric, CUDATweedieMetric>::LaunchEvalKernel(const double* score, double* sum_loss, double* sum_weight) const;
+
+// Binary metrics
+template void CUDAPointwiseMetricInterface<BinaryLoglossMetric, CUDABinaryLoglossMetric>::LaunchEvalKernel(const double* score, double* sum_loss, double* sum_weight) const;
+template void CUDAPointwiseMetricInterface<BinaryErrorMetric, CUDABinaryErrorMetric>::LaunchEvalKernel(const double* score, double* sum_loss, double* sum_weight) const;
 
 }  // namespace LightGBM
 

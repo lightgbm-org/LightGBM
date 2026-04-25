@@ -1,6 +1,5 @@
 # coding: utf-8
 import filecmp
-import os
 from pathlib import Path
 from typing import Any, Dict, Optional
 
@@ -11,18 +10,10 @@ import lightgbm as lgb
 
 from .utils import np_assert_array_equal
 
-# NOTE: In the AppVeyor CI, importing pyarrow fails due to an old Visual Studio version. Hence,
-#  we conditionally import pyarrow here (and skip tests if it cannot be imported). However, we
-#  don't want these tests to silently be skipped, hence, we only conditionally import when a
-#  specific env var is set.
-if os.getenv("ALLOW_SKIP_ARROW_TESTS") == "1":
-    pa = pytest.importorskip("pyarrow")
-else:
-    import pyarrow as pa  # type: ignore
+if not lgb.compat.PYARROW_INSTALLED:
+    pytest.skip("pyarrow is not installed", allow_module_level=True)
 
-    assert lgb.compat.PYARROW_INSTALLED is True, (
-        "'pyarrow' and its dependencies must be installed to run the arrow tests"
-    )
+import pyarrow as pa
 
 # ----------------------------------------------------------------------------------------------- #
 #                                            UTILITIES                                            #

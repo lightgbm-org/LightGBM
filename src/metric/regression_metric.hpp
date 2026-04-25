@@ -1,9 +1,10 @@
 /*!
- * Copyright (c) 2016 Microsoft Corporation. All rights reserved.
+ * Copyright (c) 2016-2026 Microsoft Corporation. All rights reserved.
+ * Copyright (c) 2016-2026 The LightGBM developers. All rights reserved.
  * Licensed under the MIT License. See LICENSE file in the project root for license information.
  */
-#ifndef LIGHTGBM_METRIC_REGRESSION_METRIC_HPP_
-#define LIGHTGBM_METRIC_REGRESSION_METRIC_HPP_
+#ifndef LIGHTGBM_SRC_METRIC_REGRESSION_METRIC_HPP_
+#define LIGHTGBM_SRC_METRIC_REGRESSION_METRIC_HPP_
 
 #include <LightGBM/metric.h>
 #include <LightGBM/utils/log.h>
@@ -318,5 +319,115 @@ class TweedieMetric : public RegressionMetric<TweedieMetric> {
 };
 
 
+class R2Metric: public Metric {
+ public:
+  explicit R2Metric(const Config& config) :config_(config) {}
+  const std::vector<std::string>& GetName() const override {
+    return name_;
+  }
+
+  double factor_to_bigger_better() const override {
+    return 1.0f;
+  }
+
+  void Init(const Metadata& metadata, data_size_t num_data) override {
+    name_.emplace_back("r2");
+    num_data_ = num_data;
+    label_ = metadata.label();
+    weights_ = metadata.weights();
+
+    double sum_label = 0.0f;
+    if (weights_ == nullptr) {
+      sum_weights_ = static_cast<double>(num_data_);
+      #pragma omp parallel for num_threads(OMP_NUM_THREADS()) schedule(static) reduction(+:sum_label)
+      for (data_size_t i = 0; i < num_data_; ++i) {
+        sum_label += label_[i];
+      }
+    } else {
+      double local_sum_weights = 0.0f;
+      #pragma omp parallel for num_threads(OMP_NUM_THREADS()) schedule(static) reduction(+:local_sum_weights, sum_label)
+      for (data_size_t i = 0; i < num_data_; ++i) {
+        local_sum_weights += weights_[i];
+        sum_label += label_[i] * weights_[i];
+      }
+      sum_weights_ = local_sum_weights;
+    }
+    label_mean_ = sum_label / sum_weights_;
+
+    total_sum_squares_ = 0.0f;
+    double local_total_sum_squares = 0.0f;
+    if (weights_ == nullptr) {
+      #pragma omp parallel for num_threads(OMP_NUM_THREADS()) schedule(static) reduction(+:local_total_sum_squares)
+      for (data_size_t i = 0; i < num_data_; ++i) {
+        double diff = label_[i] - label_mean_;
+        local_total_sum_squares += diff * diff;
+      }
+    } else {
+      #pragma omp parallel for num_threads(OMP_NUM_THREADS()) schedule(static) reduction(+:local_total_sum_squares)
+      for (data_size_t i = 0; i < num_data_; ++i) {
+        double diff = label_[i] - label_mean_;
+        local_total_sum_squares += diff * diff * weights_[i];
+      }
+    }
+    total_sum_squares_ = local_total_sum_squares;
+  }
+
+  std::vector<double> Eval(const double* score, const ObjectiveFunction* objective) const override {
+    double residual_sum_squares = 0.0f;
+    if (objective == nullptr) {
+      if (weights_ == nullptr) {
+        #pragma omp parallel for num_threads(OMP_NUM_THREADS()) schedule(static) reduction(+:residual_sum_squares)
+        for (data_size_t i = 0; i < num_data_; ++i) {
+          double diff = label_[i] - score[i];
+          residual_sum_squares += diff * diff;
+        }
+      } else {
+        #pragma omp parallel for num_threads(OMP_NUM_THREADS()) schedule(static) reduction(+:residual_sum_squares)
+        for (data_size_t i = 0; i < num_data_; ++i) {
+          double diff = label_[i] - score[i];
+          residual_sum_squares += diff * diff * weights_[i];
+        }
+      }
+    } else {
+        if (weights_ == nullptr) {
+        #pragma omp parallel for num_threads(OMP_NUM_THREADS()) schedule(static) reduction(+:residual_sum_squares)
+        for (data_size_t i = 0; i < num_data_; ++i) {
+          double t = 0;
+          objective->ConvertOutput(&score[i], &t);
+          double diff = label_[i] - t;
+          residual_sum_squares += diff * diff;
+        }
+      } else {
+        #pragma omp parallel for num_threads(OMP_NUM_THREADS()) schedule(static) reduction(+:residual_sum_squares)
+        for (data_size_t i = 0; i < num_data_; ++i) {
+          double t = 0;
+          objective->ConvertOutput(&score[i], &t);
+          double diff = label_[i] - t;
+          residual_sum_squares += diff * diff * weights_[i];
+        }
+      }
+    }
+
+    double r2 = 1.0 - (residual_sum_squares / total_sum_squares_);
+    if (std::fabs(total_sum_squares_) < kZeroThreshold) {
+      return std::vector<double>(1, std::fabs(residual_sum_squares) < kZeroThreshold ? 1.0 : 0.0);
+    }
+    return std::vector<double>(1, r2);
+  }
+
+ protected:
+  data_size_t num_data_;
+  const label_t* label_;
+  const label_t* weights_;
+  double sum_weights_;
+  Config config_;
+  std::vector<std::string> name_;
+
+  // Custom members for R2 calculation
+  double label_mean_;
+  double total_sum_squares_;
+};
+
+
 }  // namespace LightGBM
-#endif   // LightGBM_METRIC_REGRESSION_METRIC_HPP_
+#endif   // LIGHTGBM_SRC_METRIC_REGRESSION_METRIC_HPP_

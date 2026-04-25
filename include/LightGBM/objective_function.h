@@ -1,9 +1,10 @@
 /*!
- * Copyright (c) 2016 Microsoft Corporation. All rights reserved.
+ * Copyright (c) 2016-2026 Microsoft Corporation. All rights reserved.
+ * Copyright (c) 2016-2026 The LightGBM developers. All rights reserved.
  * Licensed under the MIT License. See LICENSE file in the project root for license information.
  */
-#ifndef LIGHTGBM_OBJECTIVE_FUNCTION_H_
-#define LIGHTGBM_OBJECTIVE_FUNCTION_H_
+#ifndef LIGHTGBM_INCLUDE_LIGHTGBM_OBJECTIVE_FUNCTION_H_
+#define LIGHTGBM_INCLUDE_LIGHTGBM_OBJECTIVE_FUNCTION_H_
 
 #include <LightGBM/config.h>
 #include <LightGBM/dataset.h>
@@ -45,7 +46,7 @@ class ObjectiveFunction {
   * \gradients Output gradients
   * \hessians Output hessians
   */
-  virtual void GetGradients(const double* score, const data_size_t /*num_sampled_queries*/, const data_size_t* /*sampled_query_indices*/,
+  virtual void GetGradientsWithSampledQueries(const double* score, const data_size_t /*num_sampled_queries*/, const data_size_t* /*sampled_query_indices*/,
     score_t* gradients, score_t* hessians) const { GetGradients(score, gradients, hessians); }
 
   virtual const char* GetName() const = 0;
@@ -118,9 +119,24 @@ class ObjectiveFunction {
 
   virtual bool NeedConvertOutputCUDA () const { return false; }
 
+  virtual void SetNCCLInfo(
+    ncclComm_t /*nccl_communicator*/,
+    int /*nccl_gpu_rank*/,
+    int /*local_gpu_rank*/,
+    int /*gpu_device_id*/,
+    data_size_t /*global_num_data*/) {}
+
+  /*!
+  * \brief Create object of objective function on CUDA
+  * \param type Specific type of objective function
+  * \param config Config for objective function
+  */
+  LIGHTGBM_EXPORT static ObjectiveFunction* CreateObjectiveFunctionCUDA(const std::string& type,
+    const Config& config);
+
   #endif  // USE_CUDA
 };
 
 }  // namespace LightGBM
 
-#endif   // LightGBM_OBJECTIVE_FUNCTION_H_
+#endif   // LIGHTGBM_INCLUDE_LIGHTGBM_OBJECTIVE_FUNCTION_H_

@@ -1,5 +1,6 @@
 /*!
- * Copyright (c) 2017 Microsoft Corporation. All rights reserved.
+ * Copyright (c) 2017-2026 Microsoft Corporation. All rights reserved.
+ * Copyright (c) 2017-2026 The LightGBM developers. All rights reserved.
  * Licensed under the MIT License. See LICENSE file in the project root for license information.
  */
 #ifdef USE_GPU
@@ -11,6 +12,11 @@
 #include <LightGBM/utils/array_args.h>
 
 #include <algorithm>
+#include <cstdio>
+#include <iostream>
+#include <memory>
+#include <string>
+#include <vector>
 
 #include "../io/dense_bin.hpp"
 

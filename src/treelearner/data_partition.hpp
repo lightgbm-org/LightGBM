@@ -1,9 +1,10 @@
 /*!
- * Copyright (c) 2016 Microsoft Corporation. All rights reserved.
+ * Copyright (c) 2016-2026 Microsoft Corporation. All rights reserved.
+ * Copyright (c) 2016-2026 The LightGBM developers. All rights reserved.
  * Licensed under the MIT License. See LICENSE file in the project root for license information.
  */
-#ifndef LIGHTGBM_TREELEARNER_DATA_PARTITION_HPP_
-#define LIGHTGBM_TREELEARNER_DATA_PARTITION_HPP_
+#ifndef LIGHTGBM_SRC_TREELEARNER_DATA_PARTITION_HPP_
+#define LIGHTGBM_SRC_TREELEARNER_DATA_PARTITION_HPP_
 
 #include <LightGBM/dataset.h>
 #include <LightGBM/meta.h>
@@ -167,4 +168,4 @@ class DataPartition {
 };
 
 }  // namespace LightGBM
-#endif   // LightGBM_TREELEARNER_DATA_PARTITION_HPP_
+#endif   // LIGHTGBM_SRC_TREELEARNER_DATA_PARTITION_HPP_

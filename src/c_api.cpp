@@ -1,5 +1,6 @@
 /*!
- * Copyright (c) 2016 Microsoft Corporation. All rights reserved.
+ * Copyright (c) 2016-2026 Microsoft Corporation. All rights reserved.
+ * Copyright (c) 2016-2026 The LightGBM developers. All rights reserved.
  * Licensed under the MIT License. See LICENSE file in the project root for license information.
  */
 #include <LightGBM/c_api.h>
@@ -20,13 +21,16 @@
 #include <LightGBM/utils/random.h>
 #include <LightGBM/utils/threading.h>
 
-#include <string>
-#include <cstdio>
+#include <algorithm>
 #include <cstdint>
+#include <cstdio>
 #include <functional>
 #include <memory>
 #include <mutex>
 #include <stdexcept>
+#include <string>
+#include <unordered_map>
+#include <utility>
 #include <vector>
 
 #include "application/predictor.hpp"
@@ -163,7 +167,7 @@ struct SingleRowPredictor {
 class Booster {
  public:
   explicit Booster(const char* filename) {
-    boosting_.reset(Boosting::CreateBoosting("gbdt", filename));
+    boosting_.reset(Boosting::CreateBoosting("gbdt", filename, std::string("cpu"), 0));
   }
 
   Booster(const Dataset* train_data,
@@ -177,7 +181,7 @@ class Booster {
                    "please use continued train with input score");
     }
 
-    boosting_.reset(Boosting::CreateBoosting(config_.boosting, nullptr));
+    boosting_.reset(Boosting::CreateBoosting(config_.boosting, nullptr, config_.device_type, config_.num_gpu));
 
     train_data_ = train_data;
     CreateObjectiveAndMetrics();
@@ -437,7 +441,7 @@ class Booster {
   }
 
   std::unique_ptr<SingleRowPredictor> InitSingleRowPredictor(int predict_type, int start_iteration, int num_iteration, int data_type, int32_t num_cols, const char *parameters) {
-    // Workaround https://github.com/microsoft/LightGBM/issues/6142 by locking here
+    // Workaround https://github.com/lightgbm-org/LightGBM/issues/6142 by locking here
     // This is only a workaround because if predictors are initialized differently it may still behave incorrectly,
     // and because multiple racing Predictor initializations through LGBM_BoosterPredictForMat suffers from that same issue of Predictor init writing things in the booster.
     // Once #6142 is fixed (predictor doesn't write in the Booster as should have been the case since 1c35c3b9ede9adab8ccc5fd7b4b2b6af188a79f0), this line can be removed.
@@ -919,10 +923,10 @@ using LightGBM::SingleRowPredictor;
 // some help functions used to convert data
 
 std::function<std::vector<double>(int row_idx)>
-RowFunctionFromDenseMatric(const void* data, int num_row, int num_col, int data_type, int is_row_major);
+RowFunctionFromDenseMatrix(const void* data, int num_row, int num_col, int data_type, int is_row_major);
 
 std::function<std::vector<std::pair<int, double>>(int row_idx)>
-RowPairFunctionFromDenseMatric(const void* data, int num_row, int num_col, int data_type, int is_row_major);
+RowPairFunctionFromDenseMatrix(const void* data, int num_row, int num_col, int data_type, int is_row_major);
 
 std::function<std::vector<std::pair<int, double>>(int row_idx)>
 RowPairFunctionFromDenseRows(const void** data, int num_col, int data_type);
@@ -1137,7 +1141,7 @@ int LGBM_DatasetPushRows(DatasetHandle dataset,
                          int32_t start_row) {
   API_BEGIN();
   auto p_dataset = reinterpret_cast<Dataset*>(dataset);
-  auto get_row_fun = RowFunctionFromDenseMatric(data, nrow, ncol, data_type, 1);
+  auto get_row_fun = RowFunctionFromDenseMatrix(data, nrow, ncol, data_type, 1);
   if (p_dataset->has_raw()) {
     p_dataset->ResizeRaw(p_dataset->num_numeric_features() + nrow);
   }
@@ -1176,7 +1180,7 @@ int LGBM_DatasetPushRowsWithMetadata(DatasetHandle dataset,
     Log::Fatal("data cannot be null.");
   }
   auto p_dataset = reinterpret_cast<Dataset*>(dataset);
-  auto get_row_fun = RowFunctionFromDenseMatric(data, nrow, ncol, data_type, 1);
+  auto get_row_fun = RowFunctionFromDenseMatrix(data, nrow, ncol, data_type, 1);
   if (p_dataset->has_raw()) {
     p_dataset->ResizeRaw(p_dataset->num_numeric_features() + nrow);
   }
@@ -1341,7 +1345,7 @@ int LGBM_DatasetCreateFromMats(int32_t nmat,
 
   std::vector<std::function<std::vector<double>(int row_idx)>> get_row_fun;
   for (int j = 0; j < nmat; ++j) {
-    get_row_fun.push_back(RowFunctionFromDenseMatric(data[j], nrow[j], ncol, data_type, is_row_major[j]));
+    get_row_fun.push_back(RowFunctionFromDenseMatrix(data[j], nrow[j], ncol, data_type, is_row_major[j]));
   }
 
   if (reference == nullptr) {
@@ -1611,7 +1615,7 @@ int LGBM_DatasetCreateFromCSC(const void* col_ptr,
       continue;
     }
     int group = ret->Feature2Group(feature_idx);
-    int sub_feature = ret->Feture2SubFeature(feature_idx);
+    int sub_feature = ret->Feature2SubFeature(feature_idx);
     CSC_RowIterator col_it(col_ptr, col_ptr_type, indices, data, data_type, ncol_ptr, nelem, i);
     auto bin_mapper = ret->FeatureBinMapper(feature_idx);
     if (bin_mapper->GetDefaultBin() == bin_mapper->GetMostFreqBin()) {
@@ -1640,8 +1644,8 @@ int LGBM_DatasetCreateFromCSC(const void* col_ptr,
 }
 
 int LGBM_DatasetCreateFromArrow(int64_t n_chunks,
-                                const ArrowArray* chunks,
-                                const ArrowSchema* schema,
+                                const struct ArrowArray* chunks,
+                                const struct ArrowSchema* schema,
                                 const char* parameters,
                                 const DatasetHandle reference,
                                 DatasetHandle *out) {
@@ -1855,8 +1859,8 @@ int LGBM_DatasetSetField(DatasetHandle handle,
 int LGBM_DatasetSetFieldFromArrow(DatasetHandle handle,
                                   const char* field_name,
                                   int64_t n_chunks,
-                                  const ArrowArray* chunks,
-                                  const ArrowSchema* schema) {
+                                  const struct ArrowArray* chunks,
+                                  const struct ArrowSchema* schema) {
   API_BEGIN();
   auto dataset = reinterpret_cast<Dataset*>(handle);
   ArrowChunkedArray ca(n_chunks, chunks, schema);
@@ -2528,7 +2532,7 @@ int LGBM_BoosterPredictForMat(BoosterHandle handle,
   config.Set(param);
   OMP_SET_NUM_THREADS(config.num_threads);
   Booster* ref_booster = reinterpret_cast<Booster*>(handle);
-  auto get_row_fun = RowPairFunctionFromDenseMatric(data, nrow, ncol, data_type, is_row_major);
+  auto get_row_fun = RowPairFunctionFromDenseMatrix(data, nrow, ncol, data_type, is_row_major);
   ref_booster->Predict(start_iteration, num_iteration, predict_type, nrow, ncol, get_row_fun,
                        config, out_result, out_len);
   API_END();
@@ -2551,7 +2555,7 @@ int LGBM_BoosterPredictForMatSingleRow(BoosterHandle handle,
   config.Set(param);
   OMP_SET_NUM_THREADS(config.num_threads);
   Booster* ref_booster = reinterpret_cast<Booster*>(handle);
-  auto get_row_fun = RowPairFunctionFromDenseMatric(data, 1, ncol, data_type, is_row_major);
+  auto get_row_fun = RowPairFunctionFromDenseMatrix(data, 1, ncol, data_type, is_row_major);
   ref_booster->SetSingleRowPredictorInner(start_iteration, num_iteration, predict_type, config);
   ref_booster->PredictSingleRow(predict_type, ncol, get_row_fun, config, out_result, out_len);
   API_END();
@@ -2584,7 +2588,7 @@ int LGBM_BoosterPredictForMatSingleRowFast(FastConfigHandle fastConfig_handle,
   API_BEGIN();
   SingleRowPredictor *single_row_predictor = reinterpret_cast<SingleRowPredictor*>(fastConfig_handle);
   // Single row in row-major format:
-  auto get_row_fun = RowPairFunctionFromDenseMatric(data, 1, single_row_predictor->num_cols, single_row_predictor->data_type, 1);
+  auto get_row_fun = RowPairFunctionFromDenseMatrix(data, 1, single_row_predictor->num_cols, single_row_predictor->data_type, 1);
   single_row_predictor->Predict(get_row_fun, out_result, out_len);
   API_END();
 }
@@ -2614,8 +2618,8 @@ int LGBM_BoosterPredictForMats(BoosterHandle handle,
 
 int LGBM_BoosterPredictForArrow(BoosterHandle handle,
                                 int64_t n_chunks,
-                                const ArrowArray* chunks,
-                                const ArrowSchema* schema,
+                                const struct ArrowArray* chunks,
+                                const struct ArrowSchema* schema,
                                 int predict_type,
                                 int start_iteration,
                                 int num_iteration,
@@ -2816,7 +2820,7 @@ int LGBM_GetMaxThreads(int* out) {
 
 template<typename T>
 std::function<std::vector<double>(int row_idx)>
-RowFunctionFromDenseMatric_helper(const void* data, int num_row, int num_col, int is_row_major) {
+RowFunctionFromDenseMatrix_helper(const void* data, int num_row, int num_col, int is_row_major) {
   const T* data_ptr = reinterpret_cast<const T*>(data);
   if (is_row_major) {
     return [=] (int row_idx) {
@@ -2839,19 +2843,19 @@ RowFunctionFromDenseMatric_helper(const void* data, int num_row, int num_col, in
 }
 
 std::function<std::vector<double>(int row_idx)>
-RowFunctionFromDenseMatric(const void* data, int num_row, int num_col, int data_type, int is_row_major) {
+RowFunctionFromDenseMatrix(const void* data, int num_row, int num_col, int data_type, int is_row_major) {
   if (data_type == C_API_DTYPE_FLOAT32) {
-    return RowFunctionFromDenseMatric_helper<float>(data, num_row, num_col, is_row_major);
+    return RowFunctionFromDenseMatrix_helper<float>(data, num_row, num_col, is_row_major);
   } else if (data_type == C_API_DTYPE_FLOAT64) {
-    return RowFunctionFromDenseMatric_helper<double>(data, num_row, num_col, is_row_major);
+    return RowFunctionFromDenseMatrix_helper<double>(data, num_row, num_col, is_row_major);
   }
-  Log::Fatal("Unknown data type in RowFunctionFromDenseMatric");
+  Log::Fatal("Unknown data type in RowFunctionFromDenseMatrix");
   return nullptr;
 }
 
 std::function<std::vector<std::pair<int, double>>(int row_idx)>
-RowPairFunctionFromDenseMatric(const void* data, int num_row, int num_col, int data_type, int is_row_major) {
-  auto inner_function = RowFunctionFromDenseMatric(data, num_row, num_col, data_type, is_row_major);
+RowPairFunctionFromDenseMatrix(const void* data, int num_row, int num_col, int data_type, int is_row_major) {
+  auto inner_function = RowFunctionFromDenseMatrix(data, num_row, num_col, data_type, is_row_major);
   if (inner_function != nullptr) {
     return [inner_function] (int row_idx) {
       auto raw_values = inner_function(row_idx);
@@ -2872,7 +2876,7 @@ RowPairFunctionFromDenseMatric(const void* data, int num_row, int num_col, int d
 std::function<std::vector<std::pair<int, double>>(int row_idx)>
 RowPairFunctionFromDenseRows(const void** data, int num_col, int data_type) {
   return [=](int row_idx) {
-    auto inner_function = RowFunctionFromDenseMatric(data[row_idx], 1, num_col, data_type, /* is_row_major */ true);
+    auto inner_function = RowFunctionFromDenseMatrix(data[row_idx], 1, num_col, data_type, /* is_row_major */ true);
     auto raw_values = inner_function(0);
     std::vector<std::pair<int, double>> ret;
     ret.reserve(raw_values.size());

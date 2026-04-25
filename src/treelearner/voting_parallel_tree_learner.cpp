@@ -4,7 +4,9 @@
  */
 #include <LightGBM/utils/common.h>
 
+#include <algorithm>
 #include <cstring>
+#include <functional>
 #include <tuple>
 #include <vector>
 
@@ -13,8 +15,7 @@
 namespace LightGBM {
 
 template <typename TREELEARNER_T>
-VotingParallelTreeLearner<TREELEARNER_T>::VotingParallelTreeLearner(const Config* config)
-  :TREELEARNER_T(config) {
+VotingParallelTreeLearner<TREELEARNER_T>::VotingParallelTreeLearner(const Config* config):TREELEARNER_T(config) {
   top_k_ = this->config_->top_k;
 }
 
@@ -388,7 +389,7 @@ void VotingParallelTreeLearner<TREELEARNER_T>::FindBestSplits(const Tree* tree) 
   std::vector<int> smaller_top_features, larger_top_features;
   GlobalVoting(this->smaller_leaf_splits_->leaf_index(), smaller_top_k_splits_global, &smaller_top_features);
   GlobalVoting(this->larger_leaf_splits_->leaf_index(), larger_top_k_splits_global, &larger_top_features);
-  // copy local histgrams to buffer
+  // copy local histograms to buffer
   CopyLocalHistogram(smaller_top_features, larger_top_features);
 
   // Reduce scatter for histogram

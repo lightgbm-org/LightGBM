@@ -9,6 +9,7 @@ from shutil import copyfile
 if __name__ == "__main__":
     source = Path(sys.argv[1])
     nuget_dir = Path(__file__).absolute().parent / "nuget"
+    print(f"Creating nuget directory '{nuget_dir}'")
     linux_folder_path = nuget_dir / "runtimes" / "linux-x64" / "native"
     linux_folder_path.mkdir(parents=True, exist_ok=True)
     osx_folder_path = nuget_dir / "runtimes" / "osx-x64" / "native"
@@ -17,11 +18,13 @@ if __name__ == "__main__":
     windows_folder_path.mkdir(parents=True, exist_ok=True)
     build_folder_path = nuget_dir / "build"
     build_folder_path.mkdir(parents=True, exist_ok=True)
+    print(f"Looking for libraries in '{source}'")
     copyfile(source / "lib_lightgbm.so", linux_folder_path / "lib_lightgbm.so")
     copyfile(source / "lib_lightgbm.dylib", osx_folder_path / "lib_lightgbm.dylib")
     copyfile(source / "lib_lightgbm.dll", windows_folder_path / "lib_lightgbm.dll")
     copyfile(source / "lightgbm.exe", windows_folder_path / "lightgbm.exe")
     version = (nuget_dir.parents[1] / "VERSION.txt").read_text(encoding="utf-8").strip().replace("rc", "-rc")
+    print(f"Setting version to '{version}'")
     nuget_str = rf"""<?xml version="1.0"?>
     <package xmlns="http://schemas.microsoft.com/packaging/2013/05/nuspec.xsd">
     <metadata>
@@ -30,7 +33,7 @@ if __name__ == "__main__":
         <authors>Guolin Ke</authors>
         <owners>Guolin Ke</owners>
         <license type="expression">MIT</license>
-        <projectUrl>https://github.com/microsoft/LightGBM</projectUrl>
+        <projectUrl>https://github.com/lightgbm-org/LightGBM</projectUrl>
         <requireLicenseAcceptance>false</requireLicenseAcceptance>
         <description>A fast, distributed, high performance gradient boosting framework</description>
         <copyright>Copyright {datetime.datetime.now().year} @ Microsoft</copyright>
@@ -79,3 +82,4 @@ if __name__ == "__main__":
     (nuget_dir / "LightGBM.nuspec").write_text(nuget_str, encoding="utf-8")
     (nuget_dir / "build" / "LightGBM.props").write_text(prop_str, encoding="utf-8")
     (nuget_dir / "build" / "LightGBM.targets").write_text(target_str, encoding="utf-8")
+    print("Done creating NuGet package")

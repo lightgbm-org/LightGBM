@@ -1,9 +1,10 @@
 /*!
- * Copyright (c) 2020 Microsoft Corporation. All rights reserved.
+ * Copyright (c) 2020-2026 Microsoft Corporation. All rights reserved.
+ * Copyright (c) 2020-2026 The LightGBM developers. All rights reserved.
  * Licensed under the MIT License. See LICENSE file in the project root for license information.
  */
-#ifndef LIGHTGBM_TREELEARNER_LINEAR_TREE_LEARNER_H_
-#define LIGHTGBM_TREELEARNER_LINEAR_TREE_LEARNER_H_
+#ifndef LIGHTGBM_SRC_TREELEARNER_LINEAR_TREE_LEARNER_H_
+#define LIGHTGBM_SRC_TREELEARNER_LINEAR_TREE_LEARNER_H_
 
 #include <cmath>
 #include <cstdio>
@@ -126,4 +127,4 @@ class LinearTreeLearner: public TREE_LEARNER_TYPE {
 };
 
 }  // namespace LightGBM
-#endif   // LightGBM_TREELEARNER_LINEAR_TREE_LEARNER_H_
+#endif   // LIGHTGBM_SRC_TREELEARNER_LINEAR_TREE_LEARNER_H_

@@ -54,6 +54,8 @@
 #     --precompile
 #                                   Use precompiled library.
 #                                   Only used with 'install' command.
+#     --rocm
+#                                   Compile ROCm version.
 #     --time-costs
 #                                   Compile version that outputs time costs for different internal routines.
 #     --user
@@ -141,6 +143,9 @@ while [ $# -gt 0 ]; do
         ;;
     --cuda)
         BUILD_ARGS="${BUILD_ARGS} --config-setting=cmake.define.USE_CUDA=ON"
+        ;;
+    --rocm)
+        BUILD_ARGS="${BUILD_ARGS} --config-setting=cmake.define.USE_ROCM=ON"
         ;;
     --gpu)
         BUILD_ARGS="${BUILD_ARGS} --config-setting=cmake.define.USE_GPU=ON"
@@ -289,11 +294,11 @@ create_isolated_source_dir
 
 cd ./lightgbm-python
 
-# installation involves building the wheel + `pip install`-ing it
+# if 'install' was passed, choose the type of package to build and install
 if test "${INSTALL}" = true; then
     if test "${PRECOMPILE}" = true; then
-        BUILD_SDIST=true
-        BUILD_WHEEL=false
+        BUILD_SDIST=false
+        BUILD_WHEEL=true
         BUILD_ARGS=""
         rm -rf \
             ./cmake \
@@ -302,16 +307,22 @@ if test "${INSTALL}" = true; then
             ./include \
             ./src \
             ./swig
-        # use regular-old setuptools for these builds, to avoid
-        # trying to recompile the shared library
+        # avoid trying to recompile, just use hatchling and copy in relevant files
         sed -i.bak -e '/start:build-system/,/end:build-system/d' pyproject.toml
-        # shellcheck disable=SC2129
-        echo '[build-system]' >> ./pyproject.toml
-        echo 'requires = ["setuptools"]' >> ./pyproject.toml
-        echo 'build-backend = "setuptools.build_meta"' >> ./pyproject.toml
-        echo "" >> ./pyproject.toml
-        echo "recursive-include lightgbm *.dll *.dylib *.so" > ./MANIFEST.in
-        echo "" >> ./MANIFEST.in
+
+# replace build backend configuration
+cat >> ./pyproject.toml <<EOF
+
+[build-system]
+requires = ["hatchling>=1.27.0"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+# do not consider .gitignore when choosing files to include / exclude
+ignore-vcs = true
+packages = ["lightgbm"]
+
+EOF
         mkdir -p ./lightgbm/lib
         if test -f ../lib_lightgbm.so; then
             echo "[INFO] found pre-compiled lib_lightgbm.so"
@@ -338,7 +349,11 @@ if test "${INSTALL}" = true; then
             exit 1
         fi
         rm -f ./*.bak
-    else
+    fi
+
+    # at this point, if 'install' was passed but the package type wasn't indicated, prefer wheel
+    if test "${BUILD_SDIST}" = false && test "${BUILD_WHEEL}" = false; then
+        echo "[INFO] 'install' passed but no package type ('bdist_wheel', 'sdist') chosen. Defaulting to 'bdist_wheel'."
         BUILD_SDIST="false"
         BUILD_WHEEL="true"
     fi
@@ -366,22 +381,19 @@ fi
 
 if test "${INSTALL}" = true; then
     echo "[INFO] --- installing lightgbm ---"
-    cd ../dist
+    cd ..
     if test "${BUILD_WHEEL}" = true; then
-        PACKAGE_NAME="$(echo lightgbm*.whl)"
+        PACKAGE_FILE="$(echo dist/lightgbm*.whl)"
     else
-        PACKAGE_NAME="$(echo lightgbm*.tar.gz)"
+        PACKAGE_FILE="$(echo dist/lightgbm*.tar.gz)"
     fi
-    # ref for use of '--find-links': https://stackoverflow.com/a/52481267/3986677
     # shellcheck disable=SC2086
     pip install \
         ${PIP_INSTALL_ARGS} \
         --force-reinstall \
         --no-cache-dir \
         --no-deps \
-        --find-links=. \
-        "${PACKAGE_NAME}"
-    cd ../
+        "${PACKAGE_FILE}"
 fi
 
 echo "[INFO] cleaning up"

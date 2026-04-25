@@ -9,7 +9,7 @@ For the detailed experiment scripts and output logs, please refer to this `repo`
 History
 ^^^^^^^
 
-08 Mar, 2020: update according to the latest master branch (`1b97eaf <https://github.com/dmlc/xgboost/commit/1b97eaf7a74315bfa2c132d59f937a35408bcfd1>`__ for XGBoost, `bcad692 <https://github.com/microsoft/LightGBM/commit/bcad692e263e0317cab11032dd017c78f9e58e5f>`__ for LightGBM). (``xgboost_exact`` is not updated for it is too slow.)
+08 Mar, 2020: update according to the latest master branch (`1b97eaf <https://github.com/dmlc/xgboost/commit/1b97eaf7a74315bfa2c132d59f937a35408bcfd1>`__ for XGBoost, `bcad692 <https://github.com/lightgbm-org/LightGBM/commit/bcad692e263e0317cab11032dd017c78f9e58e5f>`__ for LightGBM). (``xgboost_exact`` is not updated for it is too slow.)
 
 27 Feb, 2017: first version.
 
@@ -23,7 +23,7 @@ We used 5 datasets to conduct our comparison experiments. Details of data are li
 +===========+=======================+=================================================================================+=============+==========+==============================================+
 | Higgs     | Binary classification | `link <https://archive.ics.uci.edu/dataset/280/higgs>`__                        | 10,500,000  | 28       | last 500,000 samples were used as test set   |
 +-----------+-----------------------+---------------------------------------------------------------------------------+-------------+----------+----------------------------------------------+
-| Yahoo LTR | Learning to rank      | `link <https://webscope.sandbox.yahoo.com/catalog.php?datatype=c>`__            | 473,134     | 700      | set1.train as train, set1.test as test       |
+| Yahoo LTR | Learning to rank      | `link <https://proceedings.mlr.press/v14/chapelle11a.html>`__                   | 473,134     | 700      | set1.train as train, set1.test as test       |
 +-----------+-----------------------+---------------------------------------------------------------------------------+-------------+----------+----------------------------------------------+
 | MS LTR    | Learning to rank      | `link <https://www.microsoft.com/en-us/research/project/mslr/>`__               | 2,270,296   | 137      | {S1,S2,S3} as train set, {S5} as test set    |
 +-----------+-----------------------+---------------------------------------------------------------------------------+-------------+----------+----------------------------------------------+
@@ -250,4 +250,4 @@ Refer to `GPU Performance <./GPU-Performance.rst>`__.
 
 .. _xgboost: https://github.com/dmlc/xgboost
 
-.. _link: http://labs.criteo.com/2013/12/download-terabyte-click-logs/
+.. _link: https://ailab.criteo.com/download-criteo-1tb-click-logs-dataset/

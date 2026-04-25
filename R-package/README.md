@@ -20,7 +20,6 @@
     - [Code Coverage](#code-coverage)
 * [Updating Documentation](#updating-documentation)
 * [Preparing a CRAN Package](#preparing-a-cran-package)
-* [External Repositories](#external-unofficial-repositories)
 * [Known Issues](#known-issues)
 
 Installation
@@ -32,7 +31,7 @@ If you experience any issues with that, try ["Installing from Source with CMake"
 
 To build a GPU-enabled version of the package, follow the steps in ["Installing a GPU-enabled Build"](#installing-a-gpu-enabled-build).
 
-If any of the above options do not work for you or do not meet your needs, please let the maintainers know by [opening an issue](https://github.com/microsoft/LightGBM/issues).
+If any of the above options do not work for you or do not meet your needs, please let the maintainers know by [opening an issue](https://github.com/lightgbm-org/LightGBM/issues).
 
 When your package installation is done, you can check quickly if your LightGBM R-package is working by running the following:
 
@@ -60,7 +59,7 @@ install.packages("lightgbm", repos = "https://cran.r-project.org")
 
 This is the easiest way to install `{lightgbm}`. It does not require `CMake` or `Visual Studio`, and should work well on many different operating systems and compilers.
 
-Each CRAN package is also available on [LightGBM releases](https://github.com/microsoft/LightGBM/releases), with a name like `lightgbm-{VERSION}-r-cran.tar.gz`.
+Each CRAN package is also available on [LightGBM releases](https://github.com/lightgbm-org/LightGBM/releases), with a name like `lightgbm-{VERSION}-r-cran.tar.gz`.
 
 #### Custom Installation (Linux, Mac)
 
@@ -68,16 +67,23 @@ The steps above should work on most systems, but users with highly-customized en
 
 To change the compiler used when installing the CRAN package, you can create a file `~/.R/Makevars` which overrides `CC` (`C` compiler) and `CXX` (`C++` compiler).
 
-For example, to use `gcc` instead of `clang` on Mac, you could use something like the following:
+For example, to use `gcc-14` instead of `clang` on macOS, you could use something like the following:
 
 ```make
 # ~/.R/Makevars
-CC=gcc-8
-CXX=g++-8
-CXX11=g++-8
+CC=gcc-14
+CC17=gcc-14
+CXX=g++-14
+CXX17=g++-14
 ```
 
-### Installing from Source with CMake <a name="install"></a>
+To check the values R is using, run the following:
+
+```shell
+R CMD config --all
+```
+
+### Installing from Source with CMake <a id="install"></a>
 
 You need to install git and [CMake](https://cmake.org/) first.
 
@@ -138,7 +144,7 @@ Rscript build_r.R --use-mingw
 
 #### Mac OS Preparation
 
-You can perform installation either with **Apple Clang** or **gcc**. In case you prefer **Apple Clang**, you should install **OpenMP** (details for installation can be found in [Installation Guide](https://github.com/microsoft/LightGBM/blob/master/docs/Installation-Guide.rst#apple-clang)) first. In case you prefer **gcc**, you need to install it (details for installation can be found in [Installation Guide](https://github.com/microsoft/LightGBM/blob/master/docs/Installation-Guide.rst#gcc)) and set some environment variables to tell R to use `gcc` and `g++`. If you install these from Homebrew, your versions of `g++` and `gcc` are most likely in `/usr/local/bin`, as shown below.
+You can perform installation either with **Apple Clang** or **gcc**. In case you prefer **Apple Clang**, you should install **OpenMP** (details for installation can be found in [Installation Guide](https://github.com/lightgbm-org/LightGBM/blob/master/docs/Installation-Guide.rst#apple-clang)) first. In case you prefer **gcc**, you need to install it (details for installation can be found in [Installation Guide](https://github.com/lightgbm-org/LightGBM/blob/master/docs/Installation-Guide.rst#gcc)) and set some environment variables to tell R to use `gcc` and `g++`. If you install these from Homebrew, your versions of `g++` and `gcc` are most likely in `/usr/local/bin`, as shown below.
 
 ```
 # replace 8 with version of gcc installed on your machine
@@ -150,7 +156,7 @@ export CXX=/usr/local/bin/g++-8 CC=/usr/local/bin/gcc-8
 After following the "preparation" steps above for your operating system, build and install the R-package with the following commands:
 
 ```sh
-git clone --recursive https://github.com/microsoft/LightGBM
+git clone --recursive https://github.com/lightgbm-org/LightGBM
 cd LightGBM
 Rscript build_r.R
 ```
@@ -170,7 +176,7 @@ Note: for the build with Visual Studio/VS Build Tools in Windows, you should use
 
 ### Installing a GPU-enabled Build
 
-You will need to install Boost and OpenCL first: details for installation can be found in [Installation-Guide](https://github.com/microsoft/LightGBM/blob/master/docs/Installation-Guide.rst#build-gpu-version).
+You will need to install Boost and OpenCL first: details for installation can be found in [Installation-Guide](https://github.com/lightgbm-org/LightGBM/blob/master/docs/Installation-Guide.rst#build-gpu-version).
 
 After installing these other libraries, follow the steps in ["Installing from Source with CMake"](#install). When you reach the step that mentions `build_r.R`, pass the flag `--use-gpu`.
 
@@ -215,29 +221,29 @@ These packages do not require compilation, so they will be faster and easier to 
 
 CRAN does not prepare precompiled binaries for Linux, and as of this writing neither does this project.
 
-### Installing from a Pre-compiled lib_lightgbm <a name="lib_lightgbm"></a>
+### Installing from a Pre-compiled lib_lightgbm <a id="lib_lightgbm"></a>
 
 Previous versions of LightGBM offered the ability to first compile the C++ library (`lib_lightgbm.{dll,dylib,so}`) and then build an R-package that wraps it.
 
-As of version 3.0.0, this is no longer supported. If building from source is difficult for you, please [open an issue](https://github.com/microsoft/LightGBM/issues).
+As of version 3.0.0, this is no longer supported. If building from source is difficult for you, please [open an issue](https://github.com/lightgbm-org/LightGBM/issues).
 
 Examples
 --------
 
-Please visit [demo](https://github.com/microsoft/LightGBM/tree/master/R-package/demo):
+Please visit [demo](https://github.com/lightgbm-org/LightGBM/tree/master/R-package/demo):
 
-* [Basic walkthrough of wrappers](https://github.com/microsoft/LightGBM/blob/master/R-package/demo/basic_walkthrough.R)
-* [Boosting from existing prediction](https://github.com/microsoft/LightGBM/blob/master/R-package/demo/boost_from_prediction.R)
-* [Early Stopping](https://github.com/microsoft/LightGBM/blob/master/R-package/demo/early_stopping.R)
-* [Cross Validation](https://github.com/microsoft/LightGBM/blob/master/R-package/demo/cross_validation.R)
-* [Multiclass Training/Prediction](https://github.com/microsoft/LightGBM/blob/master/R-package/demo/multiclass.R)
-* [Leaf (in)Stability](https://github.com/microsoft/LightGBM/blob/master/R-package/demo/leaf_stability.R)
-* [Weight-Parameter Adjustment Relationship](https://github.com/microsoft/LightGBM/blob/master/R-package/demo/weight_param.R)
+* [Basic walkthrough of wrappers](https://github.com/lightgbm-org/LightGBM/blob/master/R-package/demo/basic_walkthrough.R)
+* [Boosting from existing prediction](https://github.com/lightgbm-org/LightGBM/blob/master/R-package/demo/boost_from_prediction.R)
+* [Early Stopping](https://github.com/lightgbm-org/LightGBM/blob/master/R-package/demo/early_stopping.R)
+* [Cross Validation](https://github.com/lightgbm-org/LightGBM/blob/master/R-package/demo/cross_validation.R)
+* [Multiclass Training/Prediction](https://github.com/lightgbm-org/LightGBM/blob/master/R-package/demo/multiclass.R)
+* [Leaf (in)Stability](https://github.com/lightgbm-org/LightGBM/blob/master/R-package/demo/leaf_stability.R)
+* [Weight-Parameter Adjustment Relationship](https://github.com/lightgbm-org/LightGBM/blob/master/R-package/demo/weight_param.R)
 
 Testing
 -------
 
-The R-package's unit tests are run automatically on every commit, via integrations like [GitHub Actions](https://github.com/microsoft/LightGBM/actions). Adding new tests in `R-package/tests/testthat` is a valuable way to improve the reliability of the R-package.
+The R-package's unit tests are run automatically on every commit, via integrations like [GitHub Actions](https://github.com/lightgbm-org/LightGBM/actions). Adding new tests in `R-package/tests/testthat` is a valuable way to improve the reliability of the R-package.
 
 ### Running the Tests
 
@@ -328,8 +334,6 @@ That script supports the following command-line options:
 - `--no-build-vignettes`: Skip building vignettes.
 - `--r-executable=[path-to-executable]`: Use an alternative build of R.
 
-Also, CRAN package is generated with every commit to any repo's branch and can be found in "Artifacts" section of the associated Azure Pipelines run.
-
 ### Standard Installation from CRAN Package
 
 After building the package, install it with a command like the following:
@@ -372,9 +376,12 @@ At build time, `configure` will be run and used to create a file `Makevars`, usi
 
 3. Edit `src/Makevars.in`.
 
-Alternatively, GitHub Actions can re-generate this file for you. On a pull request (only on internal one, does not work for ones from forks), create a comment with this phrase:
+Alternatively, GitHub Actions can re-generate this file for you.
 
-> /gha run r-configure
+1. navigate to https://github.com/lightgbm-org/LightGBM/actions/workflows/r_configure.yml
+2. click "Run workflow" (drop-down)
+3. enter the branch from the pull request for the `pr-branch` input
+4. click "Run workflow" (button)
 
 **Configuring for Windows**
 
@@ -477,9 +484,23 @@ RDvalgrind \
 | cat
 ```
 
-These tests can also be triggered on any pull request by leaving a comment in a pull request:
+These tests can also be triggered on a pull request branch, using GitHub Actions.
 
-> /gha run r-valgrind
+1. navigate to https://github.com/lightgbm-org/LightGBM/actions/workflows/r_valgrind.yml
+2. click "Run workflow" (drop-down)
+3. enter the branch from the pull request for the `pr-branch` input
+4. enter the pull request ID for the `pr-number` input
+5. click "Run workflow" (button)
+
+Or by using the GitHub CLI, using a command similar to this:
+
+```shell
+gh workflow run \
+    --repo lightgbm-org/LightGBM \
+    r_valgrind.yml \
+    -f pr-branch=ci/fix-rerun-workflow \
+    -f pr-number=7072
+```
 
 Known Issues
 ------------

@@ -2,6 +2,7 @@
 import filecmp
 import numbers
 import re
+import warnings
 from copy import deepcopy
 from os import getenv
 from pathlib import Path
@@ -69,13 +70,13 @@ def test_basic(tmp_path):
     assert bst.feature_name() == feature_names
     pred_from_model_file = bst.predict(X_test)
     # we need to check the consistency of model file here, so test for exact equal
-    np.testing.assert_array_equal(pred_from_matr, pred_from_model_file)
+    np_assert_array_equal(pred_from_matr, pred_from_model_file, strict=True)
 
     # check early stopping is working. Make it stop very early, so the scores should be very close to zero
     pred_parameter = {"pred_early_stop": True, "pred_early_stop_freq": 5, "pred_early_stop_margin": 1.5}
     pred_early_stopping = bst.predict(X_test, **pred_parameter)
     # scores likely to be different, but prediction should still be the same
-    np.testing.assert_array_equal(np.sign(pred_from_matr), np.sign(pred_early_stopping))
+    np_assert_array_equal(np.sign(pred_from_matr), np.sign(pred_early_stopping), strict=True)
 
     # test that shape is checked during prediction
     bad_X_test = X_test[:, 1:]
@@ -93,6 +94,49 @@ def test_basic(tmp_path):
     with open(tname, "w+b") as f:
         dump_svmlight_file(X_test, y_test, f, zero_based=False)
     np.testing.assert_raises_regex(lgb.basic.LightGBMError, bad_shape_error_msg, bst.predict, tname)
+
+
+def test_booster_rollback_one_iter(rng):
+    """Test that Booster.rollback_one_iter() correctly rolls back one boosting iteration."""
+    X = rng.uniform(size=(100, 5))
+    y = rng.integers(0, 2, size=(100,))
+    X_test = rng.uniform(size=(10, 5))
+
+    train_data = lgb.Dataset(X, label=y)
+    params = {
+        "objective": "binary",
+        "verbose": -1,
+    }
+    bst = lgb.Booster(params, train_data)
+
+    # Train for 10 iterations
+    num_iterations = 10
+    for _ in range(num_iterations):
+        bst.update()
+
+    assert bst.current_iteration() == num_iterations
+    assert bst.num_trees() == num_iterations
+
+    # Get predictions before rollback
+    pred_before = bst.predict(X_test)
+
+    # Rollback one iteration
+    result = bst.rollback_one_iter()
+
+    # Verify rollback decremented both iteration count and tree count
+    assert bst.current_iteration() == num_iterations - 1
+    assert bst.num_trees() == num_iterations - 1
+    # Verify it returns self for method chaining
+    assert result is bst
+
+    # Verify predictions actually changed (proves tree was removed, not just counter)
+    pred_after = bst.predict(X_test)
+    assert not np.allclose(pred_before, pred_after)
+
+    # Verify multiple rollbacks work
+    bst.rollback_one_iter()
+    assert bst.current_iteration() == num_iterations - 2
+    assert bst.num_trees() == num_iterations - 2
 
 
 class NumpySequence(lgb.Sequence):
@@ -213,7 +257,7 @@ def test_sequence_get_data(num_seq, rng):
 
     used_indices = rng.choice(a=np.arange(nrow), size=nrow // 3, replace=False)
     subset_data = seq_ds.subset(used_indices).construct()
-    np.testing.assert_array_equal(subset_data.get_data(), X[sorted(used_indices)])
+    np_assert_array_equal(subset_data.get_data(), X[sorted(used_indices)], strict=True)
 
 
 def test_chunked_dataset():
@@ -685,18 +729,18 @@ def test_list_to_1d_numpy(collection, dtype, rng):
                 ValueError,
                 match=r"pandas dtypes must be int, float or bool\.\nFields with bad pandas dtypes: 0: object",
             ):
-                lgb.basic._list_to_1d_numpy(y, dtype=np.float32, name=custom_name)
+                lgb.basic._list_to_1d_numpy(data=y, dtype=np.float32, name=custom_name)
             return
         elif pd.api.types.is_string_dtype(y):
             with pytest.raises(
                 ValueError, match=r"pandas dtypes must be int, float or bool\.\nFields with bad pandas dtypes: 0: str"
             ):
-                lgb.basic._list_to_1d_numpy(y, dtype=np.float32, name=custom_name)
+                lgb.basic._list_to_1d_numpy(data=y, dtype=np.float32, name=custom_name)
             return
 
     if isinstance(y, np.ndarray) and len(y.shape) == 2:
         with pytest.warns(UserWarning, match="column-vector"):
-            lgb.basic._list_to_1d_numpy(y, dtype=np.float32, name=custom_name)
+            lgb.basic._list_to_1d_numpy(data=y, dtype=np.float32, name=custom_name)
         return
     elif isinstance(y, list) and isinstance(y[0], list):
         err_msg = (
@@ -704,10 +748,10 @@ def test_list_to_1d_numpy(collection, dtype, rng):
             r"It should be list, numpy 1-D array or pandas Series"
         )
         with pytest.raises(TypeError, match=err_msg):
-            lgb.basic._list_to_1d_numpy(y, dtype=np.float32, name=custom_name)
+            lgb.basic._list_to_1d_numpy(data=y, dtype=np.float32, name=custom_name)
         return
 
-    result = lgb.basic._list_to_1d_numpy(y, dtype=dtype, name=custom_name)
+    result = lgb.basic._list_to_1d_numpy(data=y, dtype=dtype, name=custom_name)
     assert result.size == 10
     assert result.dtype == dtype
 
@@ -1019,14 +1063,149 @@ def test_equal_datasets_from_one_and_several_matrices_w_different_layouts(rng, t
     assert filecmp.cmp(one_path, several_path)
 
 
-def test_set_field_none_removes_field(rng):
-    X1 = rng.uniform(size=(10, 1))
-    d1 = lgb.Dataset(X1).construct()
-    weight = rng.uniform(size=10)
-    out = d1.set_field("weight", weight)
-    assert out is d1
+@pytest.mark.parametrize(
+    "field_name",
+    [
+        "group",
+        "init_score",
+        pytest.param(
+            "position",
+            marks=pytest.mark.skipif(
+                getenv("TASK", "") == "cuda",
+                reason="Positions in learning to rank is not supported in CUDA version yet",
+            ),
+        ),
+        "weight",
+    ],
+)
+def test_set_field_none_removes_field(rng, field_name):
+    X = rng.uniform(size=(10, 1))
+    d = lgb.Dataset(X).construct()
 
-    np.testing.assert_allclose(d1.get_field("weight"), weight)
+    if field_name == "group":
+        field = [5, 5]
+        expected = np.array([0, 5, 10], dtype=np.int32)
+    elif field_name == "position":
+        field = [100, 20, 100, 10, 30, 10, 30, 10, 30, 30]
+        expected = np.array([0, 1, 0, 2, 3, 2, 3, 2, 3, 3], dtype=np.int32)
+    else:
+        field = rng.uniform(size=10)
+        expected = field.astype(np.float64 if field_name == "init_score" else np.float32)
 
-    d1.set_field("weight", None)
-    assert d1.get_field("weight") is None
+    out = d.set_field(field_name, field)
+    assert out is d
+
+    np_assert_array_equal(d.get_field(field_name), expected, strict=True)
+
+    d.set_field(field_name, None)
+    assert d.get_field(field_name) is None
+
+
+def test_booster_eval_adds_new_valid_dataset() -> None:
+    X_train, X_test, y_train, y_test = train_test_split(
+        *load_breast_cancer(return_X_y=True),
+        test_size=0.1,
+        random_state=42,
+    )
+    train_set = lgb.Dataset(X_train, label=y_train)
+    valid_set = lgb.Dataset(X_test, label=y_test, reference=train_set)
+    booster = lgb.Booster(
+        params={
+            "deterministic": True,
+            "force_row_wise": True,
+            "objective": "binary",
+            "metric": ["auc", "binary_error"],
+            "num_iterations": 2,
+            "num_leaves": 3,
+            "num_threads": 1,
+            "seed": 708,
+            "verbose": -1,
+        },
+        train_set=train_set,
+    )
+    assert booster._Booster__num_dataset == 1
+    assert booster.valid_sets == []
+
+    result = booster.eval(valid_set, name="test")
+
+    assert booster._Booster__num_dataset == 2
+    assert booster.valid_sets == [valid_set]
+    assert len(result) == 2
+    assert isinstance(result, list)
+
+    # first metric - AUC
+    dataset_name, metric_name, metric_value, maximize = result[0]
+    assert dataset_name == "test"
+    assert metric_name == "auc"
+    assert metric_value >= 0.50
+    assert maximize is True
+
+    # second metric - binary error
+    dataset_name, metric_name, metric_value, maximize = result[1]
+    assert dataset_name == "test"
+    assert metric_name == "binary_error"
+    assert metric_value >= 0.40
+    assert maximize is False
+
+
+def test_refit_correctly_handles_categorical_features_in_params(rng) -> None:
+    rng = np.random.default_rng()
+    X = rng.integers(1, 10, size=(1_000, 3))
+    y = rng.uniform(size=(X.shape[0],))
+
+    # Dataset with 'categorical_feature" keyword arg
+    dtrain = lgb.Dataset(X, label=y, categorical_feature=[0, 2])
+    bst = lgb.train(
+        params={
+            "num_leaves": 7,
+            "verbose": -1,
+        },
+        train_set=dtrain,
+        num_boost_round=2,
+    )
+
+    # 'categorical_column' is correctly set in params
+    assert bst.params["categorical_column"] == [0, 2]
+
+    # refit() should not raise a warning
+    X_new = rng.integers(1, 10, size=(10, 3))
+    y_new = rng.uniform(size=(X_new.shape[0],))
+    with warnings.catch_warnings() as w:
+        warnings.simplefilter("always")
+        bst.refit(X_new, y_new)
+        if w:
+            assert not any(
+                re.search(r"has been found in .*params.* and will be ignored", str(warning.message)) for warning in w
+            )
+
+    # round-trip to and from a model string
+    loaded_bst = lgb.Booster(model_str=bst.model_to_string())
+
+    # that round-trip sets Booster.params to all model parameters, using the "main"
+    # ones, not any aliases
+    assert loaded_bst.params["categorical_feature"] == [0, 2]
+    assert "categorical_column" not in loaded_bst.params
+
+    # case 1: 'categorical_feature' keyword arg not passed
+    # result: should succeed and not warn
+    loaded_bst_new = loaded_bst.refit(X_new, y_new)
+    assert loaded_bst_new.params["categorical_column"] == [0, 2]
+
+    # case 2: 'categorical_feature' keyword arg passed, but identical to what's in params
+    # result: should succeed and not warn
+    with warnings.catch_warnings(record=True) as w:
+        warnings.simplefilter("always")
+        loaded_bst_new = loaded_bst.refit(X_new, y_new, categorical_feature=[0, 2])
+        assert loaded_bst_new.params["categorical_column"] == [0, 2]
+        if w:
+            assert not any(
+                re.search(r"has been found in .*params.* and will be ignored", str(warning.message)) for warning in w
+            )
+
+    # case 3: 'categorical_feature' keyword arg passed, different value
+    # result: informative error
+    with pytest.raises(
+        lgb.basic.LightGBMError,
+        match=re.escape("Using refit() to change which columns are treated as categorical is not supported"),
+    ):
+        loaded_bst_new = loaded_bst.refit(X_new, y_new, categorical_feature=[0, 1])

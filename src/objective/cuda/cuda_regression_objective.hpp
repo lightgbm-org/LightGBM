@@ -1,11 +1,12 @@
 /*!
- * Copyright (c) 2021 Microsoft Corporation. All rights reserved.
+ * Copyright (c) 2021-2026 Microsoft Corporation. All rights reserved.
+ * Copyright (c) 2021-2026 The LightGBM developers. All rights reserved.
  * Licensed under the MIT License. See LICENSE file in the project root for
  * license information.
  */
 
-#ifndef LIGHTGBM_OBJECTIVE_CUDA_CUDA_REGRESSION_OBJECTIVE_HPP_
-#define LIGHTGBM_OBJECTIVE_CUDA_CUDA_REGRESSION_OBJECTIVE_HPP_
+#ifndef LIGHTGBM_SRC_OBJECTIVE_CUDA_CUDA_REGRESSION_OBJECTIVE_HPP_
+#define LIGHTGBM_SRC_OBJECTIVE_CUDA_CUDA_REGRESSION_OBJECTIVE_HPP_
 
 #ifdef USE_CUDA
 
@@ -164,4 +165,4 @@ class CUDARegressionQuantileloss : public CUDARegressionObjectiveInterface<Regre
 }  // namespace LightGBM
 
 #endif  // USE_CUDA
-#endif  // LIGHTGBM_OBJECTIVE_CUDA_CUDA_REGRESSION_OBJECTIVE_HPP_
+#endif  // LIGHTGBM_SRC_OBJECTIVE_CUDA_CUDA_REGRESSION_OBJECTIVE_HPP_

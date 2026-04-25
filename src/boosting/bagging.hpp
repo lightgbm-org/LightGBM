@@ -1,10 +1,11 @@
 /*!
- * Copyright (c) 2021 Microsoft Corporation. All rights reserved.
+ * Copyright (c) 2021-2026 Microsoft Corporation. All rights reserved.
+ * Copyright (c) 2021-2026 The LightGBM developers. All rights reserved.
  * Licensed under the MIT License. See LICENSE file in the project root for license information.
  */
 
-#ifndef LIGHTGBM_BOOSTING_BAGGING_HPP_
-#define LIGHTGBM_BOOSTING_BAGGING_HPP_
+#ifndef LIGHTGBM_SRC_BOOSTING_BAGGING_HPP_
+#define LIGHTGBM_SRC_BOOSTING_BAGGING_HPP_
 
 #include <string>
 #include <vector>
@@ -293,4 +294,4 @@ class BaggingSampleStrategy : public SampleStrategy {
 
 }  // namespace LightGBM
 
-#endif  // LIGHTGBM_BOOSTING_BAGGING_HPP_
+#endif  // LIGHTGBM_SRC_BOOSTING_BAGGING_HPP_

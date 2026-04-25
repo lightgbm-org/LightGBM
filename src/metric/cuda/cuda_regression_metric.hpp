@@ -1,11 +1,12 @@
 /*!
- * Copyright (c) 2022 Microsoft Corporation. All rights reserved.
+ * Copyright (c) 2022-2026 Microsoft Corporation. All rights reserved.
+ * Copyright (c) 2022-2026 The LightGBM developers. All rights reserved.
  * Licensed under the MIT License. See LICENSE file in the project root for
  * license information.
  */
 
-#ifndef LIGHTGBM_METRIC_CUDA_CUDA_REGRESSION_METRIC_HPP_
-#define LIGHTGBM_METRIC_CUDA_CUDA_REGRESSION_METRIC_HPP_
+#ifndef LIGHTGBM_SRC_METRIC_CUDA_CUDA_REGRESSION_METRIC_HPP_
+#define LIGHTGBM_SRC_METRIC_CUDA_CUDA_REGRESSION_METRIC_HPP_
 
 #ifdef USE_CUDA
 
@@ -212,4 +213,4 @@ class CUDATweedieMetric : public CUDARegressionMetricInterface<TweedieMetric, CU
 
 #endif  // USE_CUDA
 
-#endif  // LIGHTGBM_METRIC_CUDA_CUDA_REGRESSION_METRIC_HPP_
+#endif  // LIGHTGBM_SRC_METRIC_CUDA_CUDA_REGRESSION_METRIC_HPP_

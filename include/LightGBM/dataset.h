@@ -1,9 +1,10 @@
 /*!
- * Copyright (c) 2016 Microsoft Corporation. All rights reserved.
+ * Copyright (c) 2016-2026 Microsoft Corporation. All rights reserved.
+ * Copyright (c) 2016-2026 The LightGBM developers. All rights reserved.
  * Licensed under the MIT License. See LICENSE file in the project root for license information.
  */
-#ifndef LIGHTGBM_DATASET_H_
-#define LIGHTGBM_DATASET_H_
+#ifndef LIGHTGBM_INCLUDE_LIGHTGBM_DATASET_H_
+#define LIGHTGBM_INCLUDE_LIGHTGBM_DATASET_H_
 
 #include <LightGBM/arrow.h>
 #include <LightGBM/config.h>
@@ -645,7 +646,7 @@ class Dataset {
   inline int Feature2Group(int feature_idx) const {
     return feature2group_[feature_idx];
   }
-  inline int Feture2SubFeature(int feature_idx) const {
+  inline int Feature2SubFeature(int feature_idx) const {
     return feature2subfeature_[feature_idx];
   }
   inline uint64_t GroupBinBoundary(int group_idx) const {
@@ -667,6 +668,8 @@ class Dataset {
   void ReSize(data_size_t num_data);
 
   void CopySubrow(const Dataset* fullset, const data_size_t* used_indices, data_size_t num_used_indices, bool need_meta_data);
+
+  void CopySubrowToDevice(const Dataset* fullset, const data_size_t* used_indices, data_size_t num_used_indices, bool need_meta_data, int gpu_device_id);
 
   MultiValBin* GetMultiBinFromSparseFeatures(const std::vector<uint32_t>& offsets) const;
 
@@ -1012,6 +1015,8 @@ class Dataset {
 
   void CreateCUDAColumnData();
 
+  void CopySubrowHostPart(const Dataset* fullset, const data_size_t* used_indices, data_size_t num_used_indices, bool need_meta_data);
+
   std::string data_filename_;
   /*! \brief Store used features */
   std::vector<std::unique_ptr<FeatureGroup>> feature_groups_;
@@ -1071,4 +1076,4 @@ class Dataset {
 
 }  // namespace LightGBM
 
-#endif   // LightGBM_DATA_H_
+#endif   // LIGHTGBM_INCLUDE_LIGHTGBM_DATASET_H_

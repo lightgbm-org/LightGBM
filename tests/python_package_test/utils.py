@@ -35,7 +35,7 @@ def load_linnerud(**kwargs):
 
 
 def make_ranking(
-    n_samples=100, n_features=20, n_informative=5, gmax=2, group=None, random_gs=False, avg_gs=10, random_state=0
+    *, n_samples=100, n_features=20, n_informative=5, gmax=2, group=None, random_gs=False, avg_gs=10, random_state=0
 ):
     """Generate a learning-to-rank dataset - feature vectors grouped together with
     integer-valued graded relevance scores. Replace this with a sklearn.datasets function
@@ -116,7 +116,7 @@ def make_ranking(
 
 
 @lru_cache(maxsize=None)
-def make_synthetic_regression(n_samples=100, n_features=4, n_informative=2, random_state=42):
+def make_synthetic_regression(*, n_samples=100, n_features=4, n_informative=2, random_state=42):
     return sklearn.datasets.make_regression(
         n_samples=n_samples, n_features=n_features, n_informative=n_informative, random_state=random_state
     )

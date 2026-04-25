@@ -1,11 +1,13 @@
 /*!
- * Copyright (c) 2022 Microsoft Corporation. All rights reserved.
+ * Copyright (c) 2022-2026 Microsoft Corporation. All rights reserved.
+ * Copyright (c) 2022-2026 The LightGBM developers. All rights reserved.
  * Licensed under the MIT License. See LICENSE file in the project root for license information.
  */
 
 #include <gtest/gtest.h>
 #include <LightGBM/utils/byte_buffer.h>
 
+#include <memory>
 #include <random>
 
 using LightGBM::ByteBuffer;

@@ -1,5 +1,6 @@
 /*!
- * Copyright (c) 2016 Microsoft Corporation. All rights reserved.
+ * Copyright (c) 2016-2026 Microsoft Corporation. All rights reserved.
+ * Copyright (c) 2016-2026 The LightGBM developers. All rights reserved.
  * Licensed under the MIT License. See LICENSE file in the project root for
  * license information.
  */
@@ -11,21 +12,25 @@
 #include <LightGBM/utils/openmp_wrapper.h>
 #include <LightGBM/utils/threading.h>
 
+#include <algorithm>
 #include <chrono>
 #include <cstdio>
 #include <limits>
+#include <memory>
 #include <sstream>
+#include <string>
 #include <unordered_map>
+#include <unordered_set>
+#include <utility>
+#include <vector>
 
 namespace LightGBM {
 
 const int Dataset::kSerializedReferenceVersionLength = 2;
 const char* Dataset::serialized_reference_version = "v1";
 
-const char* Dataset::binary_file_token =
-    "______LightGBM_Binary_File_Token______\n";
-const char* Dataset::binary_serialized_reference_token =
-    "______LightGBM_Binary_Serialized_Token______\n";
+const char* Dataset::binary_file_token = "______LightGBM_Binary_File_Token______\n";
+const char* Dataset::binary_serialized_reference_token = "______LightGBM_Binary_Serialized_Token______\n";
 
 Dataset::Dataset() {
   data_filename_ = "noname";
@@ -833,9 +838,8 @@ void Dataset::ReSize(data_size_t num_data) {
   }
 }
 
-void Dataset::CopySubrow(const Dataset* fullset,
-                         const data_size_t* used_indices,
-                         data_size_t num_used_indices, bool need_meta_data) {
+
+void Dataset::CopySubrowHostPart(const Dataset* fullset, const data_size_t* used_indices, data_size_t num_used_indices, bool need_meta_data) {
   CHECK_EQ(num_used_indices, num_data_);
 
   std::vector<int> group_ids, subfeature_ids;
@@ -882,6 +886,13 @@ void Dataset::CopySubrow(const Dataset* fullset,
       }
     }
   }
+}
+
+void Dataset::CopySubrow(const Dataset* fullset,
+                         const data_size_t* used_indices,
+                         data_size_t num_used_indices, bool need_meta_data) {
+  CopySubrowHostPart(fullset, used_indices, num_used_indices, need_meta_data);
+
   // update CUDA storage for column data and metadata
   device_type_ = fullset->device_type_;
   gpu_device_id_ = fullset->gpu_device_id_;
@@ -889,7 +900,28 @@ void Dataset::CopySubrow(const Dataset* fullset,
   #ifdef USE_CUDA
   if (device_type_ == std::string("cuda")) {
     if (cuda_column_data_ == nullptr) {
-      cuda_column_data_.reset(new CUDAColumnData(fullset->num_data(), gpu_device_id_));
+      cuda_column_data_.reset(new CUDAColumnData(num_used_indices, gpu_device_id_));
+      metadata_.CreateCUDAMetadata(gpu_device_id_);
+    }
+    cuda_column_data_->CopySubrow(fullset->cuda_column_data(), used_indices, num_used_indices);
+  }
+  #endif  // USE_CUDA
+}
+
+void Dataset::CopySubrowToDevice(const Dataset* fullset,
+                                 const data_size_t* used_indices,
+                                 data_size_t num_used_indices, bool need_meta_data,
+                                 int gpu_device_id) {
+  CopySubrowHostPart(fullset, used_indices, num_used_indices, need_meta_data);
+
+  // update CUDA storage for column data and metadata
+  device_type_ = fullset->device_type_;
+  gpu_device_id_ = gpu_device_id;
+
+  #ifdef USE_CUDA
+  if (device_type_ == std::string("cuda")) {
+    if (cuda_column_data_ == nullptr) {
+      cuda_column_data_.reset(new CUDAColumnData(num_used_indices, gpu_device_id_));
       metadata_.CreateCUDAMetadata(gpu_device_id_);
     }
     cuda_column_data_->CopySubrow(fullset->cuda_column_data(), used_indices, num_used_indices);

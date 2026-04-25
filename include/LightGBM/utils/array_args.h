@@ -1,9 +1,10 @@
 /*!
- * Copyright (c) 2016 Microsoft Corporation. All rights reserved.
+ * Copyright (c) 2016-2026 Microsoft Corporation. All rights reserved.
+ * Copyright (c) 2020-2026 The LightGBM developers. All rights reserved.
  * Licensed under the MIT License. See LICENSE file in the project root for license information.
  */
-#ifndef LIGHTGBM_UTILS_ARRAY_AGRS_H_
-#define LIGHTGBM_UTILS_ARRAY_AGRS_H_
+#ifndef LIGHTGBM_INCLUDE_LIGHTGBM_UTILS_ARRAY_ARGS_H_
+#define LIGHTGBM_INCLUDE_LIGHTGBM_UTILS_ARRAY_ARGS_H_
 
 #include <LightGBM/utils/openmp_wrapper.h>
 #include <LightGBM/utils/threading.h>
@@ -184,15 +185,6 @@ class ArrayArgs {
     }
   }
 
-  inline static bool CheckAllZero(const std::vector<VAL_T>& array) {
-    for (size_t i = 0; i < array.size(); ++i) {
-      if (array[i] != VAL_T(0)) {
-        return false;
-      }
-    }
-    return true;
-  }
-
   inline static bool CheckAll(const std::vector<VAL_T>& array, VAL_T t) {
     for (size_t i = 0; i < array.size(); ++i) {
       if (array[i] != t) {
@@ -205,4 +197,4 @@ class ArrayArgs {
 
 }  // namespace LightGBM
 
-#endif   // LightGBM_UTILS_ARRAY_AGRS_H_
+#endif  // LIGHTGBM_INCLUDE_LIGHTGBM_UTILS_ARRAY_ARGS_H_

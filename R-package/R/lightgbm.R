@@ -281,7 +281,7 @@ lightgbm <- function(data,
 #' https://archive.ics.uci.edu/ml/datasets/Mushroom
 #'
 #' Bache, K. & Lichman, M. (2013). UCI Machine Learning Repository
-#' [http://archive.ics.uci.edu/ml]. Irvine, CA: University of California,
+#' [https://archive.ics.uci.edu/ml]. Irvine, CA: University of California,
 #' School of Information and Computer Science.
 #'
 #' @docType data
@@ -305,7 +305,7 @@ NULL
 #' https://archive.ics.uci.edu/ml/datasets/Mushroom
 #'
 #' Bache, K. & Lichman, M. (2013). UCI Machine Learning Repository
-#' [http://archive.ics.uci.edu/ml]. Irvine, CA: University of California,
+#' [https://archive.ics.uci.edu/ml]. Irvine, CA: University of California,
 #' School of Information and Computer Science.
 #'
 #' @docType data
@@ -324,7 +324,7 @@ NULL
 #'              randomly selected from 3 (older version of this dataset with less inputs).
 #'
 #' @references
-#' http://archive.ics.uci.edu/ml/datasets/Bank+Marketing
+#' https://archive.ics.uci.edu/ml/datasets/Bank+Marketing
 #'
 #' S. Moro, P. Cortez and P. Rita. (2014)
 #' A Data-Driven Approach to Predict the Success of Bank Telemarketing. Decision Support Systems

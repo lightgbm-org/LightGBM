@@ -13,8 +13,8 @@ if [[ $OS_NAME == "macos" ]]; then
     # Check https://github.com/actions/runner-images/tree/main/images/macos for available
     # versions of Xcode
     macos_ver=$(sw_vers --productVersion)
-    if [[ "${macos_ver}" =~ 13. ]]; then
-        xcode_path="/Applications/Xcode_14.3.app/Contents/Developer"
+    if [[ "${macos_ver}" =~ 15. ]]; then
+        xcode_path="/Applications/Xcode_16.0.app/Contents/Developer"
     else
         xcode_path="/Applications/Xcode_15.0.app/Contents/Developer"
     fi
@@ -124,6 +124,7 @@ else  # Linux
         if [[ $IN_UBUNTU_BASE_CONTAINER == "true" ]]; then
             sudo apt-get update
             sudo apt-get install --no-install-recommends -y \
+                patchelf \
                 pocl-opencl-icd
         elif [[ $(uname -m) == "x86_64" ]]; then
             sudo yum update -y
@@ -144,7 +145,7 @@ else  # Linux
     fi
 fi
 
-if [[ "${TASK}" != "cpp-tests" ]] && [[ "${TASK}" != "r-package" ]]; then
+if [[ "${TASK}" != "cpp-tests" ]] && [[ "${TASK}" != "r-package" ]] && [[ "${TASK}" != "swig" ]]; then
     if [[ $SETUP_CONDA != "false" ]]; then
         curl \
             -sL \

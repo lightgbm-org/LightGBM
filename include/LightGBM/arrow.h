@@ -1,13 +1,15 @@
 /*!
- * Copyright (c) 2023 Microsoft Corporation. All rights reserved.
+ * Copyright (c) 2023-2026 Microsoft Corporation. All rights reserved.
+ * Copyright (c) 2023-2026 The LightGBM developers. All rights reserved.
  * Licensed under the MIT License. See LICENSE file in the project root for license information.
  *
  * Author: Oliver Borchert
  */
 
-#ifndef LIGHTGBM_ARROW_H_
-#define LIGHTGBM_ARROW_H_
+#ifndef LIGHTGBM_INCLUDE_LIGHTGBM_ARROW_H_
+#define LIGHTGBM_INCLUDE_LIGHTGBM_ARROW_H_
 
+#ifdef __cplusplus
 #include <algorithm>
 #include <cstdint>
 #include <functional>
@@ -17,6 +19,7 @@
 #include <utility>
 #include <vector>
 #include <stdexcept>
+#endif
 
 /* -------------------------------------- C DATA INTERFACE ------------------------------------- */
 // The C data interface is taken from
@@ -72,6 +75,7 @@ struct ArrowArray {
 /*                                         CHUNKED ARRAY                                         */
 /* --------------------------------------------------------------------------------------------- */
 
+#ifdef __cplusplus
 namespace LightGBM {
 
 /**
@@ -295,5 +299,6 @@ class ArrowTable {
 }  // namespace LightGBM
 
 #include "arrow.tpp"
+#endif /* __cplusplus */
 
-#endif /* LIGHTGBM_ARROW_H_ */
+#endif  // LIGHTGBM_INCLUDE_LIGHTGBM_ARROW_H_

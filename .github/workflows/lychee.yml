@@ -1,0 +1,54 @@
+name: Link checks
+
+on:
+  # Run manually by clicking a button in the UI
+  workflow_dispatch:
+  # Run once a day at 8:00am UTC
+  schedule:
+    - cron: '0 8 * * *'
+
+# only 1 job running in the repo at any time
+concurrency:
+  group: lock
+
+# default to 0 permissions
+# (job-level overrides add the minimal permissions needed)
+permissions:
+  contents: none
+
+env:
+  COMPILER: gcc
+  OS_NAME: 'linux'
+  TASK: 'check-links'
+
+jobs:
+  check-links:
+    timeout-minutes: 60
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
+        with:
+          fetch-depth: 5
+          persist-credentials: false
+          submodules: false
+      - name: Build docs
+        run: |
+          export CONDA=${HOME}/miniforge
+          export PATH=${CONDA}/bin:${HOME}/.local/bin:${PATH}
+          $GITHUB_WORKSPACE/.ci/setup.sh || exit 1
+          $GITHUB_WORKSPACE/.ci/build-docs.sh || exit 1
+      - name: Check links
+        uses: lycheeverse/lychee-action@8646ba30535128ac92d33dfc9133794bfdd9b411  # v2.8.0
+        with:
+          args: >-
+            --config=./docs/.lychee.toml
+            --
+            "**/*.rst"
+            "**/*.md"
+            "./R-package/**/*.Rd"
+            "./docs/_build/html/*.html"
+          fail: true
+          failIfEmpty: true

@@ -1,9 +1,10 @@
 /*!
- * Copyright (c) 2016 Microsoft Corporation. All rights reserved.
+ * Copyright (c) 2016-2026 Microsoft Corporation. All rights reserved.
+ * Copyright (c) 2016-2026 The LightGBM developers. All rights reserved.
  * Licensed under the MIT License. See LICENSE file in the project root for license information.
  */
-#ifndef LIGHTGBM_BOOSTING_DART_H_
-#define LIGHTGBM_BOOSTING_DART_H_
+#ifndef LIGHTGBM_SRC_BOOSTING_DART_HPP_
+#define LIGHTGBM_SRC_BOOSTING_DART_HPP_
 
 #include <LightGBM/boosting.h>
 
@@ -208,4 +209,4 @@ class DART: public GBDT {
 };
 
 }  // namespace LightGBM
-#endif   // LightGBM_BOOSTING_DART_H_
+#endif  // LIGHTGBM_SRC_BOOSTING_DART_HPP_

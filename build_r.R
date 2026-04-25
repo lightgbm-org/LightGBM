@@ -97,7 +97,7 @@ install_libs_content <- .replace_flag("use_msys2", USING_MSYS2, install_libs_con
 keyword_args <- parsed_args[["keyword_args"]]
 if (length(keyword_args) > 0L) {
   cmake_args_to_add <- NULL
-  for (i in seq_len(length(keyword_args))) {
+  for (i in seq_along(keyword_args)) {
     arg_name <- names(keyword_args)[[i]]
     define_name <- ARGS_TO_DEFINES[[arg_name]]
     arg_value <- shQuote(normalizePath(keyword_args[[arg_name]], winslash = "/"))

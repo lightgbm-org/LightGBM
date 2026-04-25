@@ -1,5 +1,6 @@
 /*!
- * Copyright (c) 2022 Microsoft Corporation. All rights reserved.
+ * Copyright (c) 2022-2026 Microsoft Corporation. All rights reserved.
+ * Copyright (c) 2022-2026 The LightGBM developers. All rights reserved.
  * Licensed under the MIT License. See LICENSE file in the project root for license information.
  */
 
@@ -7,8 +8,10 @@
 #include <testutils.h>
 #include <LightGBM/c_api.h>
 
-#include <iostream>
+#include <algorithm>
 #include <fstream>
+#include <iostream>
+#include <vector>
 
 using LightGBM::TestUtils;
 

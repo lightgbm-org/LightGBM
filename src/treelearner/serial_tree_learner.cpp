@@ -1,5 +1,6 @@
 /*!
- * Copyright (c) 2016 Microsoft Corporation. All rights reserved.
+ * Copyright (c) 2016-2026 Microsoft Corporation. All rights reserved.
+ * Copyright (c) 2016-2026 The LightGBM developers. All rights reserved.
  * Licensed under the MIT License. See LICENSE file in the project root for license information.
  */
 #include "serial_tree_learner.h"
@@ -10,10 +11,13 @@
 #include <LightGBM/utils/common.h>
 
 #include <algorithm>
+#include <memory>
 #include <queue>
 #include <set>
+#include <string>
 #include <unordered_map>
 #include <utility>
+#include <vector>
 
 #include "cost_effective_gradient_boosting.hpp"
 

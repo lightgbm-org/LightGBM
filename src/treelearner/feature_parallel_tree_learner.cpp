@@ -1,5 +1,6 @@
 /*!
- * Copyright (c) 2016 Microsoft Corporation. All rights reserved.
+ * Copyright (c) 2016-2026 Microsoft Corporation. All rights reserved.
+ * Copyright (c) 2016-2026 The LightGBM developers. All rights reserved.
  * Licensed under the MIT License. See LICENSE file in the project root for license information.
  */
 #include <cstring>
@@ -11,8 +12,7 @@ namespace LightGBM {
 
 
 template <typename TREELEARNER_T>
-FeatureParallelTreeLearner<TREELEARNER_T>::FeatureParallelTreeLearner(const Config* config)
-  :TREELEARNER_T(config) {
+FeatureParallelTreeLearner<TREELEARNER_T>::FeatureParallelTreeLearner(const Config* config):TREELEARNER_T(config) {
 }
 
 template <typename TREELEARNER_T>

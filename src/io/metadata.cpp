@@ -1,5 +1,6 @@
 /*!
- * Copyright (c) 2016 Microsoft Corporation. All rights reserved.
+ * Copyright (c) 2016-2026 Microsoft Corporation. All rights reserved.
+ * Copyright (c) 2016-2026 The LightGBM developers. All rights reserved.
  * Licensed under the MIT License. See LICENSE file in the project root for license information.
  */
 #include <LightGBM/dataset.h>
@@ -7,6 +8,7 @@
 
 #include <set>
 #include <string>
+#include <unordered_map>
 #include <vector>
 
 namespace LightGBM {
@@ -102,7 +104,7 @@ void Metadata::Init(data_size_t num_data, int32_t has_weights, int32_t has_init_
 void Metadata::Init(const Metadata& fullset, const data_size_t* used_indices, data_size_t num_used_indices) {
   num_data_ = num_used_indices;
 
-  label_ = std::vector<label_t>(num_used_indices);
+  label_.resize(num_used_indices);
 #pragma omp parallel for num_threads(OMP_NUM_THREADS()) schedule(static, 512) if (num_used_indices >= 1024)
   for (data_size_t i = 0; i < num_used_indices; ++i) {
     label_[i] = fullset.label_[used_indices[i]];

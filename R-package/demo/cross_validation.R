@@ -38,7 +38,7 @@ lgb.cv(
   , showsd = FALSE
 )
 
-# You can also do cross validation with cutomized loss function
+# You can also do cross validation with customized loss function
 print("Running cross validation, with cutomsized loss function")
 
 logregobj <- function(preds, dtrain) {

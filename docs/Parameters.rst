@@ -162,7 +162,7 @@ Core Parameters
 
    -  ranking application
 
-      -  ``lambdarank``, `lambdarank <https://proceedings.neurips.cc/paper_files/paper/2006/file/af44c4c56f385c43f2529f9b1b018f6a-Paper.pdf>`__ objective. `label_gain <#label_gain>`__ can be used to set the gain (weight) of ``int`` label and all values in ``label`` must be smaller than number of elements in ``label_gain``
+      -  ``lambdarank``, `lambdarank <https://proceedings.neurips.cc/paper/2006/hash/af44c4c56f385c43f2529f9b1b018f6a-Abstract.html>`__ objective. `label_gain <#label_gain>`__ can be used to set the gain (weight) of ``int`` label and all values in ``label`` must be smaller than number of elements in ``label_gain``
 
       -  ``rank_xendcg``, `XE_NDCG_MART <https://arxiv.org/abs/1911.09798>`__ ranking objective function, aliases: ``xendcg``, ``xe_ndcg``, ``xe_ndcg_mart``, ``xendcg_mart``
 
@@ -264,7 +264,7 @@ Core Parameters
 
    -  ``cpu`` supports all LightGBM functionality and is portable across the widest range of operating systems and hardware
 
-   -  ``cuda`` offers faster training than ``gpu`` or ``cpu``, but only works on GPUs supporting CUDA
+   -  ``cuda`` offers faster training than ``gpu`` or ``cpu``, but only works on GPUs supporting CUDA or ROCm
 
    -  ``gpu`` can be faster than ``cpu`` and works on a wider range of GPUs than CUDA
 
@@ -272,7 +272,7 @@ Core Parameters
 
    -  **Note**: for the faster speed, GPU uses 32-bit float point to sum up by default, so this may affect the accuracy for some tasks. You can set ``gpu_use_dp=true`` to enable 64-bit float point, but it will slow down the training
 
-   -  **Note**: refer to `Installation Guide <./Installation-Guide.rst>`__ to build LightGBM with GPU or CUDA support
+   -  **Note**: refer to `Installation Guide <./Installation-Guide.rst>`__ to build LightGBM with GPU, CUDA, or ROCm support
 
 -  ``seed`` :raw-html:`<a id="seed" title="Permalink to this parameter" href="#seed">&#x1F517;&#xFE0E;</a>`, default = ``None``, type = int, aliases: ``random_seed``, ``random_state``
 
@@ -290,7 +290,7 @@ Core Parameters
 
    -  when you use the different seeds, different LightGBM versions, the binaries compiled by different compilers, or in different systems, the results are expected to be different
 
-   -  you can `raise issues <https://github.com/microsoft/LightGBM/issues>`__ in LightGBM GitHub repo when you meet the unstable results
+   -  you can `raise issues <https://github.com/lightgbm-org/LightGBM/issues>`__ in LightGBM GitHub repo when you meet the unstable results
 
    -  **Note**: setting this to ``true`` may slow down the training
 
@@ -491,7 +491,7 @@ Learning Control Parameters
 
 -  ``linear_lambda`` :raw-html:`<a id="linear_lambda" title="Permalink to this parameter" href="#linear_lambda">&#x1F517;&#xFE0E;</a>`, default = ``0.0``, type = double, constraints: ``linear_lambda >= 0.0``
 
-   -  linear tree regularization, corresponds to the parameter ``lambda`` in Eq. 3 of `Gradient Boosting with Piece-Wise Linear Regression Trees <https://arxiv.org/pdf/1802.05640.pdf>`__
+   -  linear tree regularization, corresponds to the parameter ``lambda`` in Eq. 3 of `Gradient Boosting with Piece-Wise Linear Regression Trees <https://arxiv.org/abs/1802.05640>`__
 
 -  ``min_gain_to_split`` :raw-html:`<a id="min_gain_to_split" title="Permalink to this parameter" href="#min_gain_to_split">&#x1F517;&#xFE0E;</a>`, default = ``0.0``, type = double, aliases: ``min_split_gain``, constraints: ``min_gain_to_split >= 0.0``
 
@@ -631,7 +631,7 @@ Learning Control Parameters
 
    -  **Note**: the forced split logic will be ignored, if the split makes gain worse
 
-   -  see `this file <https://github.com/microsoft/LightGBM/blob/master/examples/binary_classification/forced_splits.json>`__ as an example
+   -  see `this file <https://github.com/lightgbm-org/LightGBM/blob/master/examples/binary_classification/forced_splits.json>`__ as an example
 
 -  ``refit_decay_rate`` :raw-html:`<a id="refit_decay_rate" title="Permalink to this parameter" href="#refit_decay_rate">&#x1F517;&#xFE0E;</a>`, default = ``0.9``, type = double, constraints: ``0.0 <= refit_decay_rate <= 1.0``
 
@@ -845,7 +845,7 @@ Dataset Parameters
 
 -  ``enable_bundle`` :raw-html:`<a id="enable_bundle" title="Permalink to this parameter" href="#enable_bundle">&#x1F517;&#xFE0E;</a>`, default = ``true``, type = bool, aliases: ``is_enable_bundle``, ``bundle``
 
-   -  set this to ``false`` to disable Exclusive Feature Bundling (EFB), which is described in `LightGBM: A Highly Efficient Gradient Boosting Decision Tree <https://papers.nips.cc/paper_files/paper/2017/hash/6449f44a102fde848669bdd9eb6b76fa-Abstract.html>`__
+   -  set this to ``false`` to disable Exclusive Feature Bundling (EFB), which is described in `LightGBM: A Highly Efficient Gradient Boosting Decision Tree <https://proceedings.neurips.cc/paper/2017/hash/6449f44a102fde848669bdd9eb6b76fa-Abstract.html>`__
 
    -  **Note**: disabling this may cause the slow training speed for sparse datasets
 
@@ -969,7 +969,7 @@ Dataset Parameters
 
    -  ``.json`` file should contain an array of objects, each containing the word ``feature`` (integer feature index) and ``bin_upper_bound`` (array of thresholds for binning)
 
-   -  see `this file <https://github.com/microsoft/LightGBM/blob/master/examples/regression/forced_bins.json>`__ as an example
+   -  see `this file <https://github.com/lightgbm-org/LightGBM/blob/master/examples/regression/forced_bins.json>`__ as an example
 
 -  ``save_binary`` :raw-html:`<a id="save_binary" title="Permalink to this parameter" href="#save_binary">&#x1F517;&#xFE0E;</a>`, default = ``false``, type = bool, aliases: ``is_save_binary``, ``is_save_binary_file``
 
@@ -989,9 +989,9 @@ Dataset Parameters
 
    -  path to a ``.json`` file that specifies customized parser initialized configuration
 
-   -  see `lightgbm-transform <https://github.com/microsoft/lightgbm-transform>`__ for usage examples
+   -  see `lightgbm-transform <https://github.com/lightgbm-org/LightGBM-transform>`__ for usage examples
 
-   -  **Note**: ``lightgbm-transform`` is not maintained by LightGBM's maintainers. Bug reports or feature requests should go to `issues page <https://github.com/microsoft/lightgbm-transform/issues>`__
+   -  **Note**: ``lightgbm-transform`` is not maintained by LightGBM's maintainers. Bug reports or feature requests should go to `issues page <https://github.com/lightgbm-org/LightGBM-transform/issues>`__
 
    -  *New in version 4.0.0*
 
@@ -1192,7 +1192,7 @@ Objective Parameters
 
    -  used only in ``lambdarank`` application
 
-   -  controls the number of top-results to focus on during training, refer to "truncation level" in the Sec. 3 of `LambdaMART paper <https://www.microsoft.com/en-us/research/wp-content/uploads/2016/02/MSR-TR-2010-82.pdf>`__
+   -  controls the number of top-results to focus on during training, refer to "truncation level" in the Sec. 3 of `LambdaMART paper <https://www.microsoft.com/en-us/research/publication/from-ranknet-to-lambdarank-to-lambdamart-an-overview/>`__
 
    -  this parameter is closely related to the desirable cutoff ``k`` in the metric **NDCG@k** that we aim at optimizing the ranker for. The optimal setting for this parameter is likely to be slightly higher than ``k`` (e.g., ``k + 3``) to include more pairs of documents to train on, but perhaps not too high to avoid deviating too much from the desired target metric **NDCG@k**
 
@@ -1261,11 +1261,13 @@ Metric Parameters
 
       -  ``average_precision``, `average precision score <https://scikit-learn.org/stable/modules/generated/sklearn.metrics.average_precision_score.html>`__
 
+      -  ``r2``, `R-squared <https://scikit-learn.org/stable/modules/generated/sklearn.metrics.r2_score.html>`__
+
       -  ``binary_logloss``, `log loss <https://en.wikipedia.org/wiki/Cross_entropy>`__, aliases: ``binary``
 
       -  ``binary_error``, for one sample: ``0`` for correct classification, ``1`` for error classification
 
-      -  ``auc_mu``, `AUC-mu <http://proceedings.mlr.press/v97/kleiman19a/kleiman19a.pdf>`__
+      -  ``auc_mu``, `AUC-mu <https://proceedings.mlr.press/v97/kleiman19a.html>`__
 
       -  ``multi_logloss``, log loss for multi-class classification, aliases: ``multiclass``, ``softmax``, ``multiclassova``, ``multiclass_ova``, ``ova``, ``ovr``
 
@@ -1371,7 +1373,17 @@ GPU Parameters
 
    -  ``-1`` means the default device in the selected platform
 
+   -  in multi-GPU case (``num_gpu>1``) means ID of the master GPU
+
    -  **Note**: refer to `GPU Targets <./GPU-Targets.rst#query-opencl-devices-in-your-system>`__ for more details
+
+-  ``gpu_device_id_list`` :raw-html:`<a id="gpu_device_id_list" title="Permalink to this parameter" href="#gpu_device_id_list">&#x1F517;&#xFE0E;</a>`, default = ``""``, type = string
+
+   -  list of CUDA device IDs
+
+   -  **Note**: can be used only in CUDA implementation (``device_type="cuda"``) and when ``num_gpu>1``
+
+   -  if empty, the devices with the smallest IDs will be used
 
 -  ``gpu_use_dp`` :raw-html:`<a id="gpu_use_dp" title="Permalink to this parameter" href="#gpu_use_dp">&#x1F517;&#xFE0E;</a>`, default = ``false``, type = bool
 
@@ -1381,9 +1393,15 @@ GPU Parameters
 
 -  ``num_gpu`` :raw-html:`<a id="num_gpu" title="Permalink to this parameter" href="#num_gpu">&#x1F517;&#xFE0E;</a>`, default = ``1``, type = int, constraints: ``num_gpu > 0``
 
-   -  number of GPUs
+   -  number of GPUs used for training in this node
 
    -  **Note**: can be used only in CUDA implementation (``device_type="cuda"``)
+
+   -  if ``0``, only 1 GPU will be used
+
+   -  used in both single-machine and distributed learning applications
+
+   -  in distributed learning application, each machine can use different number of GPUs
 
 .. end params list
 

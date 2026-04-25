@@ -5,7 +5,7 @@ $(() => {
     });
 
     /* List each class property item on a new line
-       https://github.com/microsoft/LightGBM/issues/5073 */
+       https://github.com/lightgbm-org/LightGBM/issues/5073 */
     if (window.location.pathname.toLocaleLowerCase().indexOf("pythonapi") !== -1) {
         $(".py.property").each(function () {
             this.style.setProperty("display", "inline", "important");
@@ -22,6 +22,7 @@ $(() => {
             "#build-mpi-version",
             "#build-gpu-version",
             "#build-cuda-version",
+            "#build-rocm-version",
             "#build-java-wrapper",
             "#build-python-package",
             "#build-r-package",
@@ -47,25 +48,5 @@ $(() => {
         $(".wy-menu.wy-menu-vertical li a.reference.internal").click(function () {
             uncollapse($($(this).attr("href")));
         });
-
-        /* Modify src and href attrs of artifacts badge */
-        function modifyBadge(src, href) {
-            $('img[alt="download artifacts"]').each(function () {
-                this.src = src;
-                this.parentNode.href = href;
-            });
-        }
-        /* Initialize artifacts badge */
-        modifyBadge("./_static/images/artifacts-fetching.svg", "#");
-        /* Fetch latest buildId and construct artifacts badge */
-        $.getJSON(
-            "https://dev.azure.com/lightgbm-ci/lightgbm-ci/_apis/build/builds?branchName=refs/heads/master&resultFilter=succeeded&queryOrder=finishTimeDescending&%24top=1&api-version=7.1-preview.7",
-            (data) => {
-                modifyBadge(
-                    "./_static/images/artifacts-download.svg",
-                    `https://dev.azure.com/lightgbm-ci/lightgbm-ci/_apis/build/builds/${data.value[0].id}/artifacts?artifactName=PackageAssets&api-version=7.1-preview.5&%24format=zip`,
-                );
-            },
-        );
     }
 });

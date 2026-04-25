@@ -1,16 +1,19 @@
 /*!
- * Copyright (c) 2021 Microsoft Corporation. All rights reserved.
+ * Copyright (c) 2021-2026 Microsoft Corporation. All rights reserved.
+ * Copyright (c) 2021-2026 The LightGBM developers. All rights reserved.
  * Licensed under the MIT License. See LICENSE file in the project root for license information.
  * Modifications Copyright(C) 2023 Advanced Micro Devices, Inc. All rights reserved.
  */
 
-#ifndef LIGHTGBM_CUDA_CUDA_ALGORITHMS_HPP_
-#define LIGHTGBM_CUDA_CUDA_ALGORITHMS_HPP_
+#ifndef LIGHTGBM_INCLUDE_LIGHTGBM_CUDA_CUDA_ALGORITHMS_HPP_
+#define LIGHTGBM_INCLUDE_LIGHTGBM_CUDA_CUDA_ALGORITHMS_HPP_
 
 #ifdef USE_CUDA
 
+#ifndef USE_ROCM
 #include <cuda.h>
 #include <cuda_runtime.h>
+#endif
 #include <stdio.h>
 
 #include <LightGBM/bin.h>
@@ -620,4 +623,4 @@ __device__ VAL_T PercentileDevice(const VAL_T* values,
 }  // namespace LightGBM
 
 #endif  // USE_CUDA
-#endif  // LIGHTGBM_CUDA_CUDA_ALGORITHMS_HPP_
+#endif  // LIGHTGBM_INCLUDE_LIGHTGBM_CUDA_CUDA_ALGORITHMS_HPP_

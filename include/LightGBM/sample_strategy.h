@@ -1,10 +1,11 @@
 /*!
- * Copyright (c) 2021 Microsoft Corporation. All rights reserved.
+ * Copyright (c) 2021-2026 Microsoft Corporation. All rights reserved.
+ * Copyright (c) 2021-2026 The LightGBM developers. All rights reserved.
  * Licensed under the MIT License. See LICENSE file in the project root for license information.
  */
 
-#ifndef LIGHTGBM_SAMPLE_STRATEGY_H_
-#define LIGHTGBM_SAMPLE_STRATEGY_H_
+#ifndef LIGHTGBM_INCLUDE_LIGHTGBM_SAMPLE_STRATEGY_H_
+#define LIGHTGBM_INCLUDE_LIGHTGBM_SAMPLE_STRATEGY_H_
 
 #include <LightGBM/cuda/cuda_utils.hu>
 #include <LightGBM/utils/random.h>
@@ -84,4 +85,4 @@ class SampleStrategy {
 
 }  // namespace LightGBM
 
-#endif  // LIGHTGBM_SAMPLE_STRATEGY_H_
+#endif  // LIGHTGBM_INCLUDE_LIGHTGBM_SAMPLE_STRATEGY_H_

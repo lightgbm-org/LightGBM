@@ -144,6 +144,7 @@ publish/
 
 # NuGet Packages
 *.nupkg
+nuget/
 # The packages folder can be ignored because of Package Restore
 **/packages/*
 # except build/, which is used as an MSBuild target.
@@ -313,6 +314,7 @@ pip-delete-this-directory.txt
 # Unit test / coverage reports
 htmlcov/
 .tox/
+.nox/
 .coverage
 .coverage.*
 .cache
@@ -320,8 +322,11 @@ nosetests.xml
 prof/
 *.prof
 coverage.xml
-*,cover
+*.cover
+*.py.cover
 .hypothesis/
+.pytest_cache/
+cover/
 **/coverage.html
 **/coverage.html.zip
 **/Rplots.pdf
@@ -469,3 +474,11 @@ dask-worker-space/
 
 # pixi environments
 .pixi
+
+# mypy
+.mypy_cache/
+.dmypy.json
+dmypy.json
+
+# files created by release tasks
+/release-artifacts
