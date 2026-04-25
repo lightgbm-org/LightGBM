@@ -89,7 +89,7 @@ jobs:
   build-gpu:
     name: build (GPU)
     # ref: https://docs.github.com/en/actions/concepts/runners/about-larger-runners#specifications-for-gpu-larger-runners
-    runs-on: github-hosted-linux-gpu-amd64
+    runs-on: ${{ inputs.test-gpu && 'github-hosted-linux-gpu-amd64' || 'ubuntu-latest' }}
     permissions:
       contents: read
     steps:
@@ -121,7 +121,7 @@ jobs:
           LIGHTGBM_GIT_REF: ${{ github.head_ref }}
         run: |
           docker build \
-            -t lightgbm:cli-only.gpu
+            -t lightgbm:cli-only.gpu \
             --build-arg LIGHTGBM_GIT_REF="${LIGHTGBM_GIT_REF}" \
             --build-arg LIGHTGBM_GIT_URL=https://github.com/${{ github.repository }} \
             - < ./docker/gpu/dockerfile-cli-only.gpu
