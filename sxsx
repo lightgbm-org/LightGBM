@@ -1,0 +1,66 @@
+[35m.ci/parameter-generator.py[m[36m:[m        [1;31mConstraints[m of the parameter.
+[35m.ci/parameter-generator.py[m[36m:[m                checks_str = f", [1;31mconstraints[m: ``{number2} {sign2} {name} {sign1} {number1}``"
+[35m.ci/parameter-generator.py[m[36m:[m                checks_str = f", [1;31mconstraints[m: ``{name} {sign} {number}``"
+[35m.ci/parameter-generator.py[m[36m:[m        "interaction_[1;31mconstraints[m": "vector<vector<int>>",
+[35mR-package/R/lgb.Booster.R[m[36m:[m      if ("interaction_[1;31mconstraints[m" %in% names(params)) {
+[35mR-package/R/lgb.Booster.R[m[36m:[m        params[["interaction_[1;31mconstraints[m"]] <- lapply(params[["interaction_[1;31mconstraints[m"]], function(x) x + 1L)
+[35mR-package/R/lgb.cv.R[m[36m:[m  # pop interaction_[1;31mconstraints[m off of params. It needs some preprocessing on the
+[35mR-package/R/lgb.cv.R[m[36m:[m  interaction_[1;31mconstraints[m <- params[["interaction_[1;31mconstraints[m"]]
+[35mR-package/R/lgb.cv.R[m[36m:[m  params["interaction_[1;31mconstraints[m"] <- NULL
+[35mR-package/R/lgb.cv.R[m[36m:[m  # Check interaction [1;31mconstraints[m
+[35mR-package/R/lgb.cv.R[m[36m:[m  params[["interaction_[1;31mconstraints[m"]] <- .check_interaction_[1;31mconstraints[m(
+[35mR-package/R/lgb.cv.R[m[36m:[m    interaction_[1;31mconstraints[m = interaction_[1;31mconstraints[m
+[35mR-package/R/lgb.train.R[m[36m:[m  # pop interaction_[1;31mconstraints[m off of params. It needs some preprocessing on the
+[35mR-package/R/lgb.train.R[m[36m:[m  interaction_[1;31mconstraints[m <- params[["interaction_[1;31mconstraints[m"]]
+[35mR-package/R/lgb.train.R[m[36m:[m  params["interaction_[1;31mconstraints[m"] <- NULL
+[35mR-package/R/lgb.train.R[m[36m:[m  # Check interaction [1;31mconstraints[m
+[35mR-package/R/lgb.train.R[m[36m:[m  params[["interaction_[1;31mconstraints[m"]] <- .check_interaction_[1;31mconstraints[m(
+[35mR-package/R/lgb.train.R[m[36m:[m    interaction_[1;31mconstraints[m = interaction_[1;31mconstraints[m
+[35mR-package/R/utils.R[m[36m:[m.check_interaction_[1;31mconstraints[m <- function(interaction_[1;31mconstraints[m, column_names) {
+[35mR-package/R/utils.R[m[36m:[m  if (is.null(interaction_[1;31mconstraints[m)) {
+[35mR-package/R/utils.R[m[36m:[m  if (!identical(class(interaction_[1;31mconstraints[m), "list")) {
+[35mR-package/R/utils.R[m[36m:[m    stop("interaction_[1;31mconstraints[m must be a list")
+[35mR-package/R/utils.R[m[36m:[m  for (j in seq_along(interaction_[1;31mconstraints[m)) {
+[35mR-package/R/utils.R[m[36m:[m    constraint <- interaction_[1;31mconstraints[m[[j]]
+[35mR-package/R/utils.R[m[36m:[m      stop("every element in interaction_[1;31mconstraints[m must be a character vector or numeric vector")
+[35mR-package/R/utils.R[m[36m:[m        "unknown feature(s) in interaction_[1;31mconstraints[m: "
+[35mR-package/R/utils.R[m[36m:[m    interaction_[1;31mconstraints[m[[j]] <- constraint_indices
+[35mR-package/R/utils.R[m[36m:[m    column_indices, sort(unique(unlist(interaction_[1;31mconstraints[m)))
+[35mR-package/R/utils.R[m[36m:[m    interaction_[1;31mconstraints[m <- c(
+[35mR-package/R/utils.R[m[36m:[m      interaction_[1;31mconstraints[m, list(remaining_indices)
+[35mR-package/R/utils.R[m[36m:[m  for (j in seq_along(interaction_[1;31mconstraints[m)) {
+[35mR-package/R/utils.R[m[36m:[m    interaction_[1;31mconstraints[m[[j]] <- paste0(
+[35mR-package/R/utils.R[m[36m:[m      "[", paste(interaction_[1;31mconstraints[m[[j]] - 1L, collapse = ","), "]"
+[35mR-package/R/utils.R[m[36m:[m  return(interaction_[1;31mconstraints[m)
+[35mR-package/tests/testthat/test_basic.R[m[36m:[mtest_that("lgb.train() throws an informative error if interaction_[1;31mconstraints[m is not a list", {
+[35mR-package/tests/testthat/test_basic.R[m[36m:[m  params <- list(objective = "regression", interaction_[1;31mconstraints[m = "[1,2],[3]")
+[35mR-package/tests/testthat/test_basic.R[m[36m:[m    }, "interaction_[1;31mconstraints[m must be a list")
+[35mR-package/tests/testthat/test_basic.R[m[36m:[mtest_that(paste0("lgb.train() throws an informative error if the members of interaction_[1;31mconstraints[m ",
+[35mR-package/tests/testthat/test_basic.R[m[36m:[m  params <- list(objective = "regression", interaction_[1;31mconstraints[m = list(list(1L, 2L), list(3L)))
+[35mR-package/tests/testthat/test_basic.R[m[36m:[m    }, "every element in interaction_[1;31mconstraints[m must be a character vector or numeric vector")
+[35mR-package/tests/testthat/test_basic.R[m[36m:[mtest_that("lgb.train() throws an informative error if interaction_[1;31mconstraints[m contains a too large index", {
+[35mR-package/tests/testthat/test_basic.R[m[36m:[m                 interaction_[1;31mconstraints[m = list(c(1L, ncol(train$data) + 1L:2L), 3L))
+[35mR-package/tests/testthat/test_basic.R[m[36m:[m      , "unknown feature(s) in interaction_[1;31mconstraints[m: '127', '128'"
+[35mR-package/tests/testthat/test_basic.R[m[36m:[mtest_that(paste0("lgb.train() gives same result when interaction_[1;31mconstraints[m is specified as a list of ",
+[35mR-package/tests/testthat/test_basic.R[m[36m:[m    , interaction_[1;31mconstraints[m = list(c(1L, 2L), 3L)
+[35mR-package/tests/testthat/test_basic.R[m[36m:[m    , interaction_[1;31mconstraints[m = list(c(cnames[[1L]], cnames[[2L]]), cnames[[3L]])
+[35mR-package/tests/testthat/test_basic.R[m[36m:[m    , interaction_[1;31mconstraints[m = list(c(cnames[[1L]], cnames[[2L]]), 3L)
+[35mR-package/tests/testthat/test_basic.R[m[36m:[mtest_that(paste0("lgb.train() gives same results when using interaction_[1;31mconstraints[m and specifying colnames"), {
+[35mR-package/tests/testthat/test_basic.R[m[36m:[m    , interaction_[1;31mconstraints[m = list(c(1L, 2L), 3L)
+[35mR-package/tests/testthat/test_basic.R[m[36m:[m    , interaction_[1;31mconstraints[m = list(c(new_colnames[1L], new_colnames[2L]), new_colnames[3L])
+[35mR-package/tests/testthat/test_basic.R[m[36m:[mtest_that("Interaction [1;31mconstraints[m add missing features correctly as new group", {
+[35mR-package/tests/testthat/test_basic.R[m[36m:[m  list_of_[1;31mconstraints[m <- list(
+[35mR-package/tests/testthat/test_basic.R[m[36m:[m  for ([1;31mconstraints[m in list_of_[1;31mconstraints[m) {
+[35mR-package/tests/testthat/test_basic.R[m[36m:[m      , interaction_[1;31mconstraints[m = [1;31mconstraints[m
+[35mR-package/tests/testthat/test_basic.R[m[36m:[m    expect_equal(bst$params$interaction_[1;31mconstraints[m, expected_list)
+[35mR-package/tests/testthat/test_basic.R[m[36m:[m    expected_string <- "[interaction_[1;31mconstraints[m: [2],[0,1],[3,4,5]]"
+[35mR-package/tests/testthat/test_basic.R[m[36m:[m.generate_trainset_for_monotone_[1;31mconstraints[m_tests <- function(x3_to_categorical) {
+[35mR-package/tests/testthat/test_basic.R[m[36m:[m  dtrain <- .generate_trainset_for_monotone_[1;31mconstraints[m_tests(
+[35mR-package/tests/testthat/test_basic.R[m[36m:[m  for (monotone_[1;31mconstraints[m_method in c("basic", "intermediate", "advanced")) {
+[35mR-package/tests/testthat/test_basic.R[m[36m:[m      "lgb.train() supports monotone [1;31mconstraints[m ("
+[35mR-package/tests/testthat/test_basic.R[m[36m:[m      , monotone_[1;31mconstraints[m_method
+[35mR-package/tests/testthat/test_basic.R[m[36m:[m        , monotone_[1;31mconstraints[m = c(1L, -1L, 0L)
+[35mR-package/tests/testthat/test_basic.R[m[36m:[m        , monotone_[1;31mconstraints[m_method = monotone_[1;31mconstraints[m_method
+[35mR-package/tests/testthat/test_lgb.Booster.R[m[36m:[m        , interaction_[1;31mconstraints[m = list(1L:2L, 3L, 4L:ncol(train$data))
+[35mR-package/tests/testthat/test_lgb.Booster.R[m[36m:[m        , "[monotone_[1;31mconstraints[m: ]"
+[35mR-package/tests/testthat/test_lgb.Booster.R[m[36m:[m        , "[monotone_[1;31mconstraints[m_
