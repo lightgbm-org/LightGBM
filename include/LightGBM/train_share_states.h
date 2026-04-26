@@ -23,7 +23,7 @@ class MultiValBinWrapper {
   MultiValBinWrapper(MultiValBin* bin, data_size_t num_data,
     const std::vector<int>& feature_groups_contained, const int num_grad_quant_bins);
 
-  bool IsSparse() {
+  bool IsSparse() const {
     if (multi_val_bin_ != nullptr) {
       return multi_val_bin_->IsSparse();
     }
@@ -277,7 +277,7 @@ struct TrainingShareStates {
     multi_val_bin_wrapper_.reset(nullptr);
   }
 
-  int num_hist_total_bin() { return num_hist_total_bin_; }
+  int num_hist_total_bin() const { return num_hist_total_bin_; }
 
   const std::vector<uint32_t>& feature_hist_offsets() const { return feature_hist_offsets_; }
 
@@ -285,7 +285,7 @@ struct TrainingShareStates {
   const std::vector<uint32_t>& column_hist_offsets() const { return column_hist_offsets_; }
   #endif  // USE_CUDA
 
-  bool IsSparseRowwise() {
+  bool IsSparseRowwise() const {
     return (multi_val_bin_wrapper_ != nullptr && multi_val_bin_wrapper_->IsSparse());
   }
 

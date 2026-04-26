@@ -49,6 +49,7 @@ if [[ $OS_NAME == "linux" ]]; then
         --no-install-recommends \
         -y \
             devscripts \
+            libuv1-dev \
             r-base-core=${R_LINUX_VERSION} \
             r-base-dev=${R_LINUX_VERSION} \
             texinfo \
