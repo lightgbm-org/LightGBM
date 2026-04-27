@@ -5160,3 +5160,105 @@ def test_zero_sample_weights_with_subsample():
     issue_preds = model_issue.predict(X_issue)
     assert issue_preds.shape[0] == len(y_issue)
     assert np.all(np.isfinite(issue_preds))
+
+
+def test_near_constant_features_no_crash():
+    """Reproduces LightGBM crash with near-constant features (GitHub #4739).
+
+    Real-world trigger: near-constant signal features (std~0.01) create
+    histogram bins where almost all samples fall in one bin, making it
+    easy for the split to produce an empty side — even without explicit
+    sample weights or subsampling.
+    """
+    from lightgbm import LGBMRegressor
+
+    np.random.seed(42)
+    n = 45000
+
+    # col 0: nearly constant around 0.5 (std=0.01)
+    # col 1: nearly constant (std=0.017)
+    # col 2: moderate variance (std=0.034)
+    # col 3: high variance (std=0.216)
+    X = np.column_stack([
+        0.500 + np.random.normal(0, 0.01, n),
+        0.200 + np.random.normal(0, 0.017, n),
+        0.500 + np.random.normal(0, 0.034, n),
+        np.random.uniform(0, 1, n),
+    ]).astype(np.float64)
+
+    # Discrete labels
+    y = np.random.choice(
+        [0.1, 0.3, 0.5, 0.7, 0.9], size=n, p=[0.25, 0.15, 0.20, 0.15, 0.25]
+    )
+
+    # Add zero weights to simulate real production data where some samples
+    # are masked out (e.g., missing labels, filtered regime periods)
+    weights = np.ones(n)
+    zero_mask = np.random.choice(n, size=int(n * 0.15), replace=False)
+    weights[zero_mask] = 0.0
+
+    # Conservative params + zero weights + subsampling
+    model = LGBMRegressor(
+        n_estimators=50,
+        max_depth=3,
+        learning_rate=0.1,
+        subsample=0.7,
+        subsample_freq=1,
+        verbose=-1,
+        random_state=42,
+    )
+    model.fit(X, y, sample_weight=weights)
+    preds = model.predict(X[:5])
+    assert len(preds) == 5
+    assert all(np.isfinite(preds))
+
+    # Aggressive params — more trees + deeper = more chances for empty splits
+    model_aggressive = LGBMRegressor(
+        n_estimators=200,
+        max_depth=5,
+        learning_rate=0.1,
+        subsample=0.7,
+        subsample_freq=1,
+        verbose=-1,
+        random_state=42,
+    )
+    model_aggressive.fit(X, y, sample_weight=weights)
+    preds_agg = model_aggressive.predict(X[:5])
+    assert len(preds_agg) == 5
+    assert all(np.isfinite(preds_agg))
+
+    # MAPE objective (from original issue) is particularly susceptible
+    model_mape = LGBMRegressor(
+        n_estimators=200,
+        max_depth=5,
+        objective="mape",
+        learning_rate=0.1,
+        subsample=0.7,
+        subsample_freq=1,
+        verbose=-1,
+        random_state=42,
+    )
+    model_mape.fit(X, y, sample_weight=weights)
+    preds_mape = model_mape.predict(X[:5])
+    assert len(preds_mape) == 5
+    assert all(np.isfinite(preds_mape))
+
+    # Stress test: train many models in a loop to catch stale state
+    # corruption that only manifests after repeated empty-partition recoveries
+    for i in range(50):
+        seed = 100 + i
+        rng = np.random.RandomState(seed)
+        w = np.ones(n)
+        w[rng.choice(n, size=int(n * 0.2), replace=False)] = 0.0
+        m = LGBMRegressor(
+            n_estimators=100,
+            max_depth=4,
+            objective="mape",
+            subsample=0.6 + rng.random() * 0.3,
+            subsample_freq=1,
+            verbose=-1,
+            random_state=seed,
+        )
+        m.fit(X, y, sample_weight=w)
+        p = m.predict(X[:3])
+        assert len(p) == 3 and all(np.isfinite(p)), f"Failed on iteration {i}"
