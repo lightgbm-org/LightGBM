@@ -57,7 +57,7 @@ RUN apt-get update && \
     libboost-filesystem-dev \
     gcc \
     g++ && \
-    rm -rf /var/lib/apt/lists/* && \
+    rm -rf /var/lib/apt/lists/*
 
 
 # Add OpenCL ICD files for LightGBM

@@ -39,7 +39,7 @@ jobs:
           persist-credentials: false
       - name: lint dockerfiles
         run: |
-          ./ci/lint-dockerfiles.sh
+          ./.ci/lint-dockerfiles.sh
   build-cpu:
     name: build (CPU)
     runs-on: ubuntu-latest
