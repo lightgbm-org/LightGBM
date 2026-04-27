@@ -37,10 +37,9 @@ jobs:
         with:
           fetch-depth: 0
           persist-credentials: false
-      - uses: hadolint/hadolint-action@2332a7b74a6de0dda2e2221d575162eba76ba5e5  # v3.3.0
-        with:
-          #config: ./docker/.hadolint.yaml
-          recursive: true
+      - name: lint dockerfiles
+        run: |
+          ./ci/lint-dockerfiles.sh
   build-cpu:
     name: build (CPU)
     runs-on: ubuntu-latest
