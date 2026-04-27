@@ -8,7 +8,7 @@ FROM nvidia/cuda:12.9.1-cudnn-devel-ubuntu24.04
 ENV LANG=C.UTF-8 LC_ALL=C.UTF-8
 ARG DEBIAN_FRONTEND=noninteractive
 ARG LIGHTGBM_GIT_REF=stable
-ARG LIGHTGBM_GIT_URL=https://github.com/Microsoft/LightGBM.git
+ARG LIGHTGBM_GIT_URL=https://github.com/lightgbm-org/LightGBM.git
 
 #################################################################################################################
 #           Global Path Setting

@@ -18,7 +18,7 @@
 FROM nvidia/opencl:devel-ubuntu18.04 AS build
 ARG DEBIAN_FRONTEND=noninteractive
 ARG LIGHTGBM_GIT_REF=stable
-ARG LIGHTGBM_GIT_URL=https://github.com/Microsoft/LightGBM.git
+ARG LIGHTGBM_GIT_URL=https://github.com/lightgbm-org/LightGBM.git
 ARG OPENCL_LIBRARIES=/usr/lib/x86_64-linux-gnu
 ARG OPENCL_INCLUDE_DIR=/usr/include/CL
 
