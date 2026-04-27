@@ -4867,3 +4867,54 @@ def test_equal_predict_from_row_major_and_col_major_data():
     preds_col = bst.predict(X_col)
 
     np.testing.assert_allclose(preds_row, preds_col)
+
+
+def test_zero_sample_weights_with_subsample():
+    """Test that training does not crash when sample weights contain zeros
+    and subsampling is enabled.
+
+    This is a regression test for https://github.com/lightgbm-org/LightGBM/issues/4739
+    where CHECK_GT(best_split_info.left_count, 0) could fail because the split
+    finder uses weighted/estimated counts while the partitioner uses actual rows,
+    leading to a mismatch when zero-weight samples exist with subsampling.
+    """
+    np.random.seed(42)
+    n_samples = 65
+    n_features = 10
+    X = np.random.randn(n_samples, n_features)
+    y = np.random.randn(n_samples)
+
+    # Create weights with several zeros — this is the key trigger
+    weights = np.ones(n_samples)
+    zero_indices = [4, 20, 41, 42, 45, 46, 61]
+    weights[zero_indices] = 0.0
+
+    ds = lgb.Dataset(X, label=y, weight=weights)
+    params = {
+        "objective": "mape",
+        "verbose": -1,
+        "deterministic": True,
+        "subsample": 0.7,
+        "subsample_freq": 1,
+        "num_leaves": 31,
+    }
+    # This should not crash with CHECK_GT assertion failure
+    bst = lgb.train(params, ds, num_boost_round=10)
+    preds = bst.predict(X)
+    assert preds.shape[0] == n_samples
+    assert np.all(np.isfinite(preds))
+
+    # Also test via sklearn API (exact reproducer from issue #4739)
+    from lightgbm.sklearn import LGBMRegressor
+
+    model = LGBMRegressor(
+        deterministic=True,
+        objective="mape",
+        subsample=0.7,
+        subsample_freq=1,
+        verbose=-1,
+    )
+    model.fit(X, y, sample_weight=weights)
+    sklearn_preds = model.predict(X)
+    assert sklearn_preds.shape[0] == n_samples
+    assert np.all(np.isfinite(sklearn_preds))

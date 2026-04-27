@@ -121,6 +121,21 @@ class DataPartition {
   }
 
   /*!
+  * \brief Undo a split by merging the right leaf back into the left leaf.
+  *        This is used when a split produces an empty partition (0 samples on one side),
+  *        which can happen when sample weights contain zeros or with subsampling.
+  *        The indices are already contiguous in memory (Split only rearranges within the
+  *        same block), so we just need to restore the counts.
+  * \param leaf index of left leaf (original leaf before split)
+  * \param right_leaf index of right leaf (created by split)
+  */
+  void UndoSplit(int leaf, int right_leaf) {
+    leaf_count_[leaf] += leaf_count_[right_leaf];
+    leaf_count_[right_leaf] = 0;
+    leaf_begin_[right_leaf] = 0;
+  }
+
+  /*!
   * \brief SetLabelAt used data indices before training, used for bagging
   * \param used_data_indices indices of used data
   * \param num_used_data number of used data

@@ -797,6 +797,18 @@ void SerialTreeLearner::SplitInner(Tree* tree, int best_leaf, int* left_leaf,
       // don't need to update this in data-based parallel model
       best_split_info.left_count = data_partition_->leaf_count(*left_leaf);
       best_split_info.right_count = data_partition_->leaf_count(next_leaf_id);
+      // The actual partition can produce an empty leaf when sample weights
+      // contain zeros or with subsampling, even though the split finder
+      // estimated both sides would be non-empty. Undo the partition and
+      // mark this leaf as unsplittable so the tree loop moves on.
+      if (best_split_info.left_count <= 0 || best_split_info.right_count <= 0) {
+        Log::Warning("Split produced an empty partition (left_count=%d, right_count=%d). Skipping split for leaf %d.",
+                     best_split_info.left_count, best_split_info.right_count, best_leaf);
+        data_partition_->UndoSplit(*left_leaf, next_leaf_id);
+        best_split_info.gain = kMinScore;
+        *right_leaf = -1;
+        return;
+      }
     }
     // split tree, will return right leaf
     *right_leaf = tree->Split(
@@ -833,6 +845,14 @@ void SerialTreeLearner::SplitInner(Tree* tree, int best_leaf, int* left_leaf,
       // don't need to update this in data-based parallel model
       best_split_info.left_count = data_partition_->leaf_count(*left_leaf);
       best_split_info.right_count = data_partition_->leaf_count(next_leaf_id);
+      if (best_split_info.left_count <= 0 || best_split_info.right_count <= 0) {
+        Log::Warning("Split produced an empty partition (left_count=%d, right_count=%d). Skipping split for leaf %d.",
+                     best_split_info.left_count, best_split_info.right_count, best_leaf);
+        data_partition_->UndoSplit(*left_leaf, next_leaf_id);
+        best_split_info.gain = kMinScore;
+        *right_leaf = -1;
+        return;
+      }
     }
 
     *right_leaf = tree->SplitCategorical(
