@@ -27,7 +27,20 @@ permissions:
   contents: none
 
 jobs:
-  build-cpu:
+  lint:
+    name: lint
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: hadolint/hadolint-action@2332a7b74a6de0dda2e2221d575162eba76ba5e5  # v3.3.0
+        with:
+          recursive: true
+  build-and-test:
     name: build (CPU)
     runs-on: ubuntu-latest
     permissions:
@@ -88,7 +101,6 @@ jobs:
             python -c "import lightgbm; print(f'lightgbm version: {lightgbm.__version__}')"
   build-gpu:
     name: build (GPU)
-    # ref: https://docs.github.com/en/actions/concepts/runners/about-larger-runners#specifications-for-gpu-larger-runners
     runs-on: ${{ inputs.test-gpu && 'github-hosted-linux-gpu-amd64' || 'ubuntu-latest' }}
     permissions:
       contents: read
@@ -152,7 +164,10 @@ jobs:
   all-docker-jobs-successful:
     if: always()
     runs-on: ubuntu-latest
-    needs: [build-cpu, build-gpu]
+    needs:
+      - build-cpu
+      - build-gpu
+      - lint
     permissions:
       statuses: read
     steps:

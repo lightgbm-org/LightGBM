@@ -19,15 +19,15 @@ RUN apt-get update && \
         git \
         libomp-dev && \
     # python environment
-    curl -sL https://github.com/conda-forge/miniforge/releases/latest/download/Miniforge3-Linux-$(arch).sh -o miniforge.sh && \
-    /bin/bash miniforge.sh -f -b -p $CONDA_DIR && \
+    curl -sL "https://github.com/conda-forge/miniforge/releases/latest/download/Miniforge3-Linux-$(arch).sh" -o miniforge.sh && \
+    /bin/bash miniforge.sh -f -b -p "${CONDA_DIR}" && \
     conda config --set always_yes yes --set changeps1 no && \
     # lightgbm
     conda install -q -y numpy pandas scipy scikit-learn && \
     git clone \
         --recursive \
         "${LIGHTGBM_GIT_URL}" && \
-    git -C ./LightGBM checkout ${LIGHTGBM_GIT_REF} && \
+    git -C ./LightGBM checkout "${LIGHTGBM_GIT_REF}" && \
     cd ./LightGBM && \
     sh ./build-python.sh install && \
     # clean

@@ -37,7 +37,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         libboost-filesystem-dev \
         gcc \
         g++ && \
-    rm -rf /var/lib/apt/lists/*
+    rm -rf /var/lib/apt/lists/* && \
+    apt-get autoremove -y && \
+    apt-get clean
 
 # LightGBM
 WORKDIR /opt

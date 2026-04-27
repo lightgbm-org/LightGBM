@@ -37,26 +37,28 @@ RUN chmod +x /tini
 # dependencies. It will do this for all repositories and PPAs.
 
 RUN apt-get update && \
-apt-get install -y --no-install-recommends \
-build-essential \
-curl \
-bzip2 \
-ca-certificates \
-intel-opencl-icd \
-libglib2.0-0 \
-libxext6 \
-libsm6 \
-libxrender1 \
-git \
-vim \
-mercurial \
-subversion \
-cmake \
-libboost-dev \
-libboost-system-dev \
-libboost-filesystem-dev \
-gcc \
-g++
+    apt-get install -y --no-install-recommends \
+    build-essential \
+    curl \
+    bzip2 \
+    ca-certificates \
+    intel-opencl-icd \
+    libglib2.0-0 \
+    libxext6 \
+    libsm6 \
+    libxrender1 \
+    git \
+    vim \
+    mercurial \
+    subversion \
+    cmake \
+    libboost-dev \
+    libboost-system-dev \
+    libboost-filesystem-dev \
+    gcc \
+    g++ && \
+    rm -rf /var/lib/apt/lists/* && \
+
 
 # Add OpenCL ICD files for LightGBM
 RUN mkdir -p /etc/OpenCL/vendors && \
@@ -71,7 +73,7 @@ ARG CONDA_DIR=/opt/miniforge
 ENV PATH=$CONDA_DIR/bin:$PATH
 
 # Install miniforge
-RUN echo "export PATH=$CONDA_DIR/bin:"'$PATH' > /etc/profile.d/conda.sh && \
+RUN echo "export PATH=$CONDA_DIR/bin:$PATH" > /etc/profile.d/conda.sh && \
     curl -sL https://github.com/conda-forge/miniforge/releases/latest/download/Miniforge3-Linux-x86_64.sh -o ~/miniforge.sh && \
     /bin/bash ~/miniforge.sh -b -p $CONDA_DIR && \
     rm ~/miniforge.sh
@@ -120,8 +122,11 @@ RUN apt-get autoremove -y && apt-get clean && \
 # password key: --NotebookApp.password='sha1:98b767162d34:8da1bc3c75a0f29145769edc977375a373407824'
 
 # Add a notebook profile.
-RUN mkdir -p -m 700 ~/.jupyter/ && \
-    echo "c.NotebookApp.ip = '*'" >> ~/.jupyter/jupyter_notebook_config.py
+RUN <<EOF
+# shellcheck disable=SC2174
+mkdir -p -m 700 ~/.jupyter/
+echo "c.NotebookApp.ip = '*'" >> ~/.jupyter/jupyter_notebook_config.py
+EOF
 
 VOLUME /home
 WORKDIR /home
