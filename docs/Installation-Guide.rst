@@ -21,7 +21,13 @@ code using a previous version.
 This means that **new minor versions can contain breaking changes**, but these are typically
 small or limited to less-frequently-used parts of the project.
 
-When built from source on an unreleased commit, this version takes the following form:
+For more details on why LightGBM uses EffVer instead of other schemes like semantic versioning,
+see https://jacobtomlinson.dev/effver/.
+
+Nightly Packages
+~~~~~~~~~~~~~~~~
+
+When built from source on an unreleased commit, the package version takes the following form:
 
 .. code::
 
@@ -38,11 +44,11 @@ To download such artifacts, run the following from the root of this repository.
 
    bash .ci/download-artifacts.sh ${COMMIT_ID}
 
-Where `COMMIT_ID` is the full commit SHA pointing to a commit on ``master``.
+Where ``COMMIT_ID`` is the full commit SHA pointing to a commit on ``master``.
 The artifacts can then be found in the ``release-artifacts/`` directory.
 
-For more details on why LightGBM uses EffVer instead of other schemes like semantic versioning,
-see https://jacobtomlinson.dev/effver/.
+For the Python package, nightly packages are also available via installers like ``pip``.
+See `the python-package documentation`_ for details.
 
 General Installation Notes
 ~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -947,7 +953,7 @@ gcc
 Build Python-package
 ~~~~~~~~~~~~~~~~~~~~
 
-Refer to `Python-package folder <https://github.com/lightgbm-org/LightGBM/tree/master/python-package>`__.
+Refer to `the python-package documentation`_.
 
 Build R-package
 ~~~~~~~~~~~~~~~
@@ -1112,6 +1118,8 @@ gcc
 .. _SWIG: https://www.swig.org/download.html
 
 .. _this detailed guide: https://docs.nvidia.com/cuda/cuda-installation-guide-linux/index.html
+
+.. _the python-package documentation: https://github.com/lightgbm-org/LightGBM/tree/master/python-package
 
 .. _the ROCm docs: https://rocm.docs.amd.com/projects/install-on-linux/en/latest/
 
