@@ -17,6 +17,8 @@
 
 FROM nvidia/opencl:devel-ubuntu18.04 AS build
 ARG DEBIAN_FRONTEND=noninteractive
+ARG LIGHTGBM_GIT_REF=stable
+ARG LIGHTGBM_GIT_URL=https://github.com/lightgbm-org/LightGBM.git
 ARG OPENCL_LIBRARIES=/usr/lib/x86_64-linux-gnu
 ARG OPENCL_INCLUDE_DIR=/usr/include/CL
 
@@ -39,12 +41,16 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 # LightGBM
 WORKDIR /opt
-RUN git clone --recursive --branch stable --depth 1 https://github.com/lightgbm-org/LightGBM && \
+RUN git clone \
+        --recursive \
+         "${LIGHTGBM_GIT_URL}" && \
+    git -C ./LightGBM checkout ${LIGHTGBM_GIT_REF} && \
     cd LightGBM && \
     cmake -B build -S . -DUSE_GPU=1 -DOpenCL_LIBRARY=${OPENCL_LIBRARIES}/libOpenCL.so.1 -DOpenCL_INCLUDE_DIR=$OPENCL_INCLUDE_DIR && \
     OPENCL_HEADERS=$OPENCL_INCLUDE_DIR LIBOPENCL=$OPENCL_LIBRARIES cmake --build build
 
-FROM gcr.io/distroless/cc-debian10
+FROM gcr.io/distroless/cc-debian10:latest
+
 COPY --from=build \
     /opt/LightGBM/lightgbm \
     /opt/LightGBM/lib_lightgbm.so \
@@ -68,8 +74,8 @@ COPY --from=build \
     /lib64/
 COPY --from=build /etc/OpenCL/vendors/nvidia.icd /etc/OpenCL/vendors/nvidia.icd
 
-ENV PATH /opt/LightGBM:${PATH}
-ENV LANG C.UTF-8
-ENV LC_ALL C.UTF-8
+ENV PATH=/opt/LightGBM:${PATH}
+ENV LANG=C.UTF-8
+ENV LC_ALL=C.UTF-8
 
 ENTRYPOINT ["lightgbm"]

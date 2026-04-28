@@ -17,6 +17,8 @@
 
 FROM nvidia/opencl:devel AS build
 ARG DEBIAN_FRONTEND=noninteractive
+ARG LIGHTGBM_GIT_REF=stable
+ARG LIGHTGBM_GIT_URL=https://github.com/lightgbm-org/LightGBM.git
 ARG OPENCL_LIBRARIES=/usr/lib/x86_64-linux-gnu
 ARG OPENCL_INCLUDE_DIR=/usr/include/CL
 
@@ -35,11 +37,16 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         libboost-filesystem-dev \
         gcc \
         g++ && \
-    rm -rf /var/lib/apt/lists/*
+    rm -rf /var/lib/apt/lists/* && \
+    apt-get autoremove -y && \
+    apt-get clean
 
 # LightGBM
 WORKDIR /opt
-RUN git clone --recursive --branch stable --depth 1 https://github.com/lightgbm-org/LightGBM && \
+RUN git clone \
+        --recursive \
+         "${LIGHTGBM_GIT_URL}" && \
+    git -C ./LightGBM checkout ${LIGHTGBM_GIT_REF} && \
     cd LightGBM && \
     cmake -B build -S . -DUSE_GPU=1 -DOpenCL_LIBRARY=${OPENCL_LIBRARIES}/libOpenCL.so.1 -DOpenCL_INCLUDE_DIR=$OPENCL_INCLUDE_DIR && \
     OPENCL_HEADERS=$OPENCL_INCLUDE_DIR LIBOPENCL=$OPENCL_LIBRARIES cmake --build build
@@ -60,8 +67,8 @@ COPY --from=build \
     /opt/LightGBM/lib_lightgbm.so \
     /opt/LightGBM/
 
-ENV PATH /opt/LightGBM:${PATH}
-ENV LANG C.UTF-8
-ENV LC_ALL C.UTF-8
+ENV PATH=/opt/LightGBM:${PATH}
+ENV LANG=C.UTF-8
+ENV LC_ALL=C.UTF-8
 
 ENTRYPOINT ["lightgbm"]
