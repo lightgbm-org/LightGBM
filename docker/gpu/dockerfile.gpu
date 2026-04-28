@@ -59,7 +59,6 @@ RUN apt-get update && \
     g++ && \
     rm -rf /var/lib/apt/lists/*
 
-
 # Add OpenCL ICD files for LightGBM
 RUN mkdir -p /etc/OpenCL/vendors && \
     echo "libnvidia-opencl.so.1" > /etc/OpenCL/vendors/nvidia.icd
@@ -73,7 +72,7 @@ ARG CONDA_DIR=/opt/miniforge
 ENV PATH=$CONDA_DIR/bin:$PATH
 
 # Install miniforge
-RUN echo "export PATH=$CONDA_DIR/bin:$PATH" > /etc/profile.d/conda.sh && \
+RUN echo "export PATH=$CONDA_DIR/bin:\$PATH" > /etc/profile.d/conda.sh && \
     curl -sL https://github.com/conda-forge/miniforge/releases/latest/download/Miniforge3-Linux-x86_64.sh -o ~/miniforge.sh && \
     /bin/bash ~/miniforge.sh -b -p $CONDA_DIR && \
     rm ~/miniforge.sh
