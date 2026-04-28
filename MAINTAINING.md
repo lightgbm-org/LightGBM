@@ -42,7 +42,7 @@ After creating a release, run the following from the root of the repo to populat
 
 ```shell
 # download all artifacts to a local directory
-./.ci/downloads-artifacts.sh ${COMMIT_ID}
+./.ci/download-artifacts.sh ${COMMIT_ID}
 
 # attach them to the GitHub release
 gh release upload \
@@ -61,3 +61,46 @@ Where:
 These include things like publishing to package managers, updating build configs for repackagers like ``conda-forge``, and many other steps.
 
 See the release checklist on the PR for details.
+
+## Nightly Packages
+
+Nightly packages for the `lightgbm` Python package are uploaded to https://anaconda.org/lightgbm-packages on every merge to `master`.
+
+That's done using an upload token stored in a secret in CI.
+Those tokens expire after 1 year.
+
+To generate a new one, run the following.
+
+```shell
+# install Anaconda CLI
+conda install -y -c conda-forge \
+    anaconda-auth \
+    anaconda-client
+
+# authenticate locally
+anaconda auth login
+
+# create a token (this expires after 1 year)
+TOKEN=$(
+    anaconda org auth \
+        --create \
+        --name nightly-uploads \
+        --org lightgbm-packages \
+        --scopes 'api:read api:write pypi:upload'
+)
+```
+
+That token can be used by maintainers to manually upload packages as well.
+
+For example:
+
+```shell
+./.ci/download-artifacts.sh $(git rev-parse HEAD)
+
+# NOTE: set upload token in environment variable 'ANACONDA_API_TOKEN'
+anaconda upload \
+  --package lightgbm \
+  --force-metadata-update \
+  -t pypi \
+  ./release-artifacts/*.whl
+```
