@@ -4804,6 +4804,42 @@ def test_train_raises_informative_error_for_params_of_wrong_type():
         lgb.train(params, dtrain)
 
 
+def test_train_raises_informative_error_for_unknown_metric():
+    X, y = load_breast_cancer(return_X_y=True)
+    dtrain = lgb.Dataset(X, label=y)
+    params = {"objective": "binary", "metric": "nonsense", "verbose": -1}
+    with pytest.raises(lgb.basic.LightGBMError, match="Unknown metric 'nonsense'"):
+        lgb.train(params, dtrain, num_boost_round=1, valid_sets=[dtrain])
+
+
+@pytest.mark.parametrize(
+    "metric",
+    [
+        "none",
+        ["none", "null"],
+        ["None"],
+        ["NULL"],
+    ],
+)
+def test_train_sentinel_metric_disables_builtin_metrics(metric):
+    X, y = load_breast_cancer(return_X_y=True)
+    dtrain = lgb.Dataset(X, label=y)
+    evals_result = {}
+    params = {"objective": "binary", "metric": metric, "verbose": -1}
+    lgb.train(params, dtrain, num_boost_round=1, valid_sets=[dtrain], callbacks=[lgb.record_evaluation(evals_result)])
+    assert evals_result == {}
+
+
+def test_train_with_metric_python_none_uses_default_metric():
+    X, y = load_breast_cancer(return_X_y=True)
+    dtrain = lgb.Dataset(X, label=y)
+    dvalid = lgb.Dataset(X, label=y, reference=dtrain)
+    evals_result = {}
+    params = {"objective": "binary", "metric": None, "verbose": -1}
+    lgb.train(params, dtrain, num_boost_round=1, valid_sets=[dvalid], callbacks=[lgb.record_evaluation(evals_result)])
+    assert "binary_logloss" in evals_result["valid_0"]
+
+
 def test_quantized_training():
     X, y = make_synthetic_regression()
     ds = lgb.Dataset(X, label=y)
