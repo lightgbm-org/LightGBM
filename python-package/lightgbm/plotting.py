@@ -6,10 +6,12 @@ from copy import deepcopy
 from io import BytesIO
 from typing import TYPE_CHECKING, Any, Dict, List, Optional, Tuple, Union
 
+import narwhals as nw
+import narwhals.dependencies as nwd
+import narwhals.typing as nwt
 import numpy as np
 
-from .basic import Booster, _data_from_narwhals, _is_zero, _log_warning, _MissingType, _pandas_df_to_numpy
-from .compat import pd_DataFrame
+from .basic import Booster, _data_from_narwhals, _is_zero, _log_warning, _MissingType
 from .sklearn import LGBMModel
 
 __all__ = [
@@ -465,7 +467,7 @@ def _to_graphviz(
     precision: Optional[int],
     orientation: str,
     constraints: Optional[List[int]],
-    example_case: Optional[Union[np.ndarray, pd_DataFrame]],
+    example_case: Optional[np.ndarray],
     max_category_values: int,
     **kwargs: Any,
 ) -> Any:
@@ -626,7 +628,7 @@ def create_tree_digraph(
     show_info: Optional[List[str]] = None,
     precision: Optional[int] = 3,
     orientation: str = "horizontal",
-    example_case: Optional[Union[np.ndarray, pd_DataFrame]] = None,
+    example_case: Optional[Union[np.ndarray, nwt.IntoDataFrame]] = None,
     max_category_values: int = 10,
     **kwargs: Any,
 ) -> Any:
@@ -668,7 +670,7 @@ def create_tree_digraph(
     orientation : str, optional (default='horizontal')
         Orientation of the tree.
         Can be 'horizontal' or 'vertical'.
-    example_case : numpy 2-D array, pandas DataFrame or None, optional (default=None)
+    example_case : numpy 2-D array, Narwhals-supported DataFrame or None, optional (default=None)
         Single row with the same structure as the training data.
         If not None, the plot will highlight the path that sample takes through the tree.
 
@@ -720,18 +722,23 @@ def create_tree_digraph(
         show_info = []
 
     if example_case is not None:
-        if not isinstance(example_case, (np.ndarray, pd_DataFrame)) or example_case.ndim != 2:
-            raise ValueError("example_case must be a numpy 2-D array or a pandas DataFrame")
-        if example_case.shape[0] != 1:
-            raise ValueError("example_case must have a single row.")
-        if isinstance(example_case, pd_DataFrame):
+        if isinstance(example_case, np.ndarray):
+            if example_case.ndim != 2:
+                raise ValueError("example_case must be a numpy 2-D array or a Narwhals-supported DataFrame")
+            if example_case.shape[0] != 1:
+                raise ValueError("example_case must have a single row.")
+        elif nwd.is_into_dataframe(example_case):
+            if nw.from_native(example_case).shape[0] != 1:
+                raise ValueError("example_case must have a single row.")
             example_case = _data_from_narwhals(
                 data=example_case,
                 feature_name="auto",
                 categorical_feature="auto",
                 pandas_categorical=booster.pandas_categorical,
             )[0]
-            example_case = _pandas_df_to_numpy(example_case)
+            example_case = nw.from_native(example_case).to_numpy()
+        else:
+            raise ValueError("example_case must be a numpy 2-D array or a Narwhals-supported DataFrame")
         example_case = example_case[0]
 
     return _to_graphviz(
@@ -756,7 +763,7 @@ def plot_tree(
     show_info: Optional[List[str]] = None,
     precision: Optional[int] = 3,
     orientation: str = "horizontal",
-    example_case: Optional[Union[np.ndarray, pd_DataFrame]] = None,
+    example_case: Optional[Union[np.ndarray, nwt.IntoDataFrame]] = None,
     **kwargs: Any,
 ) -> Any:
     """Plot specified tree.
@@ -804,7 +811,7 @@ def plot_tree(
     orientation : str, optional (default='horizontal')
         Orientation of the tree.
         Can be 'horizontal' or 'vertical'.
-    example_case : numpy 2-D array, pandas DataFrame or None, optional (default=None)
+    example_case : numpy 2-D array, Narwhals-supported DataFrame or None, optional (default=None)
         Single row with the same structure as the training data.
         If not None, the plot will highlight the path that sample takes through the tree.
 

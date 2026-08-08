@@ -507,16 +507,41 @@ def test_example_case_in_tree_digraph():
     assert makes_categorical_splits
 
 
-@pytest.mark.parametrize("input_type", ["array", "dataframe"])
-def test_empty_example_case_on_tree_digraph_raises_error(input_type):
+@pytest.mark.parametrize("dataframe_library", ["pandas", "polars", "pyarrow"])
+def test_dataframe_example_case_in_tree_digraph(dataframe_library):
     pytest.importorskip("graphviz")
     X, y = make_synthetic_regression()
-    if input_type == "dataframe":
-        pd = pytest.importorskip("pandas")
-        X = pd.DataFrame(X)
-        example_case = pd.DataFrame(X[:0])
+    bst = lgb.train({"num_leaves": 3}, lgb.Dataset(X, y), num_boost_round=1)
+    example_case = X[[0]]
+
+    if dataframe_library == "pandas":
+        dataframe = pd.DataFrame(example_case)
+    elif dataframe_library == "polars":
+        pl = pytest.importorskip("polars")
+        dataframe = pl.DataFrame(example_case)
     else:
+        pa = pytest.importorskip("pyarrow")
+        dataframe = pa.table({str(i): example_case[:, i] for i in range(example_case.shape[1])})
+
+    expected = lgb.create_tree_digraph(bst, example_case=example_case)
+    actual = lgb.create_tree_digraph(bst, example_case=dataframe)
+    assert actual.body == expected.body
+
+
+@pytest.mark.parametrize("dataframe_library", ["numpy", "pandas", "polars", "pyarrow"])
+def test_empty_example_case_on_tree_digraph_raises_error(dataframe_library):
+    pytest.importorskip("graphviz")
+    X, y = make_synthetic_regression()
+    if dataframe_library == "numpy":
         example_case = X[:0]
+    elif dataframe_library == "pandas":
+        example_case = pd.DataFrame(X[:0])
+    elif dataframe_library == "polars":
+        pl = pytest.importorskip("polars")
+        example_case = pl.DataFrame({str(i): X[:0, i] for i in range(X.shape[1])})
+    else:
+        pa = pytest.importorskip("pyarrow")
+        example_case = pa.table({str(i): X[:0, i] for i in range(X.shape[1])})
     ds = lgb.Dataset(X, y)
     bst = lgb.train({"num_leaves": 3}, ds, num_boost_round=1)
     with pytest.raises(ValueError, match="example_case must have a single row."):
