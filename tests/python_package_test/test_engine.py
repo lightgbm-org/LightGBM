@@ -2179,6 +2179,47 @@ def test_init_with_subset(tmp_path, rng):
     assert subset_data_4.get_data() == lgb_train_data
 
 
+@pytest.mark.parametrize(("objective", "num_class"), [("binary", 1), ("multiclass", 3)])
+def test_init_score_on_file_backed_subset(tmp_path, rng, objective, num_class):
+    n_rows = 60
+    data = rng.uniform(size=(n_rows, 4))
+    labels = np.arange(n_rows) % max(num_class, 2)
+    data_path = tmp_path / f"{objective}.txt"
+    np.savetxt(data_path, np.column_stack((labels, data)), delimiter="\t")
+
+    params = {
+        "objective": objective,
+        "min_data_in_leaf": 1,
+        "num_leaves": 4,
+        "verbose": -1,
+    }
+    if num_class > 1:
+        params["num_class"] = num_class
+
+    dataset = lgb.Dataset(str(data_path), free_raw_data=False)
+    init_indices = sorted(rng.choice(n_rows, size=40, replace=False))
+    continued_indices = sorted(rng.choice(n_rows, size=20, replace=False))
+    with pytest.warns(UserWarning, match="Cannot subset str type of raw data"):
+        init_model = lgb.train(
+            params=params,
+            train_set=dataset.subset(init_indices),
+            num_boost_round=5,
+            keep_training_booster=True,
+        )
+
+    continued_dataset = dataset.subset(continued_indices)
+    expected_init_score = init_model.predict(data[continued_indices], raw_score=True)
+    with pytest.warns(UserWarning, match="Cannot subset str type of raw data"):
+        lgb.train(
+            params=params,
+            train_set=continued_dataset,
+            num_boost_round=1,
+            init_model=init_model,
+        )
+
+    np.testing.assert_allclose(continued_dataset.get_init_score(), expected_init_score)
+
+
 def test_training_on_constructed_subset_without_params(rng):
     X = rng.uniform(size=(100, 10))
     y = rng.uniform(size=(100,))
