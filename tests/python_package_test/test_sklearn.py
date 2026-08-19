@@ -2365,3 +2365,40 @@ def test_eval_X_eval_y_eval_set_equivalence():
     assert gbm2.evals_result_["valid_0"]["l2"] != gbm2.evals_result_["valid_1"]["l2"], (
         "Evaluation results for the 2 validation sets are not different. This might mean they weren't both used."
     )
+
+
+@pytest.mark.parametrize("classes", [np.array(["down", "up"]), np.array([1, 2])])
+@pytest.mark.parametrize("multiple_eval_sets", [False, True])
+def test_classifier_eval_X_eval_y_encodes_labels(classes, multiple_eval_sets):
+    """Test that eval_y labels use the classifier's label encoding."""
+    X, y, _ = _create_data(task="binary-classification")
+    y = classes[y]
+    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.25, random_state=42)
+    params = {
+        "deterministic": True,
+        "force_row_wise": True,
+        "n_estimators": 10,
+        "n_jobs": 1,
+        "seed": 708,
+        "verbosity": -1,
+    }
+
+    with pytest.warns(LGBMDeprecationWarning, match="The argument 'eval_set' is deprecated.*"):
+        model_with_eval_set = lgb.LGBMClassifier(**params).fit(
+            X_train,
+            y_train,
+            eval_set=[(X_test, y_test)],
+        )
+
+    eval_X = (X_test,) if multiple_eval_sets else X_test
+    eval_y = (y_test,) if multiple_eval_sets else y_test
+    model_with_eval_X_y = lgb.LGBMClassifier(**params).fit(
+        X_train,
+        y_train,
+        eval_X=eval_X,
+        eval_y=eval_y,
+    )
+
+    assert model_with_eval_set.evals_result_["valid_0"]["binary_logloss"] == pytest.approx(
+        model_with_eval_X_y.evals_result_["valid_0"]["binary_logloss"]
+    )
