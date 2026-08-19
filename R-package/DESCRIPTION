@@ -2,7 +2,6 @@ Package: lightgbm
 Type: Package
 Title: Light Gradient Boosting Machine
 Version: 4.7.0.99
-Date: ~~DATE~~
 Authors@R: c(
     person("Yu", "Shi", email = "yushi2@microsoft.com", role = c("aut")),
     person("Guolin", "Ke", email = "guolin.ke@outlook.com", role = c("aut")),

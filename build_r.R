@@ -374,17 +374,6 @@ result <- file.copy(
 )
 .handle_result(result)
 
-# DESCRIPTION has a date placeholder so it doesn't have to be updated manually
-DESCRIPTION_FILE <- file.path(TEMP_R_DIR, "DESCRIPTION")
-description_contents <- readLines(DESCRIPTION_FILE)
-description_contents <- gsub(
-  pattern = "~~DATE~~"
-  , replacement = as.character(Sys.Date())
-  , x = description_contents
-  , fixed = TRUE
-)
-writeLines(description_contents, DESCRIPTION_FILE)
-
 # NOTE: --keep-empty-dirs is necessary to keep the deep paths expected
 #       by CMake while also meeting the CRAN req to create object files
 #       on demand
