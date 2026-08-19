@@ -264,6 +264,13 @@ jobs:
             produces-artifacts: 'true'
             artifact-name: 'windows-amd64-cli-and-liblightgbm'
             python_version: '3.11'
+          - os: ubuntu-24.04-ppc64le
+            task: bdist
+            compiler: gcc
+            method: wheel
+            python_version: '3.12'
+            produces-artifacts: 'true'
+            artifact-name: 'linux-ppc64le-wheel'
     steps:
       - name: Install packages used by third-party actions
         if: ${{ matrix.in-ubuntu-base-container == 'true' }}
@@ -313,7 +320,8 @@ jobs:
               export OS_NAME="macos"
           elif \
             [[ "${{ matrix.os }}" == "ubuntu-latest" ]] \
-            || [[ "${{ matrix.os }}" == "github-hosted-linux-gpu-amd64" ]];
+            || [[ "${{ matrix.os }}" == "github-hosted-linux-gpu-amd64" ]] \
+            || [[ "${{ matrix.os }}" == "ubuntu-24.04-ppc64le" ]];
           then
               export OS_NAME="linux"
               export PATH="/usr/lib64/openmpi/bin:${PATH}"
