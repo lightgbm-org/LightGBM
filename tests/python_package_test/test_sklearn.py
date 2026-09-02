@@ -2381,3 +2381,48 @@ def test_eval_X_eval_y_eval_set_equivalence():
     assert gbm2.evals_result_["valid_0"]["l2"] != gbm2.evals_result_["valid_1"]["l2"], (
         "Evaluation results for the 2 validation sets are not different. This might mean they weren't both used."
     )
+
+
+@pytest.mark.parametrize(
+    "classes",
+    [
+        pytest.param(np.array(["down", "up"]), id="string-labels"),
+        pytest.param(np.array([1, 2]), id="non-zero-based-integer-labels"),
+        pytest.param(np.array([0, 2, 7, 10]), id="non-contiguous-integer-labels"),
+    ],
+)
+@pytest.mark.parametrize("pass_as_tuples", [False, True])
+def test_classifier_eval_X_eval_y_encodes_labels(classes, pass_as_tuples, monkeypatch):
+    """Test that eval_y labels use the classifier's label encoding."""
+    X, y, *_ = _create_data(task="binary-classification")
+    y = classes[y]
+    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.25, random_state=42)
+    forwarded_eval_y = None
+
+    def capture_fit(self, *_args, **kwargs):
+        nonlocal forwarded_eval_y
+        forwarded_eval_y = kwargs["eval_y"]
+        return self
+
+    monkeypatch.setattr(lgb.LGBMModel, "fit", capture_fit)
+
+    if pass_as_tuples:
+        eval_X = (X_test,)
+        eval_y = (y_test,)
+    else:
+        eval_X = X_test
+        eval_y = y_test
+    model = lgb.LGBMClassifier().fit(
+        X_train,
+        y_train,
+        eval_X=eval_X,
+        eval_y=eval_y,
+    )
+
+    expected_eval_y = model._le.transform(y_test)
+    if pass_as_tuples:
+        assert isinstance(forwarded_eval_y, tuple)
+        assert len(forwarded_eval_y) == 1
+        np.testing.assert_array_equal(forwarded_eval_y[0], expected_eval_y)
+    else:
+        np.testing.assert_array_equal(forwarded_eval_y, expected_eval_y)
