@@ -968,6 +968,48 @@ def test_early_stopping_ignores_training_set(use_valid):
         assert bst.best_iteration == 0
 
 
+@pytest.mark.parametrize("disabling_run", ["dart", "train_set_only"])
+def test_early_stopping_callback_can_be_reused_after_it_disabled_itself(disabling_run):
+    x = np.linspace(-1, 1, 100)
+    X = x.reshape(-1, 1)
+    y = x**2
+    X_train, X_valid = X[:80], X[80:]
+    y_train, y_valid = y[:80], y[80:]
+    num_boost_round = 10
+
+    def train_with_valid_set(callback):
+        return lgb.train(
+            {"num_leaves": 5},
+            lgb.Dataset(X_train, y_train),
+            num_boost_round=num_boost_round,
+            valid_sets=[lgb.Dataset(X_valid, y_valid)],
+            callbacks=[callback],
+        )
+
+    # a first run where early stopping is not possible, so the callback disables itself
+    callback = lgb.early_stopping(1, verbose=False)
+    train_ds = lgb.Dataset(X_train, y_train)
+    if disabling_run == "dart":
+        params = {"num_leaves": 5, "boosting": "dart"}
+        valid_sets = [lgb.Dataset(X_valid, y_valid)]
+        warning_match = "Early stopping is not available in dart mode"
+    else:
+        params = {"num_leaves": 5}
+        valid_sets = [train_ds]
+        warning_match = "Only training set found, disabling early stopping."
+    with pytest.warns(UserWarning, match=warning_match):
+        lgb.train(params, train_ds, num_boost_round=2, valid_sets=valid_sets, callbacks=[callback])
+    assert callback.enabled is False
+
+    # the same callback object must still early stop on a later run that has a validation set
+    reused = train_with_valid_set(callback)
+    fresh = train_with_valid_set(lgb.early_stopping(1, verbose=False))
+    assert reused.current_iteration() < num_boost_round
+    assert reused.current_iteration() == fresh.current_iteration()
+    assert reused.best_iteration == fresh.best_iteration
+    assert callback.enabled is True
+
+
 @pytest.mark.parametrize("first_metric_only", [True, False])
 def test_early_stopping_via_global_params(first_metric_only):
     X, y = load_breast_cancer(return_X_y=True)
