@@ -291,6 +291,12 @@ cmake --build build --target _lightgbm -j4 || exit 1
 sh ./build-python.sh install --precompile || exit 1
 pytest -ra ./tests || exit 1
 
+echo "testing imports with 'python -O1'"
+PYTHONOPTIMIZE=1 python -c "import lightgbm; print(lightgbm.__version__)"
+
+echo "testing imports with 'python -O2'"
+PYTHONOPTIMIZE=2 python -c "import lightgbm; print(lightgbm.__version__)"
+
 if [[ $TASK == "regular" ]]; then
     if [[ $PRODUCES_ARTIFACTS == "true" ]]; then
         if [[ $OS_NAME == "macos" ]]; then

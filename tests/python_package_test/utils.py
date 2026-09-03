@@ -1,7 +1,9 @@
 # coding: utf-8
+import difflib
 import filecmp
 import os
 import pickle
+import textwrap
 from functools import lru_cache
 from inspect import getfullargspec
 from pathlib import Path
@@ -285,3 +287,28 @@ def assert_datasets_equal(tmp_path: Path, lhs: lgb.Dataset, rhs: lgb.Dataset) ->
     lhs._dump_text(tmp_path / "lhs.txt")
     rhs._dump_text(tmp_path / "rhs.txt")
     assert filecmp.cmp(tmp_path / "lhs.txt", tmp_path / "rhs.txt")
+
+
+def assert_docstrings_equal(
+    class1: type,
+    method1: str,
+    class2: type,
+    method2: str,
+    *,
+    expected_diff: str = "",
+) -> None:
+
+    # this will fail (intentionally) if either class doesn't have the method
+    doc1_docstring = textwrap.dedent(getattr(class1, method1).__doc__)
+    doc2_docstring = textwrap.dedent(getattr(class2, method2).__doc__)
+
+    # if they do, compare them
+    diff = difflib.unified_diff(
+        doc1_docstring.splitlines(keepends=True),
+        doc2_docstring.splitlines(keepends=True),
+        fromfile=f"{class1.__name__}.{method1}",
+        tofile=f"{class2.__name__}.{method2}",
+        n=0,
+    )
+    stringified_diff = "".join(line for line in diff)
+    assert stringified_diff == expected_diff, f"docs differ:\n\n{stringified_diff}"
