@@ -1851,6 +1851,35 @@ def test_feature_names_in_and_predict_warning(
                 model.predict(X_predict)
 
 
+@pytest.mark.parametrize("estimator_class", estimator_classes)
+def test_feature_names_in_preserves_spaces_in_column_names(estimator_class):
+    """Non-regression test for https://github.com/lightgbm-org/LightGBM/issues/7338.
+
+    LightGBM replaces spaces with underscores internally (via the C++ layer) when
+    storing feature names, but 'feature_names_in_' should still match the original
+    column names exactly, for compatibility with scikit-learn.
+    """
+    pd = pytest.importorskip("pandas")
+    X = pd.DataFrame(
+        {
+            "feature one": [1.0, 2.0, 3.0, 4.0, 5.0, 6.0],
+            "feature_two": [6.0, 5.0, 4.0, 3.0, 2.0, 1.0],
+        }
+    )
+    y = np.array([0, 1, 0, 1, 0, 1])
+
+    params = {"n_estimators": 2, "num_leaves": 3}
+    if estimator_class is lgb.LGBMModel:
+        model = estimator_class(**{**params, "objective": "binary"}).fit(X, y)
+    elif estimator_class is lgb.LGBMRanker:
+        model = estimator_class(**params).fit(X, y, group=np.ones(X.shape[0]))
+    else:
+        model = estimator_class(**params).fit(X, y)
+
+    np_assert_array_equal(model.feature_names_in_, np.array(list(X.columns)), strict=True)
+    assert model.feature_name_ == ["feature_one", "feature_two"]
+
+
 # Starting with scikit-learn 1.6 (https://github.com/scikit-learn/scikit-learn/pull/30149),
 # the only API for marking estimator tests as expected to fail is to pass a keyword argument
 # to parametrize_with_checks(). That function didn't accept additional arguments in earlier

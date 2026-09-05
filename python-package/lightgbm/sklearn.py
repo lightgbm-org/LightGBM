@@ -751,6 +751,8 @@ class LGBMModel(_LGBMModelBase):
         self._class_weight: Optional[Union[Dict, str]] = None
         self._class_map: Optional[Dict[int, int]] = None
         self._fitted_with_feature_names: bool = False
+        # captured pre-Dataset so it's unaffected by the C++ space->underscore rename (issue #7338)
+        self._feature_names_in: Optional[List[str]] = None
         self._n_features: int = -1
         self._n_features_in: int = -1
         self._classes: Optional[np.ndarray] = None
@@ -1091,6 +1093,16 @@ class LGBMModel(_LGBMModelBase):
             else:
                 sample_weight = np.multiply(sample_weight, class_sample_weight)  # type: ignore[arg-type]
 
+        # capture original feature names before Dataset/C++ mangles spaces to underscores
+        if isinstance(feature_name, list):
+            self._feature_names_in = [str(name) for name in feature_name]
+        elif isinstance(_X, pd_DataFrame):
+            self._feature_names_in = [str(col) for col in _X.columns]
+        elif nwd.is_into_dataframe(_X):
+            self._feature_names_in = list(nw.from_native(_X).schema.names())
+        else:
+            self._feature_names_in = None
+
         train_set = Dataset(
             data=_X,
             label=_y,
@@ -1416,13 +1428,13 @@ class LGBMModel(_LGBMModelBase):
         """
         if not self.__sklearn_is_fitted__():
             raise LGBMNotFittedError("No feature_names_in_ found. Need to call fit beforehand.")
-        if not self._fitted_with_feature_names:
+        if not self._fitted_with_feature_names or self._feature_names_in is None:
             raise AttributeError(
                 f"'{type(self).__name__}' object has no attribute 'feature_names_in_'. "
                 "The training data did not have feature names "
                 "(e.g. was a numpy array rather than a pandas DataFrame)."
             )
-        return np.array(self.feature_name_)
+        return np.array(self._feature_names_in)
 
     @feature_names_in_.deleter
     def feature_names_in_(self) -> None:
