@@ -326,6 +326,10 @@ class _EarlyStoppingCallback:
         if env.evaluation_result_list is None or env.evaluation_result_list == []:
             raise ValueError("For early stopping, at least one dataset and eval metric is required for evaluation")
 
+        # re-evaluate here, so a callback re-used across training runs is not left
+        # permanently disabled by an earlier run (for example, one using dart boosting)
+        self.enabled = _should_enable_early_stopping(self.stopping_rounds)
+
         is_dart = any(env.params.get(alias, "") == "dart" for alias in _ConfigAliases.get("boosting"))
         if is_dart:
             self.enabled = False

@@ -35,7 +35,7 @@ env:
 
 jobs:
   test-linux-aarch64:
-    name: bdist wheel (manylinux2014-arm, gcc, Python 3.14)
+    name: bdist wheel (aarch64-manylinux2014, gcc, Python 3.14)
     runs-on: ubuntu-24.04-arm
     timeout-minutes: 60
     steps:
@@ -93,11 +93,6 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - os: macos-15-intel
-            task: sdist
-            compiler: clang
-            python_version: '3.10'
-            pixi-env: 'py310'
           - os: windows-2022
             task: sdist
             compiler: MSVC
@@ -145,7 +140,7 @@ jobs:
           #   in-ubuntu-base-container: 'true'
           - os: ubuntu-latest
             container: &manylinux_amd64_image ghcr.io/lightgbm-org/lightgbm-vsts-agent:manylinux_2_28_x86_64
-            os-display-name: &manylinux_amd64_display_name 'manylinux_2_28'
+            os-display-name: &manylinux_amd64_display_name 'x86_64_manylinux_2_28'
             task: gpu
             method: source
             compiler: gcc
@@ -155,11 +150,6 @@ jobs:
           ############
           # MPI jobs #
           ############
-          - os: macos-15-intel
-            task: mpi
-            compiler: gcc
-            method: source
-            python_version: '3.12'
           - os: ubuntu-latest
             container: *manylinux_amd64_image
             os-display-name: *manylinux_amd64_display_name
@@ -257,6 +247,16 @@ jobs:
             method: wheel
             produces-artifacts: 'true'
             artifact-name: 'windows-amd64-wheel'
+            wheel-platform-tag: 'win_amd64'
+            python_version: '3.13'
+          - os: windows-11-arm
+            task: bdist
+            compiler: MSVC
+            method: wheel
+            produces-artifacts: 'true'
+            artifact-name: 'windows-arm64-wheel'
+            setup-conda: 'false'
+            wheel-platform-tag: 'win_arm64'
             python_version: '3.13'
           - os: windows-2022
             task: regular
@@ -264,6 +264,15 @@ jobs:
             produces-artifacts: 'true'
             artifact-name: 'windows-amd64-cli-and-liblightgbm'
             python_version: '3.11'
+          - os: ubuntu-24.04-ppc64le
+            container: 'ghcr.io/lightgbm-org/lightgbm-ci:ppc64le-manylinux-2_28'
+            os-display-name: 'ppc64le-manylinux_2_28'
+            task: bdist
+            compiler: gcc
+            method: wheel
+            python_version: '3.12'
+            produces-artifacts: 'true'
+            artifact-name: 'linux-ppc64le-wheel'
     steps:
       - name: Install packages used by third-party actions
         if: ${{ matrix.in-ubuntu-base-container == 'true' }}
@@ -295,9 +304,14 @@ jobs:
           fetch-depth: 5
           persist-credentials: false
           submodules: true
+      - name: Set up Python on Windows
+        if: startsWith(matrix.os, 'windows') && matrix.setup-conda == 'false'
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97  # v7.0.0
+        with:
+          python-version: ${{ matrix.python_version }}
       - name: Set up 'pixi' for jobs that need it
         if: matrix.pixi-env != ''
-        uses: prefix-dev/setup-pixi@a09b6247153796b190642a2b53fac4241043cf6f  # v0.10.0
+        uses: prefix-dev/setup-pixi@f00437f565399d418b0acc85936d12c1fb668347  # v0.10.1
         with:
           environments: ${{ matrix.pixi-env }}
       - name: Setup and run tests on Linux and macOS
@@ -313,7 +327,8 @@ jobs:
               export OS_NAME="macos"
           elif \
             [[ "${{ matrix.os }}" == "ubuntu-latest" ]] \
-            || [[ "${{ matrix.os }}" == "github-hosted-linux-gpu-amd64" ]];
+            || [[ "${{ matrix.os }}" == "github-hosted-linux-gpu-amd64" ]] \
+            || [[ "${{ matrix.os }}" == "ubuntu-24.04-ppc64le" ]];
           then
               export OS_NAME="linux"
               export PATH="/usr/lib64/openmpi/bin:${PATH}"
@@ -329,14 +344,14 @@ jobs:
           $GITHUB_WORKSPACE/.ci/setup.sh || exit 1
           $GITHUB_WORKSPACE/.ci/test.sh || exit 1
       - name: Install OpenCL on Windows
-        if: startsWith(matrix.os, 'windows') && (matrix.task == 'bdist')
+        if: startsWith(matrix.os, 'windows') && (matrix.task == 'bdist') && matrix.setup-conda != 'false'
         shell: pwsh -command ". {0}"
         run: |
           & "$env:GITHUB_WORKSPACE/.ci/install-opencl.ps1"
       # 'conda init powershell' needs to be run in a separate process
       # ref: https://docs.conda.io/projects/conda/en/stable/dev-guide/deep-dives/activation.html
       - name: Initialize conda on Windows
-        if: startsWith(matrix.os, 'windows')
+        if: startsWith(matrix.os, 'windows') && matrix.setup-conda != 'false'
         shell: pwsh -command ". {0}"
         run: |
           $env:PATH = "$env:CONDA/Scripts;$env:PATH"
@@ -349,7 +364,9 @@ jobs:
           $env:METHOD = "${{ matrix.method }}"
           $env:PRODUCES_ARTIFACTS = "${{ matrix.produces-artifacts }}"
           $env:PYTHON_VERSION = "${{ matrix.python_version }}"
+          $env:SETUP_CONDA = "${{ matrix.setup-conda }}"
           $env:TASK = "${{ matrix.task }}"
+          $env:WHEEL_PLATFORM_TAG = "${{ matrix.wheel-platform-tag }}"
           & "$env:GITHUB_WORKSPACE/.ci/test-windows.ps1"
       - name: Upload artifacts
         if: ${{ matrix.produces-artifacts == 'true' }}

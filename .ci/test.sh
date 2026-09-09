@@ -157,7 +157,12 @@ elif [[ $TASK == "bdist" ]]; then
             cp "$(echo "dist/lightgbm-${LGB_VER}-py3-none-macosx"*.whl)" "${BUILD_ARTIFACTSTAGINGDIRECTORY}" || exit 1
         fi
     else
-        sh ./build-python.sh bdist_wheel --integrated-opencl || exit 1
+        BUILD_PYTHON_FLAGS=()
+        if [[ "${ARCH}" != "ppc64le" ]]; then
+            BUILD_PYTHON_FLAGS+=(--integrated-opencl)
+        fi
+
+        sh ./build-python.sh bdist_wheel "${BUILD_PYTHON_FLAGS[@]}" || exit 1
 
         # print some debugging logs about the wheel's GLIBC version and dependencies on shared libraries
         pip install 'auditwheel>=6.5.1'
@@ -185,13 +190,17 @@ elif [[ $TASK == "bdist" ]]; then
             # manylinux tag than we intended)
             if [[ $ARCH == "x86_64" ]]; then
                 PLATFORM="manylinux_2_27_x86_64.manylinux_2_28_x86_64"
+            elif [[ $ARCH == "ppc64le" ]]; then
+                PLATFORM="manylinux_2_27_ppc64le.manylinux_2_28_ppc64le"
             else
                 PLATFORM="manylinux2014_aarch64.manylinux_2_17_aarch64"
             fi
             cp "dist/lightgbm-${LGB_VER}-py3-none-${PLATFORM}.whl" "${BUILD_ARTIFACTSTAGINGDIRECTORY}" || exit 1
         fi
-        # Make sure we can do both CPU and GPU; see tests/python_package_test/test_dual.py
-        export LIGHTGBM_TEST_DUAL_CPU_GPU=1
+        if [[ "${ARCH}" != "ppc64le" ]]; then
+            # Make sure we can do both CPU and GPU; see tests/python_package_test/test_dual.py
+            export LIGHTGBM_TEST_DUAL_CPU_GPU=1
+        fi
     fi
     pip install -v --no-deps ./dist/*.whl || exit 1
     pytest -ra ./tests || exit 1

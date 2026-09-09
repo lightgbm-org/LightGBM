@@ -6,8 +6,10 @@
 #include <gtest/gtest.h>
 
 #include <limits>
+#include <vector>
 
 #include "../include/LightGBM/utils/common.h"
+#include "../include/LightGBM/utils/threading.h"
 
 
 // This is a basic test for floating number parsing.
@@ -151,4 +153,23 @@ TEST_F(AtofPreciseTest, Inf) {
     EXPECT_EQ(memcmp(&got, &test.expected, sizeof(test.expected)), 0)
               << "parsed infinite is not the same for every bit: " << test.data;
   }
+}
+
+TEST(ParallelPartitionRunnerTest, EmptyInputReturnsZero) {
+  LightGBM::ParallelPartitionRunner<LightGBM::data_size_t, false> runner(8, 1);
+  bool callback_called = false;
+  std::vector<LightGBM::data_size_t> output(1, -1);
+
+  const auto left_count = runner.Run<false>(
+      0,
+      [&](int, LightGBM::data_size_t, LightGBM::data_size_t,
+          LightGBM::data_size_t*, LightGBM::data_size_t*) {
+        callback_called = true;
+        return 0;
+      },
+      output.data());
+
+  EXPECT_EQ(left_count, 0);
+  EXPECT_FALSE(callback_called);
+  EXPECT_EQ(output[0], -1);
 }

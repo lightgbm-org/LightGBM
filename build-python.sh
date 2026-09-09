@@ -337,7 +337,6 @@ if test "${INSTALL}" = true; then
     if test "${PRECOMPILE}" = true; then
         BUILD_SDIST=false
         BUILD_WHEEL=true
-        BUILD_ARGS=""
         rm -rf \
             ./cmake \
             ./CMakeLists.txt \
