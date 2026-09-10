@@ -289,6 +289,18 @@ fi
 cmake --build build --target _lightgbm -j4 || exit 1
 
 sh ./build-python.sh install --precompile || exit 1
+
+# This MPI skip can be removed when those jobs do not use conda.
+# ref: https://github.com/lightgbm-org/LightGBM/issues/7355#issuecomment-5578260518
+if [[ "${TASK}" != "mpi" ]]; then
+    echo "testing imports with 'python -O1'"
+    PYTHONOPTIMIZE=1 python -c "import lightgbm; print(lightgbm.__version__)"
+
+    echo "testing imports with 'python -O2'"
+    PYTHONOPTIMIZE=2 python -c "import lightgbm; print(lightgbm.__version__)"
+fi
+
+echo "running tests"
 pytest -ra ./tests || exit 1
 
 if [[ $TASK == "regular" ]]; then
