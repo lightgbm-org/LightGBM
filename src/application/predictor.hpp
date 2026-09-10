@@ -64,10 +64,10 @@ class Predictor {
     num_pred_one_row_ = boosting_->NumPredictOneRow(start_iteration,
         num_iteration, predict_leaf_index, predict_contrib);
     num_feature_ = boosting_->MaxFeatureIdx() + 1;
-    predict_buf_.resize(
-        OMP_NUM_THREADS(),
-        std::vector<double, Common::AlignmentAllocator<double, kAlignedSize>>(
-            num_feature_, 0.0f));
+    predict_buf_.resize(OMP_NUM_THREADS());
+    for (auto& buffer : predict_buf_) {
+      buffer.resize(num_feature_, 0.0);
+    }
     const int kFeatureThreshold = 100000;
     const size_t KSparseThreshold = static_cast<size_t>(0.01 * num_feature_);
     if (predict_leaf_index) {
