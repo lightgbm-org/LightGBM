@@ -66,12 +66,14 @@ class Predictor {
     num_feature_ = boosting_->MaxFeatureIdx() + 1;
     const auto storage = ResolveStorage(feature_storage);
     predict_buf_.resize(OMP_NUM_THREADS());
-    if (!predict_contrib && storage == Storage::Array) {
+    if ((predict_leaf_index || !predict_contrib) && storage == Storage::Array) {
       for (auto& buffer : predict_buf_) {
         buffer.resize(num_feature_, 0.0);
       }
     }
-    if (predict_contrib) {
+    if (predict_leaf_index) {
+      SelectPredictFunction<Output::Leaf>(storage);
+    } else if (predict_contrib) {
       if (boosting_->IsLinear()) {
         Log::Fatal("Predicting SHAP feature contributions is not implemented for linear trees.");
       }
@@ -90,8 +92,6 @@ class Predictor {
         auto buffer = CopyToPredictMap(features);
         boosting_->PredictContribByMap(buffer, output);
       };
-    } else if (predict_leaf_index) {
-      SelectPredictFunction<Output::Leaf>(storage);
     } else if (is_raw_score) {
       SelectPredictFunction<Output::Raw>(storage);
     } else {

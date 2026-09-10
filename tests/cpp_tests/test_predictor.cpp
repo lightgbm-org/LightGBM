@@ -5,8 +5,8 @@
  */
 
 #include <gtest/gtest.h>
-#include <LightGBM/prediction_early_stop.h>
 #include <LightGBM/c_api.h>
+#include <LightGBM/prediction_early_stop.h>
 
 #include <cmath>
 #include <limits>
@@ -140,6 +140,19 @@ TEST_F(PredictorBufferTest, SparseContributionsMatchDenseContributions) {
   }
 }
 
+
+TEST_F(PredictorBufferTest, LeafPredictionTakesPrecedenceOverContributions) {
+  for (const std::string storage : {"auto", "array", "map"}) {
+    Predictor predictor(boosting_.get(), 0, -1, true, true, true, false, 10, 10.0, storage);
+    // Keep a full-sized output so a regression reports a mismatch without overwriting memory.
+    std::vector<double> output(kNumFeatures + 1, -123.0);
+    predictor.GetPredictFunction()(rows_[1], output.data());
+    EXPECT_EQ(1.0, output[0]);
+    for (size_t i = 1; i < output.size(); ++i) {
+      EXPECT_EQ(-123.0, output[i]);
+    }
+  }
+}
 
 TEST_F(PredictorBufferTest, DenseStorageFollowsSelectedPath) {
   OMP_SET_NUM_THREADS(1);
