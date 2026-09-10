@@ -1054,6 +1054,18 @@ Predict Parameters
 
    -  **Note**: be very careful setting this parameter to ``true``
 
+-  ``predict_feature_storage`` :raw-html:`<a id="predict_feature_storage" title="Permalink to this parameter" href="#predict_feature_storage">&#x1F517;&#xFE0E;</a>`, default = ``auto``, type = string, options: ``auto``, ``array``, ``map``
+
+   -  feature lookup storage for normal, raw-score and leaf-index prediction
+
+   -  ``array`` allocates a dense feature buffer per prediction thread; ``map`` uses a hash table without a dense feature buffer
+
+   -  ``auto`` uses a hash table for rows with fewer than 1% stored entries when the model has more than 100000 features, and an array otherwise
+
+   -  arrays can benefit repeated prediction or larger batches; maps avoid dense initialization for short high-dimensional sparse predictions
+
+   -  does not control SHAP contribution storage, which is determined by the prediction output API
+
 -  ``pred_early_stop`` :raw-html:`<a id="pred_early_stop" title="Permalink to this parameter" href="#pred_early_stop">&#x1F517;&#xFE0E;</a>`, default = ``false``, type = bool
 
    -  used only in ``prediction`` task
