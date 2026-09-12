@@ -888,9 +888,10 @@ def test_no_copy_when_single_float_dtype_dataframe(dtype, feature_name, rng):
     # a copy of the input numpy array by default
     # ref: https://github.com/pandas-dev/pandas/issues/58913
     df = pd.DataFrame(X, copy=False)
-    built_data = lgb.basic._data_from_pandas(
+    built_data = lgb.basic._data_from_narwhals(
         data=df, feature_name=feature_name, categorical_feature="auto", pandas_categorical=None
     )[0]
+    built_data = lgb.basic._pandas_df_to_numpy(built_data)
     assert built_data.dtype == dtype
     assert np.shares_memory(X, built_data)
 

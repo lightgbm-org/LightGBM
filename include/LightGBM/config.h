@@ -784,7 +784,7 @@ struct Config {
   // desc = used to specify categorical features
   // desc = use number for index, e.g. ``categorical_feature=0,1,2`` means column\_0, column\_1 and column\_2 are categorical features
   // desc = add a prefix ``name:`` for column name, e.g. ``categorical_feature=name:c1,c2,c3`` means c1, c2 and c3 are categorical features
-  // desc = **Note**: all values will be cast to ``int32`` (integer codes will be extracted from pandas categoricals in the Python-package)
+  // desc = **Note**: all values will be cast to ``int32`` (integer codes will be extracted from categorical or enum dtypes in the Python-package)
   // desc = **Note**: index starts from ``0`` and it doesn't count the label column when passing type is ``int``
   // desc = **Note**: all values should be less than ``Int32.MaxValue`` (2147483647)
   // desc = **Note**: using large values could be memory consuming. Tree decision rule works best when categorical features are presented by consecutive integers starting from zero
