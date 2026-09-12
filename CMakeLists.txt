@@ -534,6 +534,24 @@ if(MSVC AND NOT __BUILD_FOR_R)
   set_target_properties(_lightgbm PROPERTIES OUTPUT_NAME "lib_lightgbm")
 endif()
 
+# Symbol Visibility
+#
+# Only the C API (functions / types with names prefixed 'LGBM_*') is considered part of LightGBM's
+# public API.
+#
+# Hiding other symbols 
+if(NOT BUILD_STATIC_LIB)
+  # 
+  set_target_properties(
+    lightgbm_objs lightgbm_capi_objs _lightgbm
+    PROPERTIES
+      C_VISIBILITY_PRESET hidden
+      CXX_VISIBILITY_PRESET hidden
+      CUDA_VISIBILITY_PRESET hidden
+      VISIBILITY_INLINES_HIDDEN TRUE
+  )
+endif()
+
 if(USE_SWIG)
   set_property(SOURCE swig/lightgbmlib.i PROPERTY CPLUSPLUS ON)
   list(APPEND swig_options -package com.microsoft.ml.lightgbm)

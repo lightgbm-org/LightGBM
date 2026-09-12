@@ -16,11 +16,11 @@
 
 
 #ifdef _MSC_VER
-#define LIGHTGBM_EXPORT __declspec(dllexport)
-#define LIGHTGBM_C_EXPORT LIGHTGBM_EXTERN_C __declspec(dllexport)
+  #define LIGHTGBM_C_EXPORT  LIGHTGBM_EXTERN_C __declspec(dllexport)
+#elif defined(__GNUC__) || defined(__clang__)
+  #define LIGHTGBM_C_EXPORT  LIGHTGBM_EXTERN_C __attribute__((visibility("default")))
 #else
-#define LIGHTGBM_EXPORT
-#define LIGHTGBM_C_EXPORT LIGHTGBM_EXTERN_C
+  #define LIGHTGBM_C_EXPORT  LIGHTGBM_EXTERN_C
 #endif
 
 #endif  // LIGHTGBM_INCLUDE_LIGHTGBM_EXPORT_H_
