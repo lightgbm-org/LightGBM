@@ -1610,6 +1610,48 @@ def test_parameters_are_loaded_from_model_file(tmp_path, capsys, rng):
     np.testing.assert_allclose(preds, orig_preds)
 
 
+def test_parameters_with_colons_in_values_are_loaded_from_model_file(tmp_path, rng):
+    X = rng.uniform(size=(100, 3))
+    y = rng.uniform(size=(100,))
+    ds = lgb.Dataset(X, y)
+    params = {"num_leaves": 5, "num_threads": 1, "verbosity": 0}
+    model_file = tmp_path / "model.txt"
+    bst = lgb.train(params, ds, num_boost_round=1)
+    bst.save_model(model_file)
+    with model_file.open("rt") as f:
+        model_contents = f.readlines()
+    params_start = model_contents.index("parameters:\n")
+    model_contents.insert(params_start + 1, "[ignore_column: name:relevance]\n")
+    with model_file.open("wt") as f:
+        f.writelines(model_contents)
+
+    # Loading raised json.JSONDecodeError: the value was split on every colon,
+    # so the column name was truncated and then emitted unquoted in brackets.
+    reloaded = lgb.Booster(model_file=model_file)
+    assert reloaded.params["ignore_column"] == "name:relevance"
+
+
+def test_string_parameters_with_backslashes_are_loaded_from_model_file(tmp_path, rng):
+    X = rng.uniform(size=(100, 3))
+    y = rng.uniform(size=(100,))
+    ds = lgb.Dataset(X, y)
+    params = {"num_leaves": 5, "num_threads": 1, "verbosity": 0}
+    model_file = tmp_path / "model.txt"
+    bst = lgb.train(params, ds, num_boost_round=1)
+    bst.save_model(model_file)
+    with model_file.open("rt") as f:
+        model_contents = f.readlines()
+    params_start = model_contents.index("parameters:\n")
+    model_contents.insert(params_start + 1, "[data: C:\\folder\\train.csv]\n")
+    with model_file.open("wt") as f:
+        f.writelines(model_contents)
+
+    # A Windows path was emitted into JSON unescaped, producing invalid \f and
+    # \t escapes.
+    reloaded = lgb.Booster(model_file=model_file)
+    assert reloaded.params["data"] == "C:\\folder\\train.csv"
+
+
 def test_string_serialized_params_retrieval(rng):
     # Random train data
     train_x = rng.random((500, 3))
