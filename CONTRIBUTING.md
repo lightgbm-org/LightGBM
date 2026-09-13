@@ -53,17 +53,7 @@ Maintainers may close contributions which fail to follow these guidelines, and b
 
 ## Development Guide
 
-### Linting
-
-Every commit in the repository is tested with multiple static analyzers.
-
-When developing locally, run some of them using `pre-commit` ([pre-commit docs](https://pre-commit.com/)).
-
-```shell
-pre-commit run --all-files
-```
-
-That command will check for some issues and automatically reformat the code.
+For more details on how to develop changes to LightGBM, see `Development Guide <./Development-Guide.rst>`__.
 
 ## References
 
