@@ -12,6 +12,7 @@ Your help is very valuable to make it better for everyone.
 - Contribute to the [tests](https://github.com/lightgbm-org/LightGBM/tree/main/tests) to make it more reliable.
 - Contribute to the [documentation](https://github.com/lightgbm-org/LightGBM/tree/main/docs) to make it clearer for everyone.
 - Contribute to the [examples](https://github.com/lightgbm-org/LightGBM/tree/main/examples) to share your experience with other users.
+- Add your stories and experience to [Awesome LightGBM](https://github.com/lightgbm-org/LightGBM/blob/main/examples/README.md). If LightGBM helped you in a machine learning competition or some research application, we want to hear about it!
 - [Open an issue](https://github.com/lightgbm-org/LightGBM/issues) to report problems or recommend new features.
 
 ### First-time Contributions
