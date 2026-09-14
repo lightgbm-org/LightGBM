@@ -1064,7 +1064,7 @@ Predict Parameters
 
    -  ``auto`` uses a hash table for rows with fewer than 1% stored entries when the model has more than 100000 features, and an array otherwise
 
-   -  this parameter does not apply to SHAP contribution prediction
+   -  this parameter has no effect on SHAP contribution prediction
 
 -  ``pred_early_stop`` :raw-html:`<a id="pred_early_stop" title="Permalink to this parameter" href="#pred_early_stop">&#x1F517;&#xFE0E;</a>`, default = ``false``, type = bool
 

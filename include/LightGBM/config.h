@@ -870,7 +870,7 @@ struct Config {
   // desc = ``array`` uses a dense feature buffer per prediction thread and looks up values by array index
   // desc = ``map`` stores feature index-value pairs in a hash table and looks up values by key
   // desc = ``auto`` uses a hash table for rows with fewer than 1% stored entries when the model has more than 100000 features, and an array otherwise
-  // desc = this parameter does not apply to SHAP contribution prediction
+  // desc = this parameter has no effect on SHAP contribution prediction
   std::string predict_feature_storage = "auto";
 
   // [no-save]
