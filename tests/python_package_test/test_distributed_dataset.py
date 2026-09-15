@@ -74,9 +74,11 @@ def test_distributed_bin_feature_indices(tmp_path, input_type, per_feature_max_b
     workers = []
     try:
         for rank, port in enumerate(ports):
+            # Windows adapter enumeration does not include the loopback address.
+            # Set the rank explicitly for these local workers.
             worker = context.Process(
                 target=_construct_distributed_dataset,
-                args=(data, params, machines, port, tmp_path / f"rank{rank}.txt"),
+                args=(data, params, f"rank={rank},{machines}", port, tmp_path / f"rank{rank}.txt"),
             )
             worker.start()
             workers.append(worker)
