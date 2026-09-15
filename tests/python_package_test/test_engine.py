@@ -496,6 +496,32 @@ def test_multiclass():
     assert evals_result["valid_0"]["multi_logloss"][-1] == pytest.approx(ret)
 
 
+@pytest.mark.skipif(not BuildInfo.has_cuda, reason="Requires the CUDA test runner")
+def test_cuda_tree_transfer_save_load(tmp_path):
+    rng = np.random.RandomState(42)
+    categories = rng.randint(0, 6, size=4_000)
+    X = np.column_stack((categories, rng.normal(size=len(categories)))).astype(np.float32)
+    y = np.isin(categories, [0, 2, 5]).astype(np.float32)
+    train_set = lgb.Dataset(X, label=y, categorical_feature=[0], free_raw_data=False)
+    booster = lgb.train(
+        {
+            "objective": "regression",
+            "metric": "l2",
+            "device_type": "cuda",
+            "num_threads": 1,
+            "num_leaves": 7,
+            "verbosity": -1,
+        },
+        train_set,
+        num_boost_round=8,
+    )
+    predictions = booster.predict(X)
+    model_path = tmp_path / "cuda_model.txt"
+    booster.save_model(str(model_path))
+    reloaded = lgb.Booster(model_file=str(model_path))
+    np.testing.assert_allclose(reloaded.predict(X), predictions, rtol=0, atol=0)
+
+
 def test_multiclass_rf():
     X, y = load_digits(n_class=10, return_X_y=True)
     X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.1, random_state=42)

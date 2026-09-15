@@ -167,22 +167,22 @@ void CUDATree::ToHost() {
   leaf_depth_.resize(max_leaves_);
 
   const size_t num_leaves_size = static_cast<size_t>(num_leaves_);
-  CopyFromCUDADeviceToHost<int>(left_child_.data(), cuda_left_child_.RawData(), num_leaves_size - 1, __FILE__, __LINE__);
-  CopyFromCUDADeviceToHost<int>(right_child_.data(), cuda_right_child_.RawData(), num_leaves_size - 1, __FILE__, __LINE__);
-  CopyFromCUDADeviceToHost<int>(split_feature_inner_.data(), cuda_split_feature_inner_.RawData(), num_leaves_size - 1, __FILE__, __LINE__);
-  CopyFromCUDADeviceToHost<int>(split_feature_.data(), cuda_split_feature_.RawData(), num_leaves_size - 1, __FILE__, __LINE__);
-  CopyFromCUDADeviceToHost<uint32_t>(threshold_in_bin_.data(), cuda_threshold_in_bin_.RawData(), num_leaves_size - 1, __FILE__, __LINE__);
-  CopyFromCUDADeviceToHost<double>(threshold_.data(), cuda_threshold_.RawData(), num_leaves_size - 1, __FILE__, __LINE__);
-  CopyFromCUDADeviceToHost<int8_t>(decision_type_.data(), cuda_decision_type_.RawData(), num_leaves_size - 1, __FILE__, __LINE__);
-  CopyFromCUDADeviceToHost<float>(split_gain_.data(), cuda_split_gain_.RawData(), num_leaves_size - 1, __FILE__, __LINE__);
-  CopyFromCUDADeviceToHost<int>(leaf_parent_.data(), cuda_leaf_parent_.RawData(), num_leaves_size - 1, __FILE__, __LINE__);
-  CopyFromCUDADeviceToHost<double>(leaf_value_.data(), cuda_leaf_value_.RawData(), num_leaves_size, __FILE__, __LINE__);
-  CopyFromCUDADeviceToHost<double>(leaf_weight_.data(), cuda_leaf_weight_.RawData(), num_leaves_size, __FILE__, __LINE__);
-  CopyFromCUDADeviceToHost<data_size_t>(leaf_count_.data(), cuda_leaf_count_.RawData(), num_leaves_size, __FILE__, __LINE__);
-  CopyFromCUDADeviceToHost<double>(internal_value_.data(), cuda_internal_value_.RawData(), num_leaves_size - 1, __FILE__, __LINE__);
-  CopyFromCUDADeviceToHost<double>(internal_weight_.data(), cuda_internal_weight_.RawData(), num_leaves_size - 1, __FILE__, __LINE__);
-  CopyFromCUDADeviceToHost<data_size_t>(internal_count_.data(), cuda_internal_count_.RawData(), num_leaves_size - 1, __FILE__, __LINE__);
-  CopyFromCUDADeviceToHost<int>(leaf_depth_.data(), cuda_leaf_depth_.RawData(), num_leaves_size, __FILE__, __LINE__);
+  CopyFromCUDADeviceToHostAsync<int>(left_child_.data(), cuda_left_child_.RawData(), num_leaves_size - 1, cuda_stream_, __FILE__, __LINE__);
+  CopyFromCUDADeviceToHostAsync<int>(right_child_.data(), cuda_right_child_.RawData(), num_leaves_size - 1, cuda_stream_, __FILE__, __LINE__);
+  CopyFromCUDADeviceToHostAsync<int>(split_feature_inner_.data(), cuda_split_feature_inner_.RawData(), num_leaves_size - 1, cuda_stream_, __FILE__, __LINE__);
+  CopyFromCUDADeviceToHostAsync<int>(split_feature_.data(), cuda_split_feature_.RawData(), num_leaves_size - 1, cuda_stream_, __FILE__, __LINE__);
+  CopyFromCUDADeviceToHostAsync<uint32_t>(threshold_in_bin_.data(), cuda_threshold_in_bin_.RawData(), num_leaves_size - 1, cuda_stream_, __FILE__, __LINE__);
+  CopyFromCUDADeviceToHostAsync<double>(threshold_.data(), cuda_threshold_.RawData(), num_leaves_size - 1, cuda_stream_, __FILE__, __LINE__);
+  CopyFromCUDADeviceToHostAsync<int8_t>(decision_type_.data(), cuda_decision_type_.RawData(), num_leaves_size - 1, cuda_stream_, __FILE__, __LINE__);
+  CopyFromCUDADeviceToHostAsync<float>(split_gain_.data(), cuda_split_gain_.RawData(), num_leaves_size - 1, cuda_stream_, __FILE__, __LINE__);
+  CopyFromCUDADeviceToHostAsync<int>(leaf_parent_.data(), cuda_leaf_parent_.RawData(), num_leaves_size - 1, cuda_stream_, __FILE__, __LINE__);
+  CopyFromCUDADeviceToHostAsync<double>(leaf_value_.data(), cuda_leaf_value_.RawData(), num_leaves_size, cuda_stream_, __FILE__, __LINE__);
+  CopyFromCUDADeviceToHostAsync<double>(leaf_weight_.data(), cuda_leaf_weight_.RawData(), num_leaves_size, cuda_stream_, __FILE__, __LINE__);
+  CopyFromCUDADeviceToHostAsync<data_size_t>(leaf_count_.data(), cuda_leaf_count_.RawData(), num_leaves_size, cuda_stream_, __FILE__, __LINE__);
+  CopyFromCUDADeviceToHostAsync<double>(internal_value_.data(), cuda_internal_value_.RawData(), num_leaves_size - 1, cuda_stream_, __FILE__, __LINE__);
+  CopyFromCUDADeviceToHostAsync<double>(internal_weight_.data(), cuda_internal_weight_.RawData(), num_leaves_size - 1, cuda_stream_, __FILE__, __LINE__);
+  CopyFromCUDADeviceToHostAsync<data_size_t>(internal_count_.data(), cuda_internal_count_.RawData(), num_leaves_size - 1, cuda_stream_, __FILE__, __LINE__);
+  CopyFromCUDADeviceToHostAsync<int>(leaf_depth_.data(), cuda_leaf_depth_.RawData(), num_leaves_size, cuda_stream_, __FILE__, __LINE__);
 
   if (num_cat_ > 0) {
     cuda_cat_boundaries_inner_.Resize(num_cat_ + 1);
@@ -192,6 +192,8 @@ void CUDATree::ToHost() {
     cat_threshold_ = cuda_bitset_.ToHost();
     cat_threshold_inner_ = cuda_bitset_inner_.ToHost();
   }
+
+  SynchronizeCUDAStream(cuda_stream_, __FILE__, __LINE__);
 
   SynchronizeCUDADevice(__FILE__, __LINE__);
 }
