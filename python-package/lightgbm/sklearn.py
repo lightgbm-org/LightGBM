@@ -37,13 +37,8 @@ from .compat import (
     SKLEARN_CHECK_SAMPLE_WEIGHT_HAS_ALLOW_ZERO_WEIGHTS_ARG,
     SKLEARN_INSTALLED,
     LGBMNotFittedError,
-    _LGBMAssertAllFinite,
-    _LGBMCheckClassificationTargets,
     _LGBMCheckSampleWeight,
     _LGBMClassifierBase,
-    _LGBMComputeSampleWeight,
-    _LGBMCpuCount,
-    _LGBMLabelEncoder,
     _LGBMModelBase,
     _LGBMRegressorBase,
     _LGBMValidateData,
@@ -53,8 +48,12 @@ from .compat import (
 from .engine import train
 
 if TYPE_CHECKING:
-    from .compat import _sklearn_Tags
-
+    # sklearn.utils.Tags can be imported unconditionally once
+    # lightgbm's minimum scikit-learn version is 1.6 or higher
+    try:
+        from sklearn.utils import Tags as _sklearn_Tags
+    except ImportError:
+        _sklearn_Tags = None
 
 __all__ = [
     "LGBMClassifier",
@@ -122,6 +121,24 @@ _LGBM_ScikitEvalMetricType = Union[
     List[Union[str, _LGBM_ScikitCustomEvalFunction]],
 ]
 _LGBM_ScikitValidSet = Tuple[_LGBM_ScikitMatrixLike, _LGBM_LabelType]
+
+
+def _cpu_count(only_physical_cores: bool) -> int:
+    ret: int
+    try:
+        from joblib import cpu_count  # noqa: I001,PLC0415
+
+        ret = cpu_count(only_physical_cores=only_physical_cores)
+    except ImportError:
+        try:
+            from psutil import cpu_count  # noqa: I001,PLC0415
+
+            ret = cpu_count(logical=not only_physical_cores) or 1
+        except ImportError:
+            from multiprocessing import cpu_count  # noqa: I001,PLC0415
+
+            ret = cpu_count()
+    return ret
 
 
 def _get_group_from_constructed_dataset(dataset: Dataset) -> Optional[np.ndarray]:
@@ -817,9 +834,9 @@ class LGBMModel(_LGBMModelBase):
             The value of n_jobs with special values converted to actual number of threads.
         """
         if n_jobs is None:
-            n_jobs = _LGBMCpuCount(only_physical_cores=True)
+            n_jobs = _cpu_count(only_physical_cores=True)
         elif n_jobs < 0:
-            n_jobs = max(_LGBMCpuCount(only_physical_cores=False) + 1 + n_jobs, 1)
+            n_jobs = max(_cpu_count(only_physical_cores=False) + 1 + n_jobs, 1)
         return n_jobs
 
     def fit(
@@ -981,6 +998,10 @@ class LGBMModel(_LGBMModelBase):
             maximize : bool
                 Are higher values better? e.g. ``True`` for AUC and ``False`` for binary error.
         """
+        try:
+            from sklearn.utils.class_weight import compute_sample_weight  # noqa: PLC0415
+        except ImportError as err:
+            raise ImportError("lightgbm requires compute_sample_weight") from err
         params = self._process_params(stage="fit")
 
         # Do not modify original args in fit function
@@ -1031,7 +1052,7 @@ class LGBMModel(_LGBMModelBase):
         if self._class_weight is None:
             self._class_weight = self.class_weight
         if self._class_weight is not None:
-            class_sample_weight = _LGBMComputeSampleWeight(self._class_weight, y)
+            class_sample_weight = compute_sample_weight(self._class_weight, y)
             if sample_weight is None or len(sample_weight) == 0:
                 sample_weight = class_sample_weight
             else:
@@ -1076,7 +1097,7 @@ class LGBMModel(_LGBMModelBase):
                     if valid_class_weight is not None:
                         if isinstance(valid_class_weight, dict) and self._class_map is not None:
                             valid_class_weight = {self._class_map[k]: v for k, v in valid_class_weight.items()}
-                        valid_class_sample_weight = _LGBMComputeSampleWeight(valid_class_weight, valid_data[1])
+                        valid_class_sample_weight = compute_sample_weight(valid_class_weight, valid_data[1])
                         if valid_weight is None or len(valid_weight) == 0:
                             valid_weight = valid_class_sample_weight
                         else:
@@ -2083,9 +2104,17 @@ class LGBMClassifier(_LGBMClassifierBase, LGBMModel):
             maximize : bool
                 Are higher values better? e.g. ``True`` for AUC and ``False`` for binary error.
         """
-        _LGBMAssertAllFinite(y)
-        _LGBMCheckClassificationTargets(y)
-        self._le = _LGBMLabelEncoder().fit(y)
+        try:
+            from sklearn.preprocessing import LabelEncoder  # noqa: PLC0415
+            from sklearn.utils.multiclass import check_classification_targets  # noqa: PLC0415
+            from sklearn.utils.validation import assert_all_finite  # noqa: PLC0415
+        except ImportError as err:
+            # TODO: clean up error type and message for all of these
+            raise ImportError("lightgbm requires LabelEncoder") from err
+
+        assert_all_finite(y)
+        check_classification_targets(y)
+        self._le = LabelEncoder().fit(y)
         _y = self._le.transform(y)
         self._class_map = dict(zip(self._le.classes_, self._le.transform(self._le.classes_), strict=True))
         if isinstance(self.class_weight, dict):
