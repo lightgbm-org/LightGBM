@@ -198,6 +198,7 @@ Tree* CUDASingleGPUTreeLearner::Train(const score_t* gradients,
     const uint8_t num_bits_in_histogram_bins = config_->use_quantized_grad ? (nccl_communicator_ != nullptr ?
         cuda_gradient_discretizer_->GetHistBitsInLeaf<true>(smaller_leaf_index_) :
         cuda_gradient_discretizer_->GetHistBitsInLeaf<false>(smaller_leaf_index_)) : 0;
+    cuda_histogram_constructor_->WaitForDataIndices(cuda_data_partition_->data_indices_ready_event());
     cuda_histogram_constructor_->ConstructHistogramForLeaf(
       cuda_smaller_leaf_splits_->GetCUDAStruct(),
       cuda_larger_leaf_splits_->GetCUDAStruct(),

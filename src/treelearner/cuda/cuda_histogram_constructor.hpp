@@ -76,6 +76,9 @@ class CUDAHistogramConstructor {
 
   hist_t* cuda_hist_pointer() { return cuda_hist_.RawData(); }
 
+  // Add a device-side dependency on the post-split data-index copy.
+  void WaitForDataIndices(cudaEvent_t event);
+
  private:
   void InitFeatureMetaInfo(const Dataset* train_data, const std::vector<uint32_t>& feature_hist_offsets);
 

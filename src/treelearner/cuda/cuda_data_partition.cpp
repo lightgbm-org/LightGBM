@@ -54,6 +54,9 @@ CUDADataPartition::CUDADataPartition(
 }
 
 CUDADataPartition::~CUDADataPartition() {
+  if (data_indices_ready_event_ != nullptr) {
+    CUDASUCCESS_OR_FATAL(cudaEventDestroy(data_indices_ready_event_));
+  }
   CUDASUCCESS_OR_FATAL(cudaStreamDestroy(cuda_streams_[0]));
   CUDASUCCESS_OR_FATAL(cudaStreamDestroy(cuda_streams_[1]));
   CUDASUCCESS_OR_FATAL(cudaStreamDestroy(cuda_streams_[2]));
@@ -88,6 +91,7 @@ void CUDADataPartition::Init() {
   gpuAssert(cudaStreamCreate(&cuda_streams_[1]), __FILE__, __LINE__);
   gpuAssert(cudaStreamCreate(&cuda_streams_[2]), __FILE__, __LINE__);
   gpuAssert(cudaStreamCreate(&cuda_streams_[3]), __FILE__, __LINE__);
+  CUDASUCCESS_OR_FATAL(cudaEventCreateWithFlags(&data_indices_ready_event_, cudaEventDisableTiming));
 
   cuda_num_data_.InitFromHostVector(std::vector<data_size_t>{num_data_});
   use_bagging_ = false;
@@ -95,6 +99,7 @@ void CUDADataPartition::Init() {
 }
 
 void CUDADataPartition::BeforeTrain() {
+  data_indices_ready_ = false;
   if (!use_bagging_) {
     LaunchFillDataIndicesBeforeTrain();
   }

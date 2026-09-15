@@ -43,6 +43,12 @@ CUDAHistogramConstructor::~CUDAHistogramConstructor() {
   gpuAssert(cudaStreamDestroy(cuda_stream_), __FILE__, __LINE__);
 }
 
+void CUDAHistogramConstructor::WaitForDataIndices(cudaEvent_t event) {
+  if (event != nullptr) {
+    gpuAssert(cudaStreamWaitEvent(cuda_stream_, event, 0), __FILE__, __LINE__);
+  }
+}
+
 void CUDAHistogramConstructor::InitFeatureMetaInfo(const Dataset* train_data, const std::vector<uint32_t>& feature_hist_offsets) {
   need_fix_histogram_features_.clear();
   need_fix_histogram_features_num_bin_aligend_.clear();

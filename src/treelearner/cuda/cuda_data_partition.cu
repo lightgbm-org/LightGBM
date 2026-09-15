@@ -1063,6 +1063,8 @@ void CUDADataPartition::LaunchSplitInnerKernel(
   global_timer.Start("CUDADataPartition::CopyDataIndicesKernel");
   CopyDataIndicesKernel<<<grid_dim_, block_dim_, 0, cuda_streams_[2]>>>(
     left_leaf_num_data + right_leaf_num_data, cuda_out_data_indices_in_leaf_.RawData(), cuda_data_indices_.RawData() + left_leaf_data_start);
+  gpuAssert(cudaEventRecord(data_indices_ready_event_, cuda_streams_[2]), __FILE__, __LINE__);
+  data_indices_ready_ = true;
   global_timer.Stop("CUDADataPartition::CopyDataIndicesKernel");
   const data_size_t right_leaf_data_start = cpu_split_info_buffer[5];
   *left_leaf_num_data_ref = left_leaf_num_data;

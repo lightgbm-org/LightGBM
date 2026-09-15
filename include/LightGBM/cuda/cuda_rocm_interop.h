@@ -42,6 +42,12 @@
 #define cudaStreamDestroy hipStreamDestroy
 #define cudaStreamSynchronize hipStreamSynchronize
 #define cudaStream_t hipStream_t
+#define cudaEventCreateWithFlags hipEventCreateWithFlags
+#define cudaEventDestroy hipEventDestroy
+#define cudaEventRecord hipEventRecord
+#define cudaEvent_t hipEvent_t
+#define cudaEventDisableTiming hipEventDisableTiming
+#define cudaStreamWaitEvent hipStreamWaitEvent
 #define cudaSuccess hipSuccess
 
 // ROCm 7.0 did add __shfl_down_sync et al, but the following hack still works.

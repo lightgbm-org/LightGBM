@@ -102,6 +102,12 @@ class CUDADataPartition: public NCCLInfo {
 
   const int* cuda_data_index_to_leaf_index() const { return cuda_data_index_to_leaf_index_.RawData(); }
 
+  // Returns an event recorded after the post-split data-index copy, or null
+  // before the first split in a boosting iteration.
+  cudaEvent_t data_indices_ready_event() const {
+    return data_indices_ready_ ? data_indices_ready_event_ : nullptr;
+  }
+
   bool use_bagging() const { return use_bagging_; }
 
  private:
@@ -355,6 +361,9 @@ class CUDADataPartition: public NCCLInfo {
   // CUDA streams
   /*! \brief cuda streams used for asynchronizing kernel computing and memory copy */
   std::vector<cudaStream_t> cuda_streams_;
+  /*! \brief event recorded after cuda_data_indices_ is refreshed by a split */
+  cudaEvent_t data_indices_ready_event_ = nullptr;
+  bool data_indices_ready_ = false;
 
 
   // CUDA memory, held by this object
