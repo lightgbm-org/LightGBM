@@ -496,6 +496,47 @@ def test_multiclass():
     assert evals_result["valid_0"]["multi_logloss"][-1] == pytest.approx(ret)
 
 
+@pytest.mark.skipif(not BuildInfo.has_cuda, reason="Requires the CUDA test runner")
+@pytest.mark.parametrize("objective", ["multiclass", "multiclassova"])
+@pytest.mark.parametrize("with_weights", [False, True])
+def test_cuda_multiclass_logloss_matches_predict(objective, with_weights):
+    rng = np.random.RandomState(42)
+    X = rng.normal(size=(12_000, 12)).astype(np.float32)
+    logits = X[:, :4] @ rng.normal(size=(4, 4))
+    y = np.argmax(logits + rng.normal(scale=0.75, size=logits.shape), axis=1)
+    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+    train_weights = rng.uniform(0.25, 2.0, size=len(y_train)) if with_weights else None
+    test_weights = rng.uniform(0.25, 2.0, size=len(y_test)) if with_weights else None
+    train_set = lgb.Dataset(X_train, label=y_train, weight=train_weights, free_raw_data=False)
+    valid_set = lgb.Dataset(
+        X_test, label=y_test, weight=test_weights, reference=train_set, free_raw_data=False
+    )
+    evals_result = {}
+    booster = lgb.train(
+        {
+            "objective": objective,
+            "num_class": 4,
+            "metric": "multi_logloss",
+            "device_type": "cuda",
+            "num_threads": 1,
+            "num_leaves": 15,
+            "learning_rate": 0.1,
+            "verbosity": -1,
+        },
+        train_set,
+        num_boost_round=8,
+        valid_sets=[valid_set],
+        callbacks=[lgb.record_evaluation(evals_result)],
+    )
+    probabilities = booster.predict(X_test)
+    if objective == "multiclass":
+        expected = log_loss(y_test, probabilities, labels=np.arange(4), sample_weight=test_weights)
+    else:
+        per_row_loss = -np.log(np.maximum(probabilities[np.arange(len(y_test)), y_test], 1e-15))
+        expected = np.average(per_row_loss, weights=test_weights)
+    assert evals_result["valid_0"]["multi_logloss"][-1] == pytest.approx(expected, rel=1e-5, abs=1e-7)
+
+
 def test_multiclass_rf():
     X, y = load_digits(n_class=10, return_X_y=True)
     X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.1, random_state=42)

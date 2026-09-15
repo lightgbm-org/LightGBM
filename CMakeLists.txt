@@ -441,9 +441,11 @@ set(
       src/boosting/cuda/cuda_score_updater.cu
       src/boosting/cuda/nccl_gbdt.cpp
       src/metric/cuda/cuda_binary_metric.cpp
+      src/metric/cuda/cuda_multiclass_metric.cpp
       src/metric/cuda/cuda_pointwise_metric.cpp
       src/metric/cuda/cuda_regression_metric.cpp
       src/metric/cuda/cuda_pointwise_metric.cu
+      src/metric/cuda/cuda_multiclass_metric.cu
       src/objective/cuda/cuda_binary_objective.cpp
       src/objective/cuda/cuda_multiclass_objective.cpp
       src/objective/cuda/cuda_rank_objective.cpp
