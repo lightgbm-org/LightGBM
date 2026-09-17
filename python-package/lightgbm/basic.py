@@ -816,6 +816,9 @@ def _data_from_narwhals(
         cat_cols = data.select(ncs.categorical()).columns + [
             col for col, dtype in data.schema.items() if dtype == nw.Enum
         ]
+    # Ordered categoricals have ordinal semantics, which means we handle them as numeric features.
+    # By excluding them from ``categorical_feature``, the C++ backend uses ``value < threshold`` splits
+    # on their integer codes. See docs/Advanced-Topics.rst#categorical-feature-support.
     cat_cols_not_ordered: List[str] = [col for col in cat_cols if not nw.is_ordered_categorical(data.get_column(col))]
     if pandas_categorical is None:  # train dataset
         pandas_categorical = []

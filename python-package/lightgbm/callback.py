@@ -113,8 +113,8 @@ def log_evaluation(period: int = 1, show_stdv: bool = True) -> _LogEvaluationCal
     By default, standard output resource is used.
     Use ``register_logger()`` function to register a custom logger.
 
-    Note
-    ----
+    Notes
+    -----
     Requires at least one validation data.
 
     Parameters
