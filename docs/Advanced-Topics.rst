@@ -33,13 +33,18 @@ Categorical Feature Support
    This ensures consistent encoding between training and prediction without additional preprocessing.
 
 -  With ``categorical_feature="auto"`` (the default), LightGBM auto-detects **unordered**
-   categorical columns of a dataframe input (``pandas.Categorical(ordered=False)``)
-   and treats them as categorical features. Ordered categoricals
-   (``pandas.Categorical(ordered=True)``) are instead treated as ordinal numeric features
-   (standard ``value < threshold`` splits on the integer codes), since a declared order between
-   categories matches numeric-split semantics better than partition-based categorical splits.
-   Pass the column name explicitly via ``categorical_feature=["col"]`` to force categorical
-   handling of an ordered column.
+   categorical columns of a dataframe input and treats them as categorical features. Ordered
+   categoricals are instead treated as ordinal numeric features (standard ``value < threshold``
+   splits on the integer codes), since a declared order between categories matches numeric-split
+   semantics better than partition-based categorical splits. Pass the column name explicitly via
+   ``categorical_feature=["col"]`` to force categorical handling of an ordered column. The
+   "ordered" check is normalized across dataframe backends via
+   `narwhals.is_ordered_categorical <https://narwhals-dev.github.io/narwhals/api-reference/narwhals/#is_ordered_categorical>`__:
+
+   -  **pandas**: ``Categorical(ordered=False)`` → categorical; ``ordered=True`` → numeric.
+   -  **polars**: ``Categorical(...)`` → categorical (or numeric on polars < 2.0 when constructed
+      with the now-removed ``ordering="physical"`` argument); ``Enum([...])`` → numeric.
+   -  **pyarrow**: ``dictionary(..., ordered=False)`` → categorical; ``ordered=True`` → numeric.
 
 -  At ``predict()`` time, categories not seen during training will be treated as missing values.
 
