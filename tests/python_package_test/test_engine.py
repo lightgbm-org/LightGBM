@@ -2025,7 +2025,7 @@ def test_contribs_sparse():
     n_samples = 100
     # generate CSR sparse dataset
     X, y = make_multilabel_classification(
-        n_samples=n_samples, sparse=True, n_features=n_features, n_classes=1, n_labels=2
+        n_samples=n_samples, sparse=True, n_features=n_features, n_classes=1, n_labels=2, random_state=0
     )
     y = y.flatten()
     X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.1, random_state=42)
