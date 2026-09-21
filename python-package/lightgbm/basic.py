@@ -17,24 +17,25 @@ from collections import OrderedDict
 from copy import deepcopy
 from enum import Enum
 from functools import wraps
+from importlib import metadata
 from os import SEEK_END, environ
 from os.path import getsize
 from pathlib import Path
 from tempfile import NamedTemporaryFile
 from typing import TYPE_CHECKING, Any, Callable, Dict, Iterable, Iterator, List, NamedTuple, Optional, Set, Tuple, Union
 
-import narwhals as nw
-import narwhals.dependencies as nwd
-import narwhals.dtypes as nw_dtypes
-import narwhals.selectors as ncs
-import narwhals.typing as nwt
+import narwhals.stable.v2 as nw
+import narwhals.stable.v2.dependencies as nwd
+import narwhals.stable.v2.dtypes as nw_dtypes
+import narwhals.stable.v2.selectors as ncs
+import narwhals.stable.v2.typing as nwt
 import numpy as np
 import scipy.sparse
 
 from .compat import PANDAS_INSTALLED, concat, pd_CategoricalDtype, pd_DataFrame, pd_Series
 
-_NARWHALS_VERSION = tuple(int(v) for v in nw.__version__.split("."))
-_NARWHALS_VERSION_GTE_2_23 = _NARWHALS_VERSION >= (2, 23)
+_NARWHALS_VERSION = metadata.version("narwhals")
+_NARWHALS_VERSION_GTE_2_23 = tuple(int(v) for v in _NARWHALS_VERSION.split(".")) >= (2, 23)
 
 if TYPE_CHECKING:
     from typing import Literal, TypeGuard
