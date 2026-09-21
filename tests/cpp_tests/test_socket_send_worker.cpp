@@ -36,9 +36,9 @@ class SocketSendWorkerTest : public ::testing::Test {
 #endif
     ASSERT_EQ(getsockname(listener, reinterpret_cast<sockaddr*>(&address), &address_size), 0);
     listener_socket.Listen();
-    const SOCKET client_fd = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
-    ASSERT_NE(client_fd, INVALID_SOCKET);
-    TcpSocket client(client_fd);
+    client_fd_ = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+    ASSERT_NE(client_fd_, INVALID_SOCKET);
+    TcpSocket client(client_fd_);
     ASSERT_TRUE(client.Connect("127.0.0.1", ntohs(address.sin_port)));
     TcpSocket server = listener_socket.Accept();
     listener_socket.Close();
@@ -54,16 +54,6 @@ class SocketSendWorkerTest : public ::testing::Test {
     // the shared descriptors afterwards to keep failure tests bounded.
     client.SetTimeout(1000);
     server.SetTimeout(1000);
-    // TcpSocket::SetTimeout only configures receives. Bound the deliberately
-    // blocked send separately; production socket timeout policy is unchanged.
-#ifdef _WIN32
-    DWORD send_timeout = 1000;
-#else
-    timeval send_timeout{};
-    send_timeout.tv_sec = 1;
-#endif
-    ASSERT_EQ(setsockopt(client_fd, SOL_SOCKET, SO_SNDTIMEO,
-                         reinterpret_cast<const char*>(&send_timeout), sizeof(send_timeout)), 0);
   }
 
   void TearDown() override {
@@ -104,6 +94,7 @@ class SocketSendWorkerTest : public ::testing::Test {
     EXPECT_EQ(right_recv, left_send);
   }
 
+  SOCKET client_fd_ = INVALID_SOCKET;
   std::unique_ptr<Linkers> left_, right_;
 };
 
@@ -127,12 +118,13 @@ TEST_F(SocketSendWorkerTest, ReceiveTimeoutWaitsForSenderAndAllowsAnotherExchang
   Exchange<int64_t>(4096, 3072, 42);
 }
 
-TEST_F(SocketSendWorkerTest, SendTimeoutIsRethrownOnCaller) {
-  // The peer deliberately does not read. This exceeds the fixed socket buffers.
-  std::vector<char> data(16 * 1024 * 1024, 1);
+TEST_F(SocketSendWorkerTest, SendErrorIsRethrownOnCaller) {
+  // Use a closed socket to fail the send independently of OS buffering.
+  TcpSocket closed_socket(client_fd_);
+  closed_socket.Close();
+  left_->SetLinker(0, closed_socket);
   char byte = 0;
-  EXPECT_THROW(left_->SendRecv(0, data.data(), static_cast<int64_t>(data.size()),
-                              0, &byte, int64_t{0}), std::exception);
+  EXPECT_THROW(left_->SendRecv(0, &byte, int64_t{1}, 0, &byte, int64_t{0}), std::exception);
 }
 
 TEST_F(SocketSendWorkerTest, DestroyWithoutStartingSender) {
