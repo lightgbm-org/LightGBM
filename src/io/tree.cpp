@@ -999,7 +999,8 @@ void Tree::TreeSHAPByMap(const std::unordered_map<int, double>& feature_values, 
     for (int i = 1; i <= unique_depth; ++i) {
       const double w = UnwoundPathSum(unique_path, unique_depth, i);
       const PathElement &el = unique_path[i];
-      // Look up the output before arithmetic to allow the same multiply-add contraction as TreeSHAP.
+      // Complete the hash-table lookup before arithmetic to let the compiler
+      // fuse the final multiplication with the accumulation.
       double& contribution = (*phi)[el.feature_index];
       contribution += w*(el.one_fraction - el.zero_fraction)*leaf_value_[~node];
     }
