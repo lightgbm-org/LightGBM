@@ -1678,7 +1678,7 @@ def test_predict_dataframe_modes_together(task, output, all_empty, cluster):
             assert prediction.dtype == expected.dtype
             assert actual.shape == expected.shape
             assert actual.dtype == expected.dtype
-            np_assert_array_equal(actual, expected)
+            np_assert_array_equal(actual, expected, strict=True)
 
 
 @pytest.mark.parametrize("output", data_output)
