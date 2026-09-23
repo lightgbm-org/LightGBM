@@ -971,6 +971,7 @@ def _predict(
 
     if isinstance(data, dask.dataframe.DataFrame):
         # Bind prediction options into the callable to give each mode distinct task keys.
+        # ref: https://github.com/dask/dask/pull/12603
         predict_fn = partial(
             _predict_part,
             model=model,
