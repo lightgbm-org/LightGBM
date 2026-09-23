@@ -86,37 +86,6 @@ def categorize(continuous_x):
     return np.digitize(continuous_x, bins=np.arange(0, 1, 0.01))
 
 
-@pytest.mark.parametrize("invalid_index", [0, 1])
-def test_train_rejects_invalid_valid_names(invalid_index):
-    X, y = make_synthetic_regression(n_samples=100, n_features=2)
-    train_set = lgb.Dataset(X, label=y)
-    valid_set = lgb.Dataset(X.copy(), label=y.copy())
-    valid_names = ["train", "valid"]
-    valid_names[invalid_index] = train_set
-    msg = f"Every item in valid_names must be a string. Item {invalid_index} has type 'Dataset'."
-    with pytest.raises(TypeError, match=re.escape(msg)):
-        lgb.train(
-            {"objective": "regression", "verbosity": -1, "num_threads": 1},
-            train_set,
-            num_boost_round=1,
-            valid_sets=[train_set, valid_set],
-            valid_names=valid_names,
-        )
-
-
-def test_train_valid_names_accepts_str_subclass():
-    X, y = make_synthetic_regression(n_samples=100, n_features=2)
-    train_set = lgb.Dataset(X, label=y)
-    booster = lgb.train(
-        {"objective": "regression", "verbosity": -1, "num_threads": 1},
-        train_set,
-        num_boost_round=1,
-        valid_sets=[train_set],
-        valid_names=np.str_("train"),
-    )
-    assert list(booster.best_score) == ["train"]
-
-
 def test_binary():
     X, y = load_breast_cancer(return_X_y=True)
     X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.1, random_state=42)
@@ -4926,6 +4895,41 @@ def test_train_raises_informative_error_if_any_valid_sets_are_not_dataset_object
             train_set=lgb.Dataset(X, y),
             valid_sets=[lgb.Dataset(X_valid, y), ([1.0], [2.0]), [5.6, 5.7, 5.8]],
         )
+
+
+def test_train_rejects_invalid_valid_names():
+    X, y = make_synthetic_regression(n_samples=100, n_features=2)
+    train_set = lgb.Dataset(X, label=y)
+    valid_set = lgb.Dataset(X.copy(), label=y.copy())
+    with pytest.raises(TypeError, match=r"Every item in valid_names must be a string\. Item 0 has type 'Dataset'\."):
+        lgb.train(
+            {"objective": "regression", "verbosity": -1, "num_threads": 1},
+            train_set,
+            num_boost_round=1,
+            valid_sets=[train_set, valid_set],
+            valid_names=[train_set, "valid"],
+        )
+    with pytest.raises(TypeError, match=r"Every item in valid_names must be a string\. Item 1 has type 'Dataset'\."):
+        lgb.train(
+            {"objective": "regression", "verbosity": -1, "num_threads": 1},
+            train_set,
+            num_boost_round=1,
+            valid_sets=[train_set, valid_set],
+            valid_names=["train", valid_set],
+        )
+
+
+def test_train_valid_names_accepts_str_subclass():
+    X, y = make_synthetic_regression(n_samples=100, n_features=2)
+    train_set = lgb.Dataset(X, label=y)
+    booster = lgb.train(
+        {"objective": "regression", "verbosity": -1, "num_threads": 1},
+        train_set,
+        num_boost_round=1,
+        valid_sets=[train_set],
+        valid_names=np.str_("flamingo"),
+    )
+    assert list(booster.best_score) == ["flamingo"]
 
 
 def test_train_raises_informative_error_for_params_of_wrong_type():
