@@ -34,8 +34,9 @@ import scipy.sparse
 
 from .compat import PANDAS_INSTALLED, concat, pd_CategoricalDtype, pd_DataFrame, pd_Series
 
-_NARWHALS_VERSION = metadata.version("narwhals")
-_NARWHALS_VERSION_GTE_2_23 = tuple(int(v) for v in _NARWHALS_VERSION.split(".")) >= (2, 23)
+_NARWHALS_VERSION_TUPLE = tuple(int(v) for v in metadata.version("narwhals").split("."))
+_NARWHALS_VERSION_GTE_2_23 = _NARWHALS_VERSION_TUPLE >= (2, 23)
+_NARWHALS_VERSION_GTE_2_26 = _NARWHALS_VERSION_TUPLE >= (2, 26)
 
 if TYPE_CHECKING:
     from typing import Literal, TypeGuard
@@ -822,15 +823,19 @@ def _data_from_narwhals(
     # on their integer codes. See docs/Advanced-Topics.rst#categorical-feature-support.
     cat_cols_not_ordered: List[str] = [col for col in cat_cols if not nw.is_ordered_categorical(data.get_column(col))]
     if pandas_categorical is None:  # train dataset
-        pandas_categorical = []
-        for col in cat_cols:
-            if not nw.is_ordered_categorical(data.get_column(col)) and data.implementation.is_polars():
-                # Use per-column observed values instead of Polars categorical metadata.
-                # Polars categories can be unstable due to the global string cache, which
-                # can leak categories across columns/slices and corrupt train/valid mapping.
-                pandas_categorical.append(data.get_column(col).unique().drop_nulls().sort().to_list())
-            else:
-                pandas_categorical.append(data.get_column(col).cat.get_categories().to_list())
+        if _NARWHALS_VERSION_GTE_2_26:
+            pandas_categorical = [data.get_column(col).cat.get_categories().to_list() for col in cat_cols]
+        else:
+            # workaround for narwhals < 2.26: for Polars, `.cat.get_categories()` can leak
+            # categories across columns/slices via the global string cache, so use per-column
+            # observed values instead. This workaround can be removed once minimum narwhals
+            # version is 2.26.
+            pandas_categorical = []
+            for col in cat_cols:
+                if not nw.is_ordered_categorical(data.get_column(col)) and data.implementation.is_polars():
+                    pandas_categorical.append(data.get_column(col).unique().drop_nulls().sort().to_list())
+                else:
+                    pandas_categorical.append(data.get_column(col).cat.get_categories().to_list())
     else:
         if len(cat_cols) != len(pandas_categorical):
             raise ValueError("train and valid dataset categorical_feature do not match.")
