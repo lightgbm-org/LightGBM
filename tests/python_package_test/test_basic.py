@@ -103,7 +103,7 @@ def test_reset_parameter_on_loaded_model(tmp_path):
     loaded = lgb.Booster(model_file=model_file)
     expected = loaded.predict(X)
 
-    for params in [{"kelp_var1": 123456789}, {"learning_rate": 0.2}]:
+    for params in [{"some_unrecognized_param": 123456789}, {"learning_rate": 0.2}]:
         loaded.reset_parameter(params)
         np_assert_array_equal(loaded.predict(X), expected, strict=True)
 
