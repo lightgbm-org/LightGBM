@@ -95,6 +95,19 @@ def test_basic(tmp_path):
     np.testing.assert_raises_regex(lgb.basic.LightGBMError, bad_shape_error_msg, bst.predict, tname)
 
 
+def test_reset_parameter_on_loaded_model(tmp_path):
+    X, y = load_breast_cancer(return_X_y=True)
+    bst = lgb.train({"objective": "binary", "num_threads": 1}, lgb.Dataset(X, label=y), num_boost_round=2)
+    model_file = tmp_path / "model.txt"
+    bst.save_model(model_file)
+    loaded = lgb.Booster(model_file=model_file)
+    expected = loaded.predict(X)
+
+    for params in [{"kelp_var1": 123456789}, {"learning_rate": 0.2}]:
+        loaded.reset_parameter(params)
+        np_assert_array_equal(loaded.predict(X), expected, strict=True)
+
+
 def test_booster_rollback_one_iter(rng):
     """Test that Booster.rollback_one_iter() correctly rolls back one boosting iteration."""
     X = rng.uniform(size=(100, 5))
