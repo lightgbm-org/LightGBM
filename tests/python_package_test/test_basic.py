@@ -97,14 +97,27 @@ def test_basic(tmp_path):
 
 def test_reset_parameter_on_loaded_model(tmp_path):
     X, y = load_breast_cancer(return_X_y=True)
-    bst = lgb.train({"objective": "binary", "num_threads": 1}, lgb.Dataset(X, label=y), num_boost_round=2)
+    bst = lgb.train(
+        {"objective": "binary", "learning_rate": 0.1, "num_threads": 1}, lgb.Dataset(X, label=y), num_boost_round=2
+    )
     model_file = tmp_path / "model.txt"
     bst.save_model(model_file)
     loaded = lgb.Booster(model_file=model_file)
     expected = loaded.predict(X)
+    assert loaded.params["learning_rate"] == 0.1
+    assert "some_unrecognized_param" not in loaded.params
+    assert loaded._get_loaded_param() == loaded.params
+    expected_params = loaded.params.copy()
 
     for params in [{"some_unrecognized_param": 123456789}, {"learning_rate": 0.2}]:
         loaded.reset_parameter(params)
+        expected_params.update(params)
+        assert loaded.params == expected_params
+
+        # Reload to read the current C++ configuration instead of the parameters saved at load time.
+        reloaded = lgb.Booster(model_str=loaded.model_to_string())
+        assert reloaded.params["learning_rate"] == expected_params["learning_rate"]
+        assert "some_unrecognized_param" not in reloaded.params
         np_assert_array_equal(loaded.predict(X), expected, strict=True)
 
 
