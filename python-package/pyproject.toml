@@ -154,7 +154,13 @@ ignore = [
     # (pylint) use 'elif' instead of 'else' then 'if', to reduce indentation
     "PLR5501",
     # (flake8-pytest-style) `scope='function'` is implied in `@pytest.fixture()`
-    "PT003"
+    "PT003",
+    # (flake8-bandit) Use of `assert` detected
+    #
+    # 'assert' is used pervasively in this project, including outside of tests, to check
+    # internal invariants rather than to validate untrusted input. Ignoring this project-wide
+    # matches the practice of other numerical-computing projects (e.g. NumPy, pandas).
+    "S101"
 ]
 select = [
     # flake8-bugbear
@@ -179,6 +185,8 @@ select = [
     "RET504",
     # flake8-return: superfluous-else-raise
     "RET506",
+    # flake8-bandit
+    "S",
     # flake8-simplify: use dict.get() instead of an if-else block
     "SIM401",
     # flake8-print
@@ -198,12 +206,17 @@ raises-extend-require-match-for = ["*Exception", "*Error"]
 "docs/conf.py" = [
     # (flake8-bugbear) raise exceptions with "raise ... from err"
     "B904",
+    # (flake8-bandit) Starting a process with a partial executable path
+    "S607",
     # (flake8-print) flake8-print
     "T"
 ]
 "examples/*" = [
     # pydocstyle
     "D",
+    # (flake8-bandit) `pickle` and modules that wrap it can be unsafe when used to
+    # deserialize untrusted data (this loads a model that was just saved locally)
+    "S301",
     # flake8-print
     "T"
 ]
@@ -218,6 +231,15 @@ raises-extend-require-match-for = ["*Exception", "*Error"]
     "E402",
     # pydocstyle
     "D",
+    # (flake8-bandit) `pickle` and modules that wrap it can be unsafe when used to
+    # deserialize untrusted data (only used here on data serialized by the test itself)
+    "S301",
+    # (flake8-bandit) Standard pseudo-random generators are not suitable for cryptographic
+    # purposes (only used here to generate synthetic test data)
+    "S311",
+    # (flake8-bandit) `subprocess` call: check for execution of untrusted input (only used
+    # here to invoke LightGBM's own CLI binary with test-generated config files)
+    "S603",
     # flake8-print
     "T"
 ]
