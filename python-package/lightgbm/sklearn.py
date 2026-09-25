@@ -18,7 +18,6 @@ from .basic import (
     Booster,
     Dataset,
     LGBMDeprecationWarning,
-    LightGBMError,
     _choose_param_value,
     _ConfigAliases,
     _LGBM_BoosterBestScoreType,
@@ -545,7 +544,7 @@ class LGBMModel(_LGBMModelBase):
         and grad and hess should be returned in the same format.
         """
         if not SKLEARN_INSTALLED:
-            raise LightGBMError(
+            raise ImportError(
                 "scikit-learn is required for lightgbm.sklearn. "
                 "You must install scikit-learn and restart your session to use this module."
             )
@@ -1001,7 +1000,9 @@ class LGBMModel(_LGBMModelBase):
         try:
             from sklearn.utils.class_weight import compute_sample_weight  # noqa: PLC0415
         except ImportError as err:
-            raise ImportError("lightgbm requires compute_sample_weight") from err
+            raise ImportError(
+                "lightgbm.sklearn requires compute_sample_weight() and other 'sklearn' exports that could not be loaded"
+            ) from err
         params = self._process_params(stage="fit")
 
         # Do not modify original args in fit function
@@ -2109,8 +2110,9 @@ class LGBMClassifier(_LGBMClassifierBase, LGBMModel):
             from sklearn.utils.multiclass import check_classification_targets  # noqa: PLC0415
             from sklearn.utils.validation import assert_all_finite  # noqa: PLC0415
         except ImportError as err:
-            # TODO: clean up error type and message for all of these
-            raise ImportError("lightgbm requires LabelEncoder") from err
+            raise ImportError(
+                "lightgbm.sklearn requires LabelEncoder and other 'sklearn' exports that could not be loaded"
+            ) from err
 
         assert_all_finite(y)
         check_classification_targets(y)

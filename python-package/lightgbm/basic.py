@@ -3554,7 +3554,7 @@ class Dataset:
                     self.data = None
             elif isinstance(self.data, pd_DataFrame):
                 if not PANDAS_INSTALLED:
-                    raise LightGBMError(
+                    raise ImportError(
                         "Cannot add features to DataFrame type of raw data "
                         "without pandas installed. "
                         "Install pandas and restart your session."
@@ -3990,7 +3990,7 @@ class Booster:
             Returns a pandas DataFrame of the parsed model.
         """
         if not PANDAS_INSTALLED:
-            raise LightGBMError(
+            raise ImportError(
                 "This method cannot be run without pandas installed. "
                 "You must install pandas and restart your session to use this method."
             )

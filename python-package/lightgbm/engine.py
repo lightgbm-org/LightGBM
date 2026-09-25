@@ -15,7 +15,6 @@ from .basic import (
     Booster,
     Dataset,
     EvalResult,
-    LightGBMError,
     _choose_param_value,
     _ConfigAliases,
     _InnerPredictor,
@@ -562,7 +561,7 @@ def _make_n_folds(
             try:
                 from sklearn.model_selection import GroupKFold  # noqa: PLC0415
             except ImportError as err:
-                raise LightGBMError(
+                raise ImportError(
                     "Failed to import 'sklearn.model_selection.GroupKFold'. scikit-learn is required."
                 ) from err
             # ranking task, split according to groups
@@ -574,7 +573,7 @@ def _make_n_folds(
             try:
                 from sklearn.model_selection import StratifiedKFold  # noqa: PLC0415
             except ImportError as err:
-                raise LightGBMError(
+                raise ImportError(
                     "Failed to import 'sklearn.model_selection.StratifiedKFold' (required for lightgbm)"
                 ) from err
             skf = StratifiedKFold(n_splits=nfold, shuffle=shuffle, random_state=seed)

@@ -550,7 +550,7 @@ def _train(
         from dask import delayed  # noqa: PLC0415
         from dask.distributed import wait  # noqa: PLC0415
     except _DaskImportErrorTypes as err:
-        raise LightGBMError("dask is required for lightgbm.dask") from err
+        raise ImportError("dask is required for lightgbm.dask") from err
 
     params = deepcopy(params)
 
@@ -959,7 +959,7 @@ def _predict(
         If ``pred_contrib=True``, the feature contributions for each sample.
     """
     if not all((PANDAS_INSTALLED, SKLEARN_INSTALLED)):
-        raise LightGBMError("pandas and scikit-learn are required for lightgbm.dask")
+        raise ImportError("pandas and scikit-learn are required for lightgbm.dask")
 
     try:
         import dask.array  # noqa: PLC0415
@@ -967,7 +967,7 @@ def _predict(
         import dask.dataframe  # noqa: PLC0415
         from dask import delayed  # noqa: PLC0415
     except _DaskImportErrorTypes as err:
-        raise LightGBMError("dask is required for lightgbm.dask") from err
+        raise ImportError("dask is required for lightgbm.dask") from err
 
     if isinstance(data, dask.dataframe.DataFrame):
         # Bind prediction options into the callable to give each mode distinct task keys.
@@ -1120,7 +1120,7 @@ class _DaskLGBMModel:
         **kwargs: Any,
     ) -> "_DaskLGBMModel":
         if not all((PANDAS_INSTALLED, SKLEARN_INSTALLED)):
-            raise LightGBMError("pandas and scikit-learn are required for lightgbm.dask")
+            raise ImportError("pandas and scikit-learn are required for lightgbm.dask")
 
         params = self.get_params(True)  # type: ignore[attr-defined]
         params.pop("client", None)
