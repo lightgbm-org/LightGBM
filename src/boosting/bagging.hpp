@@ -145,6 +145,7 @@ class BaggingSampleStrategy : public SampleStrategy {
       num_pos_data = objective_function_->NumPositiveData();
     }
     bool balance_bagging_cond = (config->pos_bagging_fraction < 1.0 || config->neg_bagging_fraction < 1.0) && (num_pos_data > 0);
+    balanced_bagging_ = balance_bagging_cond;
     if ((config->bagging_fraction < 1.0 || balance_bagging_cond) && config->bagging_freq > 0) {
       need_re_bagging_ = false;
       if (!is_change_dataset &&
@@ -155,7 +156,6 @@ class BaggingSampleStrategy : public SampleStrategy {
       }
       config_ = config;
       if (balance_bagging_cond) {
-        balanced_bagging_ = true;
         bag_data_cnt_ = static_cast<data_size_t>(num_pos_data * config_->pos_bagging_fraction)
                         + static_cast<data_size_t>((num_data_ - num_pos_data) * config_->neg_bagging_fraction);
       } else {
