@@ -3878,6 +3878,56 @@ def test_interaction_constraints():
     )
 
 
+@pytest.mark.parametrize("seed", [123, None], ids=["fixed_seed", "randomized"])
+@pytest.mark.parametrize(
+    ("initial_constraints", "new_constraints"),
+    [
+        ("[]", "[[0],[1],[2],[3]]"),
+        ("[[0,1],[2,3]]", "[[0,2],[1,3]]"),
+        ("[[0],[1],[2],[3]]", "[]"),
+    ],
+    ids=["enable", "replace", "clear"],
+)
+def test_reset_interaction_constraints(seed, initial_constraints, new_constraints):
+    if seed is None:
+        seed = int(np.random.default_rng().integers(0, 1000000))
+    X = np.random.RandomState(seed).normal(size=(600, 4))
+    y = X @ np.arange(1, 5)
+    params = {
+        "objective": "regression",
+        "interaction_constraints": initial_constraints,
+        "max_depth": 3,
+        "seed": seed,
+        "num_threads": 1,
+        "verbosity": -1,
+    }
+    actual = lgb.train(params, lgb.Dataset(X, label=y), num_boost_round=1, keep_training_booster=True)
+    expected = lgb.train(
+        dict(params, interaction_constraints=new_constraints),
+        lgb.Dataset(X, label=y),
+        num_boost_round=2,
+        init_model=actual,
+    )
+    actual.reset_parameter({"interaction_constraints": new_constraints})
+    for _ in range(2):
+        actual.update()
+
+    groups = [set(group) for group in json.loads(new_constraints)]
+
+    def check_branch(node, features):
+        if "split_feature" not in node:
+            return
+        features = features | {node["split_feature"]}
+        assert any(features <= group for group in groups), f"seed={seed}, features={features}"
+        check_branch(node["left_child"], features)
+        check_branch(node["right_child"], features)
+
+    if groups:
+        for tree in actual.dump_model()["tree_info"][-2:]:
+            check_branch(tree["tree_structure"], set())
+    np.testing.assert_allclose(actual.predict(X), expected.predict(X), err_msg=f"seed={seed}")
+
+
 def test_linear_trees_num_threads(rng_fixed_seed):
     # check that number of threads does not affect result
     x = np.arange(0, 1000, 0.1)
