@@ -150,7 +150,8 @@ class BaggingSampleStrategy : public SampleStrategy {
       need_re_bagging_ = false;
       if (!is_change_dataset &&
         config_ != nullptr && config_->bagging_fraction == config->bagging_fraction && config_->bagging_freq == config->bagging_freq
-        && config_->pos_bagging_fraction == config->pos_bagging_fraction && config_->neg_bagging_fraction == config->neg_bagging_fraction) {
+        && config_->pos_bagging_fraction == config->pos_bagging_fraction && config_->neg_bagging_fraction == config->neg_bagging_fraction
+        && config_->bagging_seed == config->bagging_seed) {
         config_ = config;
         return;
       }

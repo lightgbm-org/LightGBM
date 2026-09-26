@@ -145,6 +145,40 @@ def test_reset_balanced_bagging(seed, bagging_fraction, balanced_fraction):
         np.testing.assert_allclose(actual.predict(X), expected.predict(X), err_msg=f"seed={seed}, fraction={fraction}")
 
 
+@pytest.mark.parametrize("new_seed", [456, None], ids=["fixed_seed", "randomized"])
+def test_reset_bagging_seed(new_seed):
+    if new_seed is None:
+        new_seed = int(np.random.default_rng().integers(124, 1000000))
+    X = np.random.RandomState(0).normal(size=(600, 4))
+    y = X @ np.arange(1, 5)
+    params = {
+        "objective": "regression",
+        "bagging_fraction": 0.6,
+        "bagging_freq": 1,
+        "bagging_seed": 123,
+        "max_depth": 3,
+        "num_threads": 1,
+        "verbosity": -1,
+    }
+    actual = lgb.train(params, lgb.Dataset(X, label=y), num_boost_round=1, keep_training_booster=True)
+    expected = lgb.train(
+        dict(params, bagging_seed=new_seed),
+        lgb.Dataset(X, label=y),
+        num_boost_round=2,
+        init_model=actual,
+        keep_training_booster=True,
+    )
+    actual.reset_parameter({"bagging_seed": new_seed})
+    for _ in range(2):
+        actual.update()
+    np.testing.assert_allclose(actual.predict(X), expected.predict(X), err_msg=f"seed={new_seed}")
+
+    actual.reset_parameter({"bagging_seed": new_seed})
+    actual.update()
+    expected.update()
+    np.testing.assert_allclose(actual.predict(X), expected.predict(X), err_msg=f"seed={new_seed}")
+
+
 def test_rf():
     X, y = load_breast_cancer(return_X_y=True)
     X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.1, random_state=42)
