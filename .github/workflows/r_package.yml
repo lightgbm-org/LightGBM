@@ -351,8 +351,19 @@ jobs:
           # 'rchk' isn't run through 'R CMD check', use the approach documented at
           # https://r-hub.github.io/containers/local.html
           if [[ "${{ matrix.image }}" =~ "rchk" ]]; then
+            set +e
             r-check "$(pwd)" 2>&1 \
             | tee ./rchk-logs.txt
+
+            # check for failures, and get more logs
+            rchk_exit=${PIPESTATUS[0]}
+            set -e
+            if [[ ${rchk_exit} -ne 0 ]]; then
+              echo "r-check exited with ${rchk_exit}; raw bcheck output:"
+              find /opt/R/devel-rchk/packages/lib -name '*.bcheck' -exec cat {} +
+              ls -la /opt/R/devel-rchk/R.bc
+              exit ${rchk_exit}
+            fi
 
             # the '-v' exceptions below are from R/rchk itself and not LightGBM:
             # https://github.com/kalibera/rchk/issues/22#issuecomment-656036156
