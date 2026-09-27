@@ -10,13 +10,15 @@ from pathlib import Path
 # and its dependencies as early as possible
 # isort: split
 from .basic import Booster, Dataset, EvalResult, Sequence, register_logger
+from .callback import EarlyStopException, early_stopping, log_evaluation, record_evaluation, reset_parameter
+from .engine import CVBooster, cv, train
 
 # isort: split
-from .callback import EarlyStopException, early_stopping, log_evaluation, record_evaluation, reset_parameter
-from .dask import DaskLGBMClassifier, DaskLGBMRanker, DaskLGBMRegressor
-from .engine import CVBooster, cv, train
-from .plotting import create_tree_digraph, plot_importance, plot_metric, plot_split_value_histogram, plot_tree
 from .sklearn import LGBMClassifier, LGBMModel, LGBMRanker, LGBMRegressor
+
+# isort: split
+from .dask import DaskLGBMClassifier, DaskLGBMRanker, DaskLGBMRegressor
+from .plotting import create_tree_digraph, plot_importance, plot_metric, plot_split_value_histogram, plot_tree
 
 _version_path = Path(__file__).resolve().parent / "VERSION.txt"
 if _version_path.is_file():
