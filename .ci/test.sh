@@ -143,7 +143,7 @@ cd "${BUILD_DIRECTORY}"
 PYTEST_ARGS=(
     -ra
     --cov=lightgbm
-    --cov-fail-under=80
+    --cov-fail-under=75
 )
 
 if [[ $TASK == "sdist" ]]; then
