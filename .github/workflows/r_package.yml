@@ -83,12 +83,6 @@ jobs:
             build_type: cmake
             container: 'ubuntu:22.04'
             os-display-name: 'ubuntu22.04'
-          - os: macos-15-intel
-            task: r-package
-            compiler: clang
-            r_version: 4.3
-            build_type: cmake
-            container: null
           - os: windows-latest
             task: r-package
             compiler: MINGW
@@ -126,9 +120,12 @@ jobs:
           - os: macos-15-intel
             task: r-package
             compiler: clang
-            r_version: 4.3
+            # This 'r_version' is just for the display name in CI.
+            # Version is locked in the pixi env.
+            r_version: 4.5
             build_type: cran
             container: null
+            pixi-env: 'r-macos-intel'
           # macos-14 = arm64
           - os: macos-14
             task: r-package
@@ -171,6 +168,11 @@ jobs:
           fetch-depth: 5
           persist-credentials: false
           submodules: true
+      - name: Set up 'pixi' for jobs that need it
+        if: matrix.pixi-env != ''
+        uses: prefix-dev/setup-pixi@f00437f565399d418b0acc85936d12c1fb668347  # v0.10.1
+        with:
+          environments: ${{ matrix.pixi-env }}
       - name: Install pandoc
         uses: r-lib/actions/setup-pandoc@d3c5be51b12e724e68f33216ca3c148b66d5f0b6  # v2.12.1
       - name: Install tinytex
@@ -179,6 +181,23 @@ jobs:
         env:
           CTAN_MIRROR: https://ctan.math.illinois.edu/systems/win32/miktex
           TINYTEX_INSTALLER: TinyTeX
+      - name: Checkout 'checkbashisms.pl' from Debian/devscripts
+        if: matrix.os == 'macos-15-intel'
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          repository: Debian/devscripts
+          ref: 555a93fde8f16b53de01def05f23f71ac25fe51a
+          sparse-checkout: |
+            scripts/checkbashisms.pl
+          sparse-checkout-cone-mode: false
+          path: devscripts-checkbashisms
+          persist-credentials: false
+      - name: Install 'checkbashisms'
+        if: matrix.os == 'macos-15-intel'
+        run: |
+          cp devscripts-checkbashisms/scripts/checkbashisms.pl /usr/local/bin/checkbashisms
+          chmod +x /usr/local/bin/checkbashisms
+          rm -rf ./devscripts-checkbashisms
       - name: Setup and run tests on Linux and macOS
         if: startsWith(matrix.os, 'macos') || startsWith(matrix.os, 'ubuntu')
         shell: bash

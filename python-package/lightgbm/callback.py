@@ -113,8 +113,8 @@ def log_evaluation(period: int = 1, show_stdv: bool = True) -> _LogEvaluationCal
     By default, standard output resource is used.
     Use ``register_logger()`` function to register a custom logger.
 
-    Note
-    ----
+    Notes
+    -----
     Requires at least one validation data.
 
     Parameters
@@ -325,6 +325,10 @@ class _EarlyStoppingCallback:
     def _init(self, env: CallbackEnv) -> None:
         if env.evaluation_result_list is None or env.evaluation_result_list == []:
             raise ValueError("For early stopping, at least one dataset and eval metric is required for evaluation")
+
+        # re-evaluate here, so a callback re-used across training runs is not left
+        # permanently disabled by an earlier run (for example, one using dart boosting)
+        self.enabled = _should_enable_early_stopping(self.stopping_rounds)
 
         is_dart = any(env.params.get(alias, "") == "dart" for alias in _ConfigAliases.get("boosting"))
         if is_dart:

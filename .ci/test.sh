@@ -157,7 +157,12 @@ elif [[ $TASK == "bdist" ]]; then
             cp "$(echo "dist/lightgbm-${LGB_VER}-py3-none-macosx"*.whl)" "${BUILD_ARTIFACTSTAGINGDIRECTORY}" || exit 1
         fi
     else
-        sh ./build-python.sh bdist_wheel --integrated-opencl || exit 1
+        BUILD_PYTHON_FLAGS=()
+        if [[ "${ARCH}" != "ppc64le" ]]; then
+            BUILD_PYTHON_FLAGS+=(--integrated-opencl)
+        fi
+
+        sh ./build-python.sh bdist_wheel "${BUILD_PYTHON_FLAGS[@]}" || exit 1
 
         # print some debugging logs about the wheel's GLIBC version and dependencies on shared libraries
         pip install 'auditwheel>=6.5.1'
@@ -185,13 +190,17 @@ elif [[ $TASK == "bdist" ]]; then
             # manylinux tag than we intended)
             if [[ $ARCH == "x86_64" ]]; then
                 PLATFORM="manylinux_2_27_x86_64.manylinux_2_28_x86_64"
+            elif [[ $ARCH == "ppc64le" ]]; then
+                PLATFORM="manylinux_2_27_ppc64le.manylinux_2_28_ppc64le"
             else
                 PLATFORM="manylinux2014_aarch64.manylinux_2_17_aarch64"
             fi
             cp "dist/lightgbm-${LGB_VER}-py3-none-${PLATFORM}.whl" "${BUILD_ARTIFACTSTAGINGDIRECTORY}" || exit 1
         fi
-        # Make sure we can do both CPU and GPU; see tests/python_package_test/test_dual.py
-        export LIGHTGBM_TEST_DUAL_CPU_GPU=1
+        if [[ "${ARCH}" != "ppc64le" ]]; then
+            # Make sure we can do both CPU and GPU; see tests/python_package_test/test_dual.py
+            export LIGHTGBM_TEST_DUAL_CPU_GPU=1
+        fi
     fi
     pip install -v --no-deps ./dist/*.whl || exit 1
     pytest -ra ./tests || exit 1
@@ -280,6 +289,18 @@ fi
 cmake --build build --target _lightgbm -j4 || exit 1
 
 sh ./build-python.sh install --precompile || exit 1
+
+# This MPI skip can be removed when those jobs do not use conda.
+# ref: https://github.com/lightgbm-org/LightGBM/issues/7355#issuecomment-5578260518
+if [[ "${TASK}" != "mpi" ]]; then
+    echo "testing imports with 'python -O1'"
+    PYTHONOPTIMIZE=1 python -c "import lightgbm; print(lightgbm.__version__)"
+
+    echo "testing imports with 'python -O2'"
+    PYTHONOPTIMIZE=2 python -c "import lightgbm; print(lightgbm.__version__)"
+fi
+
+echo "running tests"
 pytest -ra ./tests || exit 1
 
 if [[ $TASK == "regular" ]]; then

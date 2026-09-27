@@ -48,7 +48,7 @@ jobs:
             method: with-sanitizers
             container: 'ubuntu:22.04'
             os-display-name: 'ubuntu22.04'
-          - os: macos-15-intel
+          - os: macos-14
             task: cpp-tests
             compiler: clang
             method: with-sanitizers

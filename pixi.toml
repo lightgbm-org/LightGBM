@@ -4,6 +4,14 @@ name = "lightgbm"
 platforms = ["linux-64", "linux-aarch64", "osx-64", "osx-arm64", "win-64"]
 
 [dependencies]
+# This project has non-Python pixi environments, so want to avoid
+# requiring 'pip' or a Python interpreter in the default dependencies.
+#
+# Every CI job ends up making network requests, and so needs 'ca-certificates',
+# so it's used here just to have a non-empty default set of dependencies.
+ca-certificates = ">=2026"
+
+[feature.python-common.dependencies]
 narwhals = ">=1.15"
 numpy = ">=1.21.3"
 pip = "*"
@@ -26,7 +34,9 @@ scikit-learn = "1.0.*"
 scipy = "1.7.*"
 
 # build-time dependencies
+hatchling = ">=1.27.0"
 python-build = "1.4.*"
+scikit-build-core = ">=0.11.0"
 
 # testing-only packages
 cloudpickle = "2.2.*"
@@ -42,6 +52,29 @@ pytest = "7.4.*"
 dask = "2022.12.*"
 distributed = "2022.12.*"
 
+[feature.r-macos-intel]
+platforms = ["osx-64"]
+
+[feature.r-macos-intel.dependencies]
+autoconf = "*"
+automake = "*"
+# putting a ceiling on 'clang' to avoid this compiler warning:
+#
+#   warning "The selected platform is no longer supported by libc++."
+#
+clang = "<22"
+qpdf = "*"
+r-base = ">=4.5"
+"r-data.table" = ">=1.9.6"
+r-jsonlite = ">=1.0"
+r-knitr = "*"
+r-markdown = "*"
+r-Matrix = ">=1.1"
+r-R6 = "*"
+r-RhpcBLASctl = "*"
+r-testthat = "*"
+
 [environments]
 default = []
-py310 = ["py310"]
+py310 = ["python-common", "py310"]
+r-macos-intel = ["r-macos-intel"]
