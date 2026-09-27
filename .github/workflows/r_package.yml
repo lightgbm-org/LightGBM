@@ -1,15 +1,7 @@
 name: R-package
 
 on:
-  push:
-    branches:
-      - main
   workflow_call:
-
-# automatically cancel in-progress builds if another commit is pushed
-concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
 
 # default to 0 permissions
 # (job-level overrides add the minimal permissions needed)
