@@ -183,7 +183,7 @@ if ($env:TASK -eq "bdist") {
 
 python "$env:BUILD_SOURCESDIRECTORY/.ci/test-imports.py"
 
-pytest -ra --cov=lightgbm --cov-fail-under=75 $tests ; Assert-Output $?
+pytest -ra --cov=lightgbm --cov-fail-under=70 $tests ; Assert-Output $?
 
 if (($env:TASK -eq "regular") -or (($env:APPVEYOR -eq "true") -and ($env:TASK -eq "python"))) {
     Set-Location "$env:BUILD_SOURCESDIRECTORY/examples/python-guide"

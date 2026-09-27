@@ -493,7 +493,7 @@ jobs:
             -v $(pwd):/opt/lgb-build \
             -w /opt/lgb-build \
             python:${{ matrix.python_version }} \
-            /bin/bash ./.ci/test-minimal-deps.sh
+            /bin/bash ./.ci/test-python-minimal-deps.sh
 
   test-old-versions:
     name: Python - oldest supported versions (manylinux_2_28, Python ${{ matrix.python_version }})
