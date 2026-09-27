@@ -8,7 +8,6 @@ sys.stdout.write("testing Python imports\n")
 lazy_imports = {
     "dask",
     "graphviz",
-    "pandas",
     "matplotlib",
 }
 
