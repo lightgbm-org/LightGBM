@@ -351,8 +351,8 @@ jobs:
           # 'rchk' isn't run through 'R CMD check', use the approach documented at
           # https://r-hub.github.io/containers/local.html
           if [[ "${{ matrix.image }}" =~ "rchk" ]]; then
-            r-check "$(pwd)" \
-            | tee ./rchk-logs.txt 2>&1
+            r-check "$(pwd)" 2>&1 \
+            | tee ./rchk-logs.txt
 
             # the '-v' exceptions below are from R/rchk itself and not LightGBM:
             # https://github.com/kalibera/rchk/issues/22#issuecomment-656036156
