@@ -126,8 +126,8 @@ jobs:
             build_type: cran
             container: null
             pixi-env: 'r-macos-intel'
-          # macos-14 = arm64
-          - os: macos-14
+          # macos-15 = arm64
+          - os: macos-15
             task: r-package
             compiler: clang
             r_version: 4.3
