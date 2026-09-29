@@ -305,7 +305,7 @@ __global__ void GenDataToLeftBitVectorKernel(
         thread_to_left_offset_cnt = split_missing_default_to_left;
       } else if ((USE_MIN_BIN && (bin < min_bin || bin > max_bin)) ||
                  (!USE_MIN_BIN && bin == 0)) {
-        if ((MISSING_IS_NA && MFB_IS_NA) || (MISSING_IS_ZERO || MFB_IS_ZERO)) {
+        if ((MISSING_IS_NA && MFB_IS_NA) || (MISSING_IS_ZERO && MFB_IS_ZERO)) {
           thread_to_left_offset_cnt = split_missing_default_to_left;
         } else {
           thread_to_left_offset_cnt = split_default_to_left;

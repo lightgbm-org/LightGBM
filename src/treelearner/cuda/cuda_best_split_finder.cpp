@@ -263,6 +263,8 @@ void CUDABestSplitFinder::ResetTrainingData(
 }
 
 void CUDABestSplitFinder::ResetConfig(const Config* config, const hist_t* cuda_hist) {
+  const bool was_extra_trees = extra_trees_;
+  const int old_extra_seed = extra_seed_;
   num_leaves_ = config->num_leaves;
   lambda_l1_ = config->lambda_l1;
   lambda_l2_ = config->lambda_l2;
@@ -279,6 +281,13 @@ void CUDABestSplitFinder::ResetConfig(const Config* config, const hist_t* cuda_h
   use_smoothing_ = (config->path_smooth > 0.0f);
   path_smooth_ = config->path_smooth;
   cuda_hist_ = cuda_hist;
+
+  if (extra_trees_ && (!was_extra_trees || extra_seed_ != old_extra_seed)) {
+    cuda_randoms_.Resize(static_cast<size_t>(num_tasks_) * 2);
+    LaunchInitCUDARandomKernel();
+  } else if (!extra_trees_) {
+    cuda_randoms_.Clear();
+  }
 
   const int num_task_blocks = (num_tasks_ + NUM_TASKS_PER_SYNC_BLOCK - 1) / NUM_TASKS_PER_SYNC_BLOCK;
   size_t cuda_best_leaf_split_info_buffer_size = static_cast<size_t>(num_task_blocks) * static_cast<size_t>(num_leaves_);

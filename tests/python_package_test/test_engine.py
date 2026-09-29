@@ -106,6 +106,40 @@ def test_binary():
     assert evals_result["valid_0"]["binary_logloss"][-1] == pytest.approx(ret)
 
 
+@pytest.mark.skipif(not BuildInfo.has_cuda, reason="Requires the CUDA test runner")
+@pytest.mark.parametrize("num_valid_rows", [1024, 1025, 1056, 15000])
+def test_cuda_weighted_binary_logloss_partial_blocks(num_valid_rows):
+    rng = np.random.RandomState(42)
+    X_train = rng.normal(size=(1024, 8)).astype(np.float32)
+    y_train = (X_train[:, 0] + X_train[:, 1] > 0).astype(np.int32)
+    X_valid = rng.normal(size=(num_valid_rows, 8)).astype(np.float32)
+    y_valid = (X_valid[:, 0] + X_valid[:, 1] > 0).astype(np.int32)
+    train_weight = rng.uniform(0.25, 2.0, size=len(y_train))
+    valid_weight = rng.uniform(0.25, 2.0, size=len(y_valid))
+    train_set = lgb.Dataset(X_train, label=y_train, weight=train_weight, free_raw_data=False)
+    valid_set = lgb.Dataset(
+        X_valid, label=y_valid, weight=valid_weight, reference=train_set, free_raw_data=False
+    )
+    evals_result = {}
+    booster = lgb.train(
+        {
+            "objective": "binary",
+            "metric": "binary_logloss",
+            "device_type": "cuda",
+            "num_threads": 1,
+            "num_leaves": 7,
+            "min_data_in_leaf": 5,
+            "verbosity": -1,
+        },
+        train_set,
+        num_boost_round=3,
+        valid_sets=[valid_set],
+        callbacks=[lgb.record_evaluation(evals_result)],
+    )
+    expected = log_loss(y_valid, booster.predict(X_valid), sample_weight=valid_weight)
+    assert evals_result["valid_0"]["binary_logloss"][-1] == pytest.approx(expected, rel=1e-5, abs=1e-7)
+
+
 def test_rf():
     X, y = load_breast_cancer(return_X_y=True)
     X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.1, random_state=42)
@@ -494,6 +528,62 @@ def test_multiclass():
     ret = multi_logloss(y_test, gbm.predict(X_test))
     assert ret < 0.16
     assert evals_result["valid_0"]["multi_logloss"][-1] == pytest.approx(ret)
+
+
+@pytest.mark.skipif(not BuildInfo.has_cuda, reason="Requires the CUDA test runner")
+def test_cuda_multiclassova_label_copy():
+    X, y = make_classification(
+        n_samples=4000, n_features=12, n_informative=8, n_redundant=0, n_classes=3,
+        n_clusters_per_class=1, random_state=42
+    )
+    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+    train_set = lgb.Dataset(X_train, label=y_train, free_raw_data=False)
+    valid_set = lgb.Dataset(X_test, label=y_test, reference=train_set, free_raw_data=False)
+    evals_result = {}
+    booster = lgb.train(
+        {
+            "objective": "multiclassova",
+            "num_class": 3,
+            "metric": "multi_logloss",
+            "device_type": "cuda",
+            "num_threads": 1,
+            "num_leaves": 15,
+            "verbosity": -1,
+        },
+        train_set,
+        num_boost_round=4,
+        valid_sets=[valid_set],
+        callbacks=[lgb.record_evaluation(evals_result)],
+    )
+    probabilities = booster.predict(X_test)
+    expected = -np.log(np.maximum(probabilities[np.arange(len(y_test)), y_test], 1e-15)).mean()
+    assert evals_result["valid_0"]["multi_logloss"][-1] == pytest.approx(expected, rel=1e-5, abs=1e-7)
+
+
+@pytest.mark.skipif(not BuildInfo.has_cuda, reason="Requires the CUDA test runner")
+def test_cuda_zero_as_missing_partition_matches_cpu():
+    values = np.concatenate((np.zeros(256), np.ones(1024), np.full(256, 2.0)))
+    X = values.reshape(-1, 1).astype(np.float32)
+    y = np.concatenate((np.ones(256), np.zeros(1024), np.ones(256))).astype(np.int32)
+    predictions = {}
+    for device in ("cpu", "cuda"):
+        train_set = lgb.Dataset(X, label=y, free_raw_data=False)
+        booster = lgb.train(
+            {
+                "objective": "binary",
+                "metric": "None",
+                "device_type": device,
+                "zero_as_missing": True,
+                "num_threads": 1,
+                "num_leaves": 3,
+                "min_data_in_leaf": 10,
+                "verbosity": -1,
+            },
+            train_set,
+            num_boost_round=3,
+        )
+        predictions[device] = booster.predict(X)
+    np.testing.assert_allclose(predictions["cuda"], predictions["cpu"], rtol=1e-3, atol=1e-3)
 
 
 def test_multiclass_rf():
@@ -3700,6 +3790,27 @@ def test_extra_trees():
     predicted_new = est.predict(X)
     err_new = mean_squared_error(y, predicted_new)
     assert err < err_new
+
+
+@pytest.mark.skipif(not BuildInfo.has_cuda, reason="Requires the CUDA test runner")
+def test_cuda_extra_trees_can_be_enabled_after_training_starts():
+    X, y = make_synthetic_regression()
+    train_set = lgb.Dataset(X, label=y)
+    booster = lgb.train(
+        {
+            "objective": "regression",
+            "device_type": "cuda",
+            "num_threads": 1,
+            "num_leaves": 15,
+            "extra_trees": False,
+            "verbosity": -1,
+        },
+        train_set,
+        num_boost_round=2,
+    )
+    booster.reset_parameter({"extra_trees": True})
+    booster.update()
+    assert np.isfinite(booster.predict(X)).all()
 
 
 def test_path_smoothing():

@@ -36,7 +36,7 @@ void CUDABinaryLogloss::Init(const Metadata& metadata, data_size_t num_data) {
     cuda_ova_label_.Clear();
   } else {
     cuda_ova_label_.Resize(static_cast<size_t>(num_data));
-    CopyFromHostToCUDADevice<label_t>(cuda_ova_label_.RawData(), metadata.cuda_metadata()->cuda_label(), static_cast<size_t>(num_data), __FILE__, __LINE__);
+    CopyFromCUDADeviceToCUDADevice<label_t>(cuda_ova_label_.RawData(), metadata.cuda_metadata()->cuda_label(), static_cast<size_t>(num_data), __FILE__, __LINE__);
     LaunchResetOVACUDALabelKernel();
     cuda_label_ = cuda_ova_label_.RawData();
   }
