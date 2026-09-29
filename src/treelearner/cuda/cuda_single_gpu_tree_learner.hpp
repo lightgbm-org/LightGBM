@@ -127,13 +127,13 @@ class CUDASingleGPUTreeLearner: public SerialTreeLearner, public NCCLInfo {
   mutable CUDAVector<double> cuda_leaf_hessian_stat_buffer_;
   mutable data_size_t leaf_stat_buffer_size_;
   mutable data_size_t refit_num_data_;
-  uint32_t* cuda_bitset_;
+  uint32_t* cuda_bitset_ = nullptr;
   size_t cuda_bitset_len_;
-  uint32_t* cuda_bitset_inner_;
+  uint32_t* cuda_bitset_inner_ = nullptr;
   size_t cuda_bitset_inner_len_;
-  size_t* cuda_block_bitset_len_buffer_;
-  int* cuda_categorical_bin_to_value_;
-  int* cuda_categorical_bin_offsets_;
+  size_t* cuda_block_bitset_len_buffer_ = nullptr;
+  int* cuda_categorical_bin_to_value_ = nullptr;
+  int* cuda_categorical_bin_offsets_ = nullptr;
 
   /*! \brief gradients on CUDA */
   CUDAVector<score_t> cuda_gradients_;

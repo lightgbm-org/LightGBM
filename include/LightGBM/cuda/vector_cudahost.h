@@ -10,6 +10,9 @@
 
 #include <LightGBM/utils/common.h>
 
+#include <cstdint>
+#include <new>
+
 #ifdef USE_CUDA
 #ifndef USE_ROCM
 #include <cuda.h>
@@ -42,50 +45,74 @@ class LGBM_config_ {
 
 template <class T>
 struct CHAllocator {
+ private:
+  struct AllocationHeader {
+    void* base;
+    bool cuda_host_alloc;
+  };
+
+  static std::size_t Alignment() {
+    std::size_t alignment = 16;
+    if (alignment < alignof(T)) {
+      alignment = alignof(T);
+    }
+    if (alignment < alignof(AllocationHeader)) {
+      alignment = alignof(AllocationHeader);
+    }
+    return alignment;
+  }
+
+ public:
   typedef T value_type;
   CHAllocator() {}
   template <class U> CHAllocator(const CHAllocator<U>& other);
   T* allocate(std::size_t n) {
-    T* ptr;
     if (n == 0) return NULL;
     n = SIZE_ALIGNED(n);
+    const std::size_t alignment = Alignment();
+    const std::size_t allocation_size = n * sizeof(T) + sizeof(AllocationHeader) + alignment - 1;
+    void* base = nullptr;
+    bool cuda_host_alloc = false;
     #ifdef USE_CUDA
       if (LGBM_config_::current_device == lgbm_device_cuda) {
-        cudaError_t ret = cudaHostAlloc(reinterpret_cast<void**>(&ptr), n*sizeof(T), cudaHostAllocPortable);
+        const cudaError_t ret = cudaHostAlloc(&base, allocation_size, cudaHostAllocPortable);
         if (ret != cudaSuccess) {
           Log::Warning("Defaulting to malloc in CHAllocator!!!");
-          ptr = reinterpret_cast<T*>(_mm_malloc(n*sizeof(T), 16));
+          base = _mm_malloc(allocation_size, alignment);
+        } else {
+          cuda_host_alloc = true;
         }
       } else {
-        ptr = reinterpret_cast<T*>(_mm_malloc(n*sizeof(T), 16));
+        base = _mm_malloc(allocation_size, alignment);
       }
     #else
-      ptr = reinterpret_cast<T*>(_mm_malloc(n*sizeof(T), 16));
+      base = _mm_malloc(allocation_size, alignment);
     #endif
-    return ptr;
+    if (base == nullptr) {
+      return nullptr;
+    }
+    const std::uintptr_t first_address = reinterpret_cast<std::uintptr_t>(base) + sizeof(AllocationHeader);
+    const std::uintptr_t aligned_address = (first_address + alignment - 1) & ~(static_cast<std::uintptr_t>(alignment) - 1);
+    auto* header = reinterpret_cast<AllocationHeader*>(aligned_address - sizeof(AllocationHeader));
+    new (header) AllocationHeader{base, cuda_host_alloc};
+    return reinterpret_cast<T*>(aligned_address);
   }
 
   void deallocate(T* p, std::size_t n) {
     (void)n;  // UNUSED
     if (p == NULL) return;
+    auto* header = reinterpret_cast<AllocationHeader*>(reinterpret_cast<std::uintptr_t>(p) - sizeof(AllocationHeader));
+    void* base = header->base;
+    const bool cuda_host_alloc = header->cuda_host_alloc;
+    header->~AllocationHeader();
     #ifdef USE_CUDA
-      if (LGBM_config_::current_device == lgbm_device_cuda) {
-        cudaPointerAttributes attributes;
-        CUDASUCCESS_OR_FATAL(cudaPointerGetAttributes(&attributes, p));
-        #if CUDA_VERSION >= 10000 || defined(USE_ROCM)
-          if ((attributes.type == cudaMemoryTypeHost) && (attributes.devicePointer != NULL)) {
-            CUDASUCCESS_OR_FATAL(cudaFreeHost(p));
-          }
-        #else
-          if ((attributes.memoryType == cudaMemoryTypeHost) && (attributes.devicePointer != NULL)) {
-            CUDASUCCESS_OR_FATAL(cudaFreeHost(p));
-          }
-        #endif
+      if (cuda_host_alloc) {
+        CUDASUCCESS_OR_FATAL(cudaFreeHost(base));
       } else {
-        _mm_free(p);
+        _mm_free(base);
       }
     #else
-      _mm_free(p);
+      _mm_free(base);
     #endif
   }
 };

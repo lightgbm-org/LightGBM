@@ -27,6 +27,11 @@ CUDASingleGPUTreeLearner::~CUDASingleGPUTreeLearner() {
   if (nccl_communicator_ != nullptr) {
     CUDAStreamDestroy(nccl_stream_);
   }
+  DeallocateCUDAMemory(&cuda_bitset_, __FILE__, __LINE__);
+  DeallocateCUDAMemory(&cuda_bitset_inner_, __FILE__, __LINE__);
+  DeallocateCUDAMemory(&cuda_block_bitset_len_buffer_, __FILE__, __LINE__);
+  DeallocateCUDAMemory(&cuda_categorical_bin_offsets_, __FILE__, __LINE__);
+  DeallocateCUDAMemory(&cuda_categorical_bin_to_value_, __FILE__, __LINE__);
 }
 
 void CUDASingleGPUTreeLearner::Init(const Dataset* train_data, bool is_constant_hessian) {
