@@ -65,6 +65,11 @@ repos:
           - ./.ci/parameter-generator.py
         language: python
         pass_filenames: false
+  - repo: https://github.com/numpy/numpydoc
+    rev: v1.11.0
+    hooks:
+      - id: numpydoc-validation
+        args: [--config=python-package]
   - repo: https://github.com/jsh9/pydoclint
     rev: 0.10.1
     hooks:
