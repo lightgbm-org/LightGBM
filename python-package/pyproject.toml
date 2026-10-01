@@ -115,8 +115,14 @@ checks = [
     "GL07",
     # "The object does not have a docstring"
     "GL08",
+    # "Parameters not documented"
+    # This is raised for every function with a docstring, even if that docstring does not have a 'Parameters' section.
+    # 'pydoclint' raises a similar warning but only for docstrings with a 'Parameters' section, so we just rely on that.
+    "PR01",
     # "No Returns section found"
     "RT01",
+    # "The first line of the Returns section should contain only the type, unless multiple values are returned"
+    "RT02",
     # "See Also section not found"
     "SA01",
 ]
@@ -126,6 +132,8 @@ exclude_files = [
 ]
 
 [tool.pydoclint]
+allow_init_docstring = true
+check_arg_defaults = false
 check_arg_order = true
 check_return_types = false
 exclude = '^examples/|^tests/'
