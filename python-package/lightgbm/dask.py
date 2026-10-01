@@ -2381,8 +2381,6 @@ class DaskLGBMRanker(LGBMRanker, _DaskLGBMModel):
         feature_name : list of str, or 'auto', optional (default='auto')
             Feature names.
             If 'auto' and data is pandas DataFrame, data columns names are used.
-        **kwargs
-            Other parameters passed through to ``LGBMRanker.fit()``.
 
         Returns
         -------
