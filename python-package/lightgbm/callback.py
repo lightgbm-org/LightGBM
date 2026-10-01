@@ -41,7 +41,7 @@ class EarlyStopException(Exception):
     """
 
     def __init__(self, best_iteration: int, best_score: _EvalResultList) -> None:
-        """Exception of early stopping.
+        """Create early stopping exception.
 
         Parameters
         ----------
