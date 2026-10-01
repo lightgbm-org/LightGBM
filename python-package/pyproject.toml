@@ -129,6 +129,15 @@ exclude_files = [
 check_arg_order = true
 check_return_types = false
 exclude = '^examples/|^tests/'
+
+# look for 'noqa:' statements on the closing triple quotes of the docstring
+# TODO(jameslamb): may be able to remove this when https://github.com/jsh9/pydoclint/issues/228 is resolved
+native_mode_noqa_location = 'docstring'
+
+# avoid warnings like
+# 'DOC501: Function `plot_metric` has raise statements, but the docstring does not have a "Raises" section'
+skip_checking_raises = true
+
 style = "numpy"
 
 [tool.rstcheck]

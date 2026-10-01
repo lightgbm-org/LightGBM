@@ -23,7 +23,7 @@ def get_parameter_infos(config_hpp: Path) -> Tuple[List[Tuple[str, int]], List[L
 
     Returns
     -------
-    infos : tuple
+    tuple
         Tuple with names and content of sections.
     """
     is_inparameter = False
@@ -96,7 +96,7 @@ def get_names(infos: List[List[Dict[str, List]]]) -> List[str]:
 
     Returns
     -------
-    names : list
+    list
         Names of all parameters.
     """
     names = []
@@ -116,7 +116,7 @@ def get_alias(infos: List[List[Dict[str, List]]]) -> List[Tuple[str, str]]:
 
     Returns
     -------
-    pairs : list
+    list
         List of tuples (param alias, param name).
     """
     pairs = []
@@ -142,7 +142,7 @@ def parse_check(check: str, reverse: bool = False) -> Tuple[str, str]:
 
     Returns
     -------
-    pair : tuple
+    tuple
         Parsed constraint in the form of tuple (value, sign).
     """
     try:
@@ -172,7 +172,7 @@ def set_one_var_from_string(name: str, param_type: str, checks: List[str]) -> st
 
     Returns
     -------
-    ret : str
+    str
         Lines of auto config file with getting and checks of one parameter value.
     """
     ret = ""
@@ -274,7 +274,7 @@ def gen_parameter_code(
 
     Returns
     -------
-    infos : tuple
+    tuple
         Tuple with names and content of sections.
     """
     keys, infos = get_parameter_infos(config_hpp)
