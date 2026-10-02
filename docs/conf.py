@@ -222,7 +222,7 @@ def generate_doxygen_xml(app: Sphinx) -> None:
     ----------
     app : sphinx.application.Sphinx
         The application object representing the Sphinx process.
-    """
+    """  # noqa: DOC105
     doxygen_args = [
         f"INPUT={CURR_PATH.parent / 'include' / 'LightGBM' / 'c_api.h'}",
         f"OUTPUT_DIRECTORY={CURR_PATH / 'doxyoutput'}",
@@ -266,7 +266,7 @@ def generate_r_docs(app: Sphinx) -> None:
     ----------
     app : sphinx.application.Sphinx
         The application object representing the Sphinx process.
-    """
+    """  # noqa: DOC105
     commands = f"""
     export TAR=/bin/tar
     cd {CURR_PATH.parent}
@@ -299,7 +299,7 @@ def replace_reference_to_r_docs(app: Sphinx) -> None:
     ----------
     app : sphinx.application.Sphinx
         The application object representing the Sphinx process.
-    """
+    """  # noqa: DOC105
     index_doc_path = CURR_PATH / "index.rst"
     with open(index_doc_path, "r+t", encoding="utf-8") as index_doc:
         content = index_doc.read()
@@ -315,7 +315,7 @@ def setup(app: Sphinx) -> None:
     ----------
     app : sphinx.application.Sphinx
         The application object representing the Sphinx process.
-    """
+    """  # noqa: DOC105
     first_run = not (CURR_PATH / "_FIRST_RUN.flag").exists()
     if first_run and RTD:
         (CURR_PATH / "_FIRST_RUN.flag").touch()
