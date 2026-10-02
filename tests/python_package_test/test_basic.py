@@ -164,6 +164,137 @@ def test_booster_rollback_one_iter(rng):
     assert bst.num_trees() == num_iterations - 2
 
 
+def _binary_dataset(rng, reference=None, n_samples=100, n_features=5):
+    X = rng.uniform(size=(n_samples, n_features))
+    y = rng.integers(0, 2, size=(n_samples,))
+    return lgb.Dataset(X, label=y, reference=reference, free_raw_data=False)
+
+
+def test_booster_update_replaces_training_data(rng):
+    train_set = _binary_dataset(rng)
+    # the new training data has to share the bin mappers of the old one
+    other_train_set = _binary_dataset(rng, reference=train_set)
+    X_test = rng.uniform(size=(10, 5))
+    params = {"objective": "binary", "verbose": -1}
+
+    bst = lgb.Booster(params, train_set)
+    for _ in range(3):
+        bst.update()
+    pred_before = bst.predict(X_test)
+
+    bst.update(train_set=other_train_set)
+
+    assert bst.train_set is other_train_set
+    assert bst.train_set_version == other_train_set.version
+    assert bst.current_iteration() == 4
+    # the new tree was fitted on different data, so predictions must have changed
+    assert not np.allclose(pred_before, bst.predict(X_test))
+
+    # passing the same Dataset again is a no-op with regard to resetting the training data
+    bst.update(train_set=other_train_set)
+    assert bst.train_set is other_train_set
+    assert bst.current_iteration() == 5
+
+
+def test_booster_update_resets_training_data_if_dataset_was_modified(rng):
+    train_set = _binary_dataset(rng)
+    bst = lgb.Booster({"objective": "binary", "verbose": -1}, train_set)
+    bst.update()
+
+    # changing a field of the constructed Dataset bumps its version
+    train_set.set_label(rng.integers(0, 2, size=(train_set.num_data(),)))
+    assert bst.train_set_version != train_set.version
+
+    bst.update()
+
+    assert bst.train_set is train_set
+    assert bst.train_set_version == train_set.version
+    assert bst.current_iteration() == 2
+
+
+def test_booster_update_raises_if_train_set_is_not_a_dataset(rng):
+    bst = lgb.Booster({"objective": "binary", "verbose": -1}, _binary_dataset(rng))
+    with pytest.raises(TypeError, match="Training data should be Dataset instance, met ndarray"):
+        bst.update(train_set=rng.uniform(size=(100, 5)))
+
+
+def test_booster_update_raises_if_new_train_set_has_a_different_predictor(rng):
+    bst = lgb.Booster({"objective": "binary", "verbose": -1}, _binary_dataset(rng))
+    bst.update()
+
+    other_train_set = _binary_dataset(rng)
+    other_train_set._set_predictor(lgb.basic._InnerPredictor.from_booster(booster=bst, pred_parameter={}))
+
+    with pytest.raises(lgb.basic.LightGBMError, match="Replace training data failed"):
+        bst.update(train_set=other_train_set)
+
+
+def test_booster_update_raises_without_fobj_after_custom_objective_was_used(rng):
+    bst = lgb.Booster({"objective": "binary", "verbose": -1}, _binary_dataset(rng))
+
+    # the first call with a custom objective sets 'objective' to 'none'
+    bst.update(fobj=dummy_obj)
+    assert bst.current_iteration() == 1
+
+    with pytest.raises(lgb.basic.LightGBMError, match="Cannot update due to null objective function"):
+        bst.update()
+
+
+def test_booster_update_returns_whether_an_empty_tree_was_produced(rng):
+    params = {"objective": "regression", "verbose": -1}
+
+    bst = lgb.Booster(params, lgb.Dataset(rng.uniform(size=(100, 5)), label=rng.uniform(size=(100,))))
+    produced_empty_tree = bst.update()
+    assert isinstance(produced_empty_tree, bool)
+    assert produced_empty_tree is False
+
+    # no split is possible when all the features hold the same value
+    bst = lgb.Booster(params, lgb.Dataset(np.ones((100, 5)), label=rng.uniform(size=(100,))))
+    assert bst.update() is True
+
+
+def _tree_structures(bst):
+    return [tree["tree_structure"] for tree in bst.dump_model()["tree_info"]]
+
+
+def test_booster_shuffle_models_changes_tree_order_but_not_predictions(rng):
+    X = rng.uniform(size=(100, 5))
+    y = rng.uniform(size=(100,))
+    X_test = rng.uniform(size=(10, 5))
+    bst = lgb.train({"objective": "regression", "verbose": -1}, lgb.Dataset(X, label=y), num_boost_round=10)
+
+    trees_before = _tree_structures(bst)
+    pred_before = bst.predict(X_test)
+
+    out = bst.shuffle_models()
+
+    assert out is bst
+    trees_after = _tree_structures(bst)
+    assert trees_after != trees_before
+    # the same trees are still there, just in a different order
+    assert sorted(map(str, trees_after)) == sorted(map(str, trees_before))
+    # raw scores are a sum over all trees, so shuffling must not change predictions
+    np.testing.assert_allclose(pred_before, bst.predict(X_test))
+
+
+def test_booster_shuffle_models_only_shuffles_the_requested_iterations(rng):
+    X = rng.uniform(size=(100, 5))
+    y = rng.uniform(size=(100,))
+    X_test = rng.uniform(size=(10, 5))
+    bst = lgb.train({"objective": "regression", "verbose": -1}, lgb.Dataset(X, label=y), num_boost_round=10)
+
+    trees_before = _tree_structures(bst)
+    pred_before = bst.predict(X_test)
+
+    bst.shuffle_models(start_iteration=2, end_iteration=5)
+
+    trees_after = _tree_structures(bst)
+    for i in [0, 1, 5, 6, 7, 8, 9]:
+        assert trees_after[i] == trees_before[i]
+    assert trees_after[2:5] != trees_before[2:5]
+    np.testing.assert_allclose(pred_before, bst.predict(X_test))
+
+
 class NumpySequence(lgb.Sequence):
     def __init__(self, ndarray, batch_size):
         self.ndarray = ndarray
