@@ -782,8 +782,15 @@ def _data_from_pandas(
         for col, category in zip(cat_cols, pandas_categorical, strict=True):
             if list(data[col].cat.categories) != list(category):
                 data[col] = data[col].cat.set_categories(category)
-    if cat_cols:  # cat_cols is list
-        data[cat_cols] = data[cat_cols].apply(lambda x: x.cat.codes).replace({-1: np.nan})
+    for col in cat_cols:
+        codes = data[col].cat.codes
+        # pandas uses -1 as the code for missing values, and LightGBM expects NaN instead.
+        # Replacing -1 with NaN on the integer codes would upcast them to float64 and, through
+        # np.result_type() below, upcast the whole feature matrix to float64 as well.
+        # Convert the codes to the float dtype they would get anyway (float32 for int8 / int16 codes)
+        # so that the presence of missing values does not change the dtype of the output matrix.
+        codes_float_dtype = np.result_type(codes.dtype, np.float32)
+        data[col] = codes.astype(codes_float_dtype).where(codes != -1)
 
     # use cat cols from DataFrame
     if categorical_feature == "auto":
