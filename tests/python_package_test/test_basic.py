@@ -921,6 +921,27 @@ def test_no_copy_when_single_float_dtype_dataframe(dtype, feature_name, rng):
     assert np.shares_memory(X, built_data)
 
 
+@pytest.mark.parametrize("dtype", [np.float32, np.float64])
+@pytest.mark.parametrize("with_missing_values", [False, True])
+def test_dataframe_with_categorical_columns_keeps_float_dtype(dtype, with_missing_values, rng):
+    pd = pytest.importorskip("pandas")
+    X = rng.uniform(size=(10, 2)).astype(dtype)
+    df = pd.DataFrame(X, columns=["x1", "x2"])
+    df["cat"] = pd.Categorical(["a", "b", "c", "a", "b", "c", "a", "b", "c", "a"])
+    expected_codes = np.array([0, 1, 2, 0, 1, 2, 0, 1, 2, 0], dtype=dtype)
+    if with_missing_values:
+        df.loc[[1, 5], "cat"] = np.nan
+        expected_codes[[1, 5]] = np.nan
+    built_data, _, categorical_feature, _ = lgb.basic._data_from_pandas(
+        data=df, feature_name="auto", categorical_feature="auto", pandas_categorical=None
+    )
+    # missing values in a categorical column must not upcast the whole matrix to float64
+    assert built_data.dtype == dtype
+    assert categorical_feature == ["cat"]
+    np.testing.assert_array_equal(built_data[:, :2], X)
+    np.testing.assert_array_equal(built_data[:, 2], expected_codes)
+
+
 @pytest.mark.parametrize("min_data_in_bin", [2, 10])
 def test_feature_num_bin(min_data_in_bin, rng):
     X = np.vstack(
