@@ -275,7 +275,6 @@ void LinearTreeLearner<TREE_LEARNER_TYPE>::CalculateLinear(Tree* tree, bool is_r
             nan_found = true;
             break;
           }
-          num_nonzero[tid][leaf_num] += 1;
           curr_row[feat] = val;
         } else {
           curr_row[feat] = raw_data_ptr[leaf_num][feat][i];
@@ -285,6 +284,9 @@ void LinearTreeLearner<TREE_LEARNER_TYPE>::CalculateLinear(Tree* tree, bool is_r
         if (nan_found) {
           continue;
         }
+        // One complete row. Counting present values instead lets a leaf with
+        // no complete row pass the rank check below.
+        num_nonzero[tid][leaf_num] += 1;
       }
       curr_row[num_feat] = 1.0;
       float h = static_cast<float>(hessians[i]);
@@ -338,6 +340,9 @@ void LinearTreeLearner<TREE_LEARNER_TYPE>::CalculateLinear(Tree* tree, bool is_r
         tree->SetLeafFeaturesInner(leaf_num, leaf_features[leaf_num]);
       } else {
         tree->SetLeafConst(leaf_num, tree->LeafOutput(leaf_num));
+        tree->SetLeafCoeffs(leaf_num, std::vector<double>());
+        tree->SetLeafFeaturesInner(leaf_num, std::vector<int>());
+        tree->SetLeafFeatures(leaf_num, std::vector<int>());
       }
       continue;
     }
@@ -365,8 +370,12 @@ void LinearTreeLearner<TREE_LEARNER_TYPE>::CalculateLinear(Tree* tree, bool is_r
         features_new.push_back(leaf_features[leaf_num][i]);
         coeffs_vec.push_back(decay_rate * old_coeffs[i] + (1.0 - decay_rate) * coeffs(i) * shrinkage);
       } else {
-        if (coeffs(i) < -kZeroThreshold || coeffs(i) > kZeroThreshold) {
-          coeffs_vec.push_back(coeffs(i));
+        const bool nonzero = coeffs(i) < -kZeroThreshold || coeffs(i) > kZeroThreshold;
+        // A coefficient can be ~0 because the feature is constant on the
+        // complete rows. Dropping it hides NaNs in that feature from
+        // prediction, which then applies the linear model to incomplete rows.
+        if (nonzero || HAS_NAN) {
+          coeffs_vec.push_back(nonzero ? coeffs(i) : 0.0);
           int feat = leaf_features[leaf_num][i];
           features_new.push_back(feat);
         }
