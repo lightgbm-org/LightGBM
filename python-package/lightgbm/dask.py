@@ -172,19 +172,6 @@ def _remove_list_padding(*args: Any) -> List[List[Any]]:
     return [[z for z in arg if z is not None] for arg in args]
 
 
-_lgbmmodel_doc_distributed_eval_metric_note = """
-    Note
-    ----
-    For all built-in eval metrics, validation scores reported in
-    ``evals_result_`` and ``best_score_`` are aggregated across Dask workers
-    and reflect the full distributed validation set. Supported metrics
-    include all built-in binary, regression, multiclass, cross-entropy,
-    ranking (``ndcg``, ``ndcg@k``, ``map``, ``map@k``), and ordering-dependent
-    (``auc``, ``average_precision``, ``auc_mu``) metrics. Custom Python eval
-    functions compute per-worker only.
-    """
-
-
 def _slice_empty(data: _DaskPart) -> _DaskPart:
     return data[:0]
 
@@ -1629,6 +1616,14 @@ class DaskLGBMClassifier(LGBMClassifier, _DaskLGBMModel):
                 Value of the evaluation metric.
             maximize : bool
                 Are higher values better? e.g. ``True`` for AUC and ``False`` for binary error.
+
+        For all built-in eval metrics, validation scores reported in
+        ``evals_result_`` and ``best_score_`` are aggregated across Dask workers
+        and reflect the full distributed validation set. Supported metrics
+        include all built-in binary, regression, multiclass, cross-entropy,
+        ranking (``ndcg``, ``ndcg@k``, ``map``, ``map@k``), and ordering-dependent
+        (``auc``, ``average_precision``, ``auc_mu``) metrics. Custom Python eval
+        functions compute per-worker only.
         """
         self._lgb_dask_fit(
             model_factory=LGBMClassifier,
@@ -2098,6 +2093,14 @@ class DaskLGBMRegressor(LGBMRegressor, _DaskLGBMModel):
                 Value of the evaluation metric.
             maximize : bool
                 Are higher values better? e.g. ``True`` for AUC and ``False`` for binary error.
+
+        For all built-in eval metrics, validation scores reported in
+        ``evals_result_`` and ``best_score_`` are aggregated across Dask workers
+        and reflect the full distributed validation set. Supported metrics
+        include all built-in binary, regression, multiclass, cross-entropy,
+        ranking (``ndcg``, ``ndcg@k``, ``map``, ``map@k``), and ordering-dependent
+        (``auc``, ``average_precision``, ``auc_mu``) metrics. Custom Python eval
+        functions compute per-worker only.
         """
         self._lgb_dask_fit(
             model_factory=LGBMRegressor,
@@ -2516,6 +2519,14 @@ class DaskLGBMRanker(LGBMRanker, _DaskLGBMModel):
                 Value of the evaluation metric.
             maximize : bool
                 Are higher values better? e.g. ``True`` for AUC and ``False`` for binary error.
+
+        For all built-in eval metrics, validation scores reported in
+        ``evals_result_`` and ``best_score_`` are aggregated across Dask workers
+        and reflect the full distributed validation set. Supported metrics
+        include all built-in binary, regression, multiclass, cross-entropy,
+        ranking (``ndcg``, ``ndcg@k``, ``map``, ``map@k``), and ordering-dependent
+        (``auc``, ``average_precision``, ``auc_mu``) metrics. Custom Python eval
+        functions compute per-worker only.
         """
         self._lgb_dask_fit(
             model_factory=LGBMRanker,
