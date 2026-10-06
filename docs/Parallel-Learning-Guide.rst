@@ -515,7 +515,7 @@ See `the mars documentation`_ for usage examples.
 
 .. _Dask: https://docs.dask.org/en/latest/
 
-.. _SynapseML: https://aka.ms/spark
+.. _SynapseML: https://microsoft.github.io/SynapseML/
 
 .. _this SynapseML example: https://github.com/microsoft/SynapseML/tree/master/docs/Explore%20Algorithms/LightGBM
 

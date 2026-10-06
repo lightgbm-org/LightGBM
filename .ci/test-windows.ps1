@@ -7,6 +7,7 @@ function Assert-Output {
 }
 
 $env:LGB_VER = (Get-Content $env:BUILD_SOURCESDIRECTORY\VERSION.txt).trim()
+$UseConda = $env:SETUP_CONDA -ne "false"
 # Use custom temp directory to avoid
 # > warning MSB8029: The Intermediate directory or Output directory cannot reside under the Temporary directory
 # > as it could lead to issues with incremental build.
@@ -67,8 +68,14 @@ if ($env:TASK -eq "swig") {
     exit 0
 }
 
-# 'pixi' is used for end-of-life Python versions
-if ($env:PYTHON_VERSION -eq "3.10") {
+# There is no native conda distribution for Windows Arm64.
+if (-not $UseConda) {
+    python -m pip install `
+        --only-binary=:all: `
+        --requirement "$env:BUILD_SOURCESDIRECTORY/.ci/pip-envs/requirements-windows-arm64.txt" `
+        --upgrade ; Assert-Output $?
+} elseif ($env:PYTHON_VERSION -eq "3.10") {
+    # 'pixi' is used for end-of-life Python versions
     $activation = ((& pixi shell-hook --locked -e py310 --shell powershell) -join "`n")
     Invoke-Expression $activation ; Assert-Output $?
 } else {
@@ -80,7 +87,21 @@ if ($env:PYTHON_VERSION -eq "3.10") {
     conda config --add channels nodefaults ; Assert-Output $?
     conda config --add channels conda-forge ; Assert-Output $?
     conda config --set channel_priority strict ; Assert-Output $?
-    conda install -q -y conda "python=$env:PYTHON_VERSION[build=*_cp*]" ; Assert-Output $?
+
+    # From Python 3.13 onwards, CPython packages on conda-forge have build strings
+    # with formats like "*_cp314".
+    #
+    # Have to be specific here (no trailing wildcard) to avoid unintentionally pulling
+    # in free-threaded builds (e.g. "*_cp314t").
+    $PythonMajorVersion, $PythonMinorVersion = $env:PYTHON_VERSION.Split(".")
+    if ([int]$PythonMajorVersion -gt 3 -or ([int]$PythonMajorVersion -eq 3 -and [int]$PythonMinorVersion -gt 12)) {
+        $env:PYTHON_ABI_TAG = "cp$($env:PYTHON_VERSION -replace '\.', '')"
+    } else {
+        $env:PYTHON_ABI_TAG = "cpython"
+    }
+    $env:CONDA_PYTHON_REQUIREMENT = "python=$env:PYTHON_VERSION[build=*_$env:PYTHON_ABI_TAG]"
+
+    conda install -q -y conda "$env:CONDA_PYTHON_REQUIREMENT" ; Assert-Output $?
 
     # print output of 'conda info', to help in submitting bug reports
     Write-Output "conda info:"
@@ -93,7 +114,7 @@ if ($env:PYTHON_VERSION -eq "3.10") {
         "-y",
         "-n", "$env:CONDA_ENV",
         "--file", "$env:CONDA_REQUIREMENT_FILE",
-        "python=$env:PYTHON_VERSION[build=*_cp*]"
+        "$env:CONDA_PYTHON_REQUIREMENT"
     )
     conda create @condaParams ; Assert-Output $?
 
@@ -112,31 +133,33 @@ Set-Location "$env:BUILD_SOURCESDIRECTORY"
 if ($env:TASK -eq "regular") {
     cmake -B build -S . -A x64 ; Assert-Output $?
     cmake --build build --target ALL_BUILD --config Release ; Assert-Output $?
-    sh ./build-python.sh install --precompile ; Assert-Output $?
+    sh ./build-python.sh install --precompile --no-isolation ; Assert-Output $?
     cp ./Release/lib_lightgbm.dll "$env:BUILD_ARTIFACTSTAGINGDIRECTORY"
     cp ./Release/lightgbm.exe "$env:BUILD_ARTIFACTSTAGINGDIRECTORY"
 } elseif ($env:TASK -eq "sdist") {
-    sh ./build-python.sh sdist ; Assert-Output $?
+    sh ./build-python.sh --no-isolation sdist ; Assert-Output $?
     sh ./.ci/check-python-dists.sh ./dist ; Assert-Output $?
     Set-Location dist; pip install --no-deps @(Get-ChildItem *.gz) -v ; Assert-Output $?
 } elseif ($env:TASK -eq "bdist") {
-    # Import the Chocolatey profile module so that the RefreshEnv command
-    # invoked below properly updates the current PowerShell session environment.
-    $module = "$env:ChocolateyInstall\helpers\chocolateyProfile.psm1"
-    Import-Module "$module" ; Assert-Output $?
-    RefreshEnv
+    if ($UseConda) {
+        # Import the Chocolatey profile module so that the RefreshEnv command
+        # invoked below properly updates the current PowerShell session environment.
+        $module = "$env:ChocolateyInstall\helpers\chocolateyProfile.psm1"
+        Import-Module "$module" ; Assert-Output $?
+        RefreshEnv
 
-    Write-Output "Current OpenCL drivers:"
-    Get-ItemProperty -Path Registry::HKEY_LOCAL_MACHINE\SOFTWARE\Khronos\OpenCL\Vendors
+        Write-Output "Current OpenCL drivers:"
+        Get-ItemProperty -Path Registry::HKEY_LOCAL_MACHINE\SOFTWARE\Khronos\OpenCL\Vendors
 
-    # (re-) activate conda environment, in case any activation logic was overridden by that 'RefreshEnv' call above
-    conda activate $env:CONDA_ENV
+        # (re-) activate conda environment, in case any activation logic was overridden by that 'RefreshEnv' call above
+        conda activate $env:CONDA_ENV
+    }
 
     # TODO: restore --integrated-opencl as part of https://github.com/lightgbm-org/LightGBM/issues/6968
-    sh "build-python.sh" bdist_wheel ; Assert-Output $?
+    sh "build-python.sh" --no-isolation bdist_wheel ; Assert-Output $?
     sh ./.ci/check-python-dists.sh ./dist ; Assert-Output $?
-    Set-Location dist; pip install --no-deps @(Get-ChildItem *py3-none-win_amd64.whl) ; Assert-Output $?
-    cp @(Get-ChildItem *py3-none-win_amd64.whl) "$env:BUILD_ARTIFACTSTAGINGDIRECTORY"
+    Set-Location dist; pip install --no-deps @(Get-ChildItem "*py3-none-$env:WHEEL_PLATFORM_TAG.whl") ; Assert-Output $?
+    cp @(Get-ChildItem "*py3-none-$env:WHEEL_PLATFORM_TAG.whl") "$env:BUILD_ARTIFACTSTAGINGDIRECTORY"
 } elseif (($env:APPVEYOR -eq "true") -and ($env:TASK -eq "python")) {
     if ($env:COMPILER -eq "MINGW") {
         sh ./build-python.sh install --mingw ; Assert-Output $?

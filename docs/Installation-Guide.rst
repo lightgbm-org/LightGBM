@@ -233,7 +233,7 @@ Install Using ``MacPorts``
 
   sudo port install LightGBM
 
-Refer to https://ports.macports.org/port/LightGBM for more details.
+Refer to https://ports.macports.org/port/LightGBM/ for more details.
 
 **Note**: Port for LightGBM is not maintained by LightGBM's maintainers.
 

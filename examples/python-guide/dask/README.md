@@ -1,7 +1,7 @@
 Dask Examples
 =============
 
-This directory contains examples of machine learning workflows with LightGBM and [Dask](https://dask.org/).
+This directory contains examples of machine learning workflows with LightGBM and [Dask](https://www.dask.org/).
 
 Before running this code, see [the installation instructions for the Dask-package](https://github.com/lightgbm-org/LightGBM/tree/main/python-package#install-dask-package).
 

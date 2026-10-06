@@ -18,7 +18,7 @@ Light Gradient Boosting Machine
 [![Documentation Status](https://readthedocs.org/projects/lightgbm/badge/?version=latest)](https://lightgbm.readthedocs.io/)
 [![Link checks](https://github.com/lightgbm-org/LightGBM/actions/workflows/lychee.yml/badge.svg?branch=main)](https://github.com/lightgbm-org/LightGBM/actions/workflows/lychee.yml)
 [![License](https://img.shields.io/github/license/lightgbm-org/lightgbm.svg)](https://github.com/lightgbm-org/LightGBM/blob/main/LICENSE)
-[![EffVer Versioning](https://img.shields.io/badge/version_scheme-EffVer-0097a7)](https://jacobtomlinson.dev/effver)
+[![EffVer Versioning](https://img.shields.io/badge/version_scheme-EffVer-0097a7)](https://jacobtomlinson.dev/effver/)
 [![StackOverflow questions](https://img.shields.io/stackexchange/stackoverflow/t/lightgbm?logo=stackoverflow&logoColor=white&label=StackOverflow%20questions)](https://stackoverflow.com/questions/tagged/lightgbm?sort=votes)
 [![Python Versions](https://img.shields.io/pypi/pyversions/lightgbm.svg?logo=python&logoColor=white)](https://pypi.org/project/lightgbm)
 [![PyPI Version](https://img.shields.io/pypi/v/lightgbm.svg?logo=pypi&logoColor=white)](https://pypi.org/project/lightgbm)
@@ -52,9 +52,8 @@ Next you may want to read:
 - [**Features**](https://github.com/lightgbm-org/LightGBM/blob/main/docs/Features.rst) and algorithms supported by LightGBM.
 - [**Parameters**](https://github.com/lightgbm-org/LightGBM/blob/main/docs/Parameters.rst) is an exhaustive list of customization you can make.
 - [**Distributed Learning**](https://github.com/lightgbm-org/LightGBM/blob/main/docs/Parallel-Learning-Guide.rst) and [**GPU Learning**](https://github.com/lightgbm-org/LightGBM/blob/main/docs/GPU-Tutorial.rst) can speed up computation.
-- [**FLAML**](https://www.microsoft.com/en-us/research/project/fast-and-lightweight-automl-for-large-scale-data/articles/flaml-a-fast-and-lightweight-automl-library/) provides automated tuning for LightGBM ([code examples](https://microsoft.github.io/FLAML/docs/Examples/AutoML-for-LightGBM/)).
+- [**FLAML**](https://www.microsoft.com/en-us/research/articles/flaml-a-fast-and-lightweight-automl-library/) provides automated tuning for LightGBM ([code examples](https://microsoft.github.io/FLAML/docs/Examples/AutoML-for-LightGBM/)).
 - [**Optuna Hyperparameter Tuner**](https://medium.com/optuna/lightgbm-tuner-new-optuna-integration-for-hyperparameter-optimization-8b7095e99258) provides automated tuning for LightGBM hyperparameters ([code examples](https://github.com/optuna/optuna-examples/blob/main/lightgbm/lightgbm_tuner_simple.py)).
-- [**Understanding LightGBM Parameters (and How to Tune Them using Neptune)**](https://neptune.ai/blog/lightgbm-parameters-guide).
 
 Documentation for contributors:
 
@@ -88,7 +87,7 @@ cuML Forest Inference Library (GPU-accelerated inference): https://github.com/ra
 
 nvForest (GPU-accelerated inference): https://github.com/rapidsai/nvforest
 
-daal4py (Intel CPU-accelerated inference): https://github.com/intel/scikit-learn-intelex/tree/master/daal4py
+daal4py (Intel CPU-accelerated inference): https://github.com/uxlfoundation/scikit-learn-intelex/tree/master/daal4py
 
 m2cgen (model appliers for various languages): https://github.com/BayesWitnesses/m2cgen
 
@@ -96,7 +95,7 @@ leaves (Go model applier): https://github.com/dmitryikh/leaves
 
 ONNXMLTools (ONNX converter): https://github.com/onnx/onnxmltools
 
-SHAP (model output explainer): https://github.com/slundberg/shap
+SHAP (model output explainer): https://github.com/shap/shap
 
 Shapash (model visualization and interpretation): https://github.com/MAIF/shapash
 
@@ -148,13 +147,13 @@ darts (time series forecasting and anomaly detection with LightGBM): https://git
 
 mlforecast (time series forecasting with LightGBM): https://github.com/Nixtla/mlforecast
 
-skforecast (time series forecasting with LightGBM): https://github.com/JoaquinAmatRodrigo/skforecast
+skforecast (time series forecasting with LightGBM): https://github.com/skforecast/skforecast
 
 `{bonsai}` (R `{parsnip}`-compliant interface): https://github.com/tidymodels/bonsai
 
 `{mlr3extralearners}` (R `{mlr3}`-compliant interface): https://github.com/mlr-org/mlr3extralearners
 
-lightgbm-transform (feature transformation binding): https://github.com/lightgbm-org/LightGBM-transform
+lightgbm-transform (feature transformation binding): https://github.com/Microsoft/LightGBM-transform
 
 `postgresml` (LightGBM training and prediction in SQL, via a Postgres extension): https://github.com/postgresml/postgresml
 

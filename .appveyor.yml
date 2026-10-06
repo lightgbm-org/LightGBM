@@ -23,7 +23,8 @@ install:
   - git submodule update --init --recursive  # get `external_libs` folder
   - set PATH=C:\mingw-w64\x86_64-8.1.0-posix-seh-rt_v6-rev0\mingw64\bin;%PATH%
   - set PYTHON_VERSION=%CONFIGURATION%
-  - powershell.exe -ExecutionPolicy ByPass -c "Invoke-RestMethod https://pixi.sh/install.ps1 | Invoke-Expression"
+  # yamllint disable-line rule:line-length
+  - powershell.exe -ExecutionPolicy ByPass -c "Invoke-RestMethod https://pixi.prefix.dev/install.ps1 | Invoke-Expression"
   - set PATH=C:\Users\appveyor\.pixi\bin;%PATH%
   - ps: |
       $env:APPVEYOR = "true"

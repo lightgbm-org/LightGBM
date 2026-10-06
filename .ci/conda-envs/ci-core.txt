@@ -31,7 +31,9 @@ scikit-learn>=1.3.2
 scipy>=1.7
 
 # build-time dependencies
+hatchling>=1.27.0
 python-build>=0.10
+scikit-build-core>=0.11.0
 
 # starting some time around 2026, 'pip' is no longer guaranteed to be installed
 pip>=24

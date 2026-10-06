@@ -1,4 +1,4 @@
-﻿# Using LightGBM via Docker
+# Using LightGBM via Docker
 
 This directory contains `Dockerfile`s to make it easy to build and run LightGBM via [Docker](https://www.docker.com/).
 
@@ -6,11 +6,11 @@ These builds of LightGBM all train on the CPU. For GPU-enabled builds, see [the 
 
 ## Installing Docker
 
-Follow the general installation instructions [on the Docker site](https://docs.docker.com/install/):
+Follow the general installation instructions [on the Docker site](https://docs.docker.com/get-started/get-docker/):
 
-* [macOS](https://docs.docker.com/docker-for-mac/install/)
-* [Ubuntu](https://docs.docker.com/install/linux/docker-ce/ubuntu/)
-* [Windows](https://docs.docker.com/docker-for-windows/install/)
+* [macOS](https://docs.docker.com/desktop/setup/install/mac-install/)
+* [Ubuntu](https://docs.docker.com/engine/install/ubuntu/)
+* [Windows](https://docs.docker.com/desktop/setup/install/windows-install/)
 
 ## Using CLI Version of LightGBM via Docker
 
@@ -171,7 +171,7 @@ docker run \
     R
 ```
 
-To use [RStudio](https://www.rstudio.com/products/rstudio/), an interactive development environment, run the following.
+To use [RStudio](https://posit.co/products/open-source/rstudio), an interactive development environment, run the following.
 
 ```shell
 docker run \

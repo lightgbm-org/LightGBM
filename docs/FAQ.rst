@@ -151,7 +151,7 @@ and copy memory as required by creating new processes instead of forking (or, us
 
 Cloud platform container services may cause LightGBM to hang, if they use Linux fork to run multiple containers on a
 single instance. For example, LightGBM hangs in AWS Batch array jobs, which `use the ECS agent
-<https://aws.amazon.com/batch/faqs>`__ to manage multiple running jobs. Setting ``nthreads=1`` mitigates the issue.
+<https://aws.amazon.com/batch/faqs/>`__ to manage multiple running jobs. Setting ``nthreads=1`` mitigates the issue.
 
 12. Why is early stopping not enabled by default in LightGBM?
 -------------------------------------------------------------
@@ -228,7 +228,7 @@ On aarch64 Linux, processes and loaded libraries share the same pool of static T
 which makes such failures more likely. See these discussions:
 
 * https://bugzilla.redhat.com/show_bug.cgi?id=1722181#c6
-* https://gcc.gcc.gnu.narkive.com/vOXMQqLA/failure-to-dlopen-libgomp-due-to-static-tls-data
+* https://github.com/pytorch/pytorch/issues/2575
 
 If you are experiencing this issue when using the ``lightgbm`` Python-package, try upgrading
 to at least ``v4.6.0``.

@@ -10,10 +10,10 @@
 
 * [Installation](#installation)
     - [Installing the CRAN Package](#installing-the-cran-package)
-    - [Installing from Source with CMake](#install)
+    - [Installing from Source with CMake](#installation)
     - [Installing a GPU-enabled Build](#installing-a-gpu-enabled-build)
     - [Installing Precompiled Binaries](#installing-precompiled-binaries)
-    - [Installing from a Pre-compiled lib_lightgbm](#lib_lightgbm)
+    - [Installing from a Pre-compiled lib_lightgbm](#installing-from-a-pre-compiled-lib_lightgbm)
 * [Examples](#examples)
 * [Testing](#testing)
     - [Running the Tests](#running-the-tests)
@@ -27,7 +27,7 @@ Installation
 
 For the easiest installation, go to ["Installing the CRAN package"](#installing-the-cran-package).
 
-If you experience any issues with that, try ["Installing from Source with CMake"](#install). This can produce a more efficient version of the library on Windows systems with Visual Studio.
+If you experience any issues with that, try ["Installing from Source with CMake"](#installation). This can produce a more efficient version of the library on Windows systems with Visual Studio.
 
 To build a GPU-enabled version of the package, follow the steps in ["Installing a GPU-enabled Build"](#installing-a-gpu-enabled-build).
 
@@ -83,7 +83,7 @@ To check the values R is using, run the following:
 R CMD config --all
 ```
 
-### Installing from Source with CMake <a id="install"></a>
+### Installing from Source with CMake
 
 You need to install git and [CMake](https://cmake.org/) first.
 
@@ -178,7 +178,7 @@ Note: for the build with Visual Studio/VS Build Tools in Windows, you should use
 
 You will need to install Boost and OpenCL first: details for installation can be found in [Installation-Guide](https://github.com/lightgbm-org/LightGBM/blob/main/docs/Installation-Guide.rst#build-gpu-version).
 
-After installing these other libraries, follow the steps in ["Installing from Source with CMake"](#install). When you reach the step that mentions `build_r.R`, pass the flag `--use-gpu`.
+After installing these other libraries, follow the steps in ["Installing from Source with CMake"](#installing-from-source-with-cmake). When you reach the step that mentions `build_r.R`, pass the flag `--use-gpu`.
 
 ```shell
 Rscript build_r.R --use-gpu
@@ -221,7 +221,7 @@ These packages do not require compilation, so they will be faster and easier to 
 
 CRAN does not prepare precompiled binaries for Linux, and as of this writing neither does this project.
 
-### Installing from a Pre-compiled lib_lightgbm <a id="lib_lightgbm"></a>
+### Installing from a Pre-compiled lib_lightgbm
 
 Previous versions of LightGBM offered the ability to first compile the C++ library (`lib_lightgbm.{dll,dylib,so}`) and then build an R-package that wraps it.
 
@@ -407,7 +407,7 @@ All packages uploaded to CRAN must pass builds using `gcc` and `clang`, instrume
 
 For more background, see
 
-* [this blog post](https://dirk.eddelbuettel.com/code/sanitizers.html)
+* [this blog post](https://dirk.eddelbuettel.com/code/sanitizers)
 * [top-level CRAN documentation on these checks](https://cran.r-project.org/web/checks/check_issue_kinds.html)
 * [CRAN's configuration of these checks](https://www.stats.ox.ac.uk/pub/bdr/memtests/README.txt)
 
