@@ -6,9 +6,11 @@
 #include <gtest/gtest.h>
 
 #include <limits>
+#include <stdexcept>
 #include <vector>
 
 #include "../include/LightGBM/utils/common.h"
+#include "../include/LightGBM/utils/pipeline_reader.h"
 #include "../include/LightGBM/utils/threading.h"
 
 
@@ -172,4 +174,20 @@ TEST(ParallelPartitionRunnerTest, EmptyInputReturnsZero) {
   EXPECT_EQ(left_count, 0);
   EXPECT_FALSE(callback_called);
   EXPECT_EQ(output[0], -1);
+}
+
+// PipelineReader::Read() reads the next block on a background thread while processing the current one.
+// An exception thrown by the processing function must propagate to the caller
+// instead of terminating the process via a still-joinable std::thread.
+TEST(PipelineReaderTest, ExceptionInProcessFunctionPropagates) {
+  const char* filename = "examples/binary_classification/binary.test";
+  // sanity check that the file exists and is read normally
+  const size_t num_bytes = LightGBM::PipelineReader::Read(
+      filename, 0, [](const char*, size_t cnt) { return cnt; });
+  ASSERT_GT(num_bytes, 0);
+
+  EXPECT_THROW(
+    LightGBM::PipelineReader::Read(
+        filename, 0, [](const char*, size_t) -> size_t { throw std::runtime_error("process failed"); }),
+    std::runtime_error);
 }
