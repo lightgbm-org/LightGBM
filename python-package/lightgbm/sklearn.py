@@ -1,4 +1,4 @@
-# coding: utf-8
+﻿# coding: utf-8
 """Scikit-learn wrapper interface for LightGBM."""
 
 import copy
@@ -2087,6 +2087,8 @@ class LGBMClassifier(_LGBMClassifierBase, LGBMModel):
         _LGBMCheckClassificationTargets(y)
         self._le = _LGBMLabelEncoder().fit(y)
         _y = self._le.transform(y)
+        if eval_y is not None:
+            eval_y = self._le.transform(eval_y)
         self._class_map = dict(zip(self._le.classes_, self._le.transform(self._le.classes_), strict=True))
         if isinstance(self.class_weight, dict):
             self._class_weight = {self._class_map[k]: v for k, v in self.class_weight.items()}

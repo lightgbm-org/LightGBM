@@ -2520,3 +2520,62 @@ def test_eval_X_eval_y_eval_set_equivalence():
     assert gbm2.evals_result_["valid_0"]["l2"] != gbm2.evals_result_["valid_1"]["l2"], (
         "Evaluation results for the 2 validation sets are not different. This might mean they weren't both used."
     )
+
+def test_classifier_eval_y_is_label_encoded():
+    """Regression test for https://github.com/lightgbm-org/LightGBM/issues/7400.
+
+    LGBMClassifier.fit() must encode eval_y with the same fitted label encoder
+    used for y, whether labels are strings or non-zero-based integers.
+    """
+    import numpy as np
+    import pytest
+    from sklearn.metrics import log_loss
+    from lightgbm import LGBMClassifier
+
+    X = np.tile(np.arange(8), 10).reshape(-1, 1)
+    y01 = (X[:, 0] >= 4).astype(int)
+
+    # 1) String labels used to raise ValueError because eval_y was passed unencoded.
+    y_string = np.where(y01 == 1, "class-b", "class-a")
+    string_model = LGBMClassifier(
+        n_estimators=3,
+        num_leaves=3,
+        min_child_samples=1,
+        verbosity=-1,
+    )
+    # Should not raise
+    string_model.fit(
+        X,
+        y_string,
+        eval_X=X,
+        eval_y=y_string,
+        eval_metric="binary_logloss",
+    )
+
+    # 2) Integer labels not in 0..n-1 were encoded for training but not validation,
+    #    producing silently wrong validation metrics.
+    y_integer = np.where(y01 == 1, 2, 1)
+    integer_model = LGBMClassifier(
+        n_estimators=3,
+        num_leaves=3,
+        min_child_samples=1,
+        verbosity=-1,
+    )
+    integer_model.fit(
+        X,
+        y_integer,
+        eval_X=X,
+        eval_y=y_integer,
+        eval_metric="binary_logloss",
+    )
+
+    encoded_eval_y = integer_model._le.transform(y_integer)
+    probabilities = integer_model.predict_proba(X)
+    expected_logloss = log_loss(
+        encoded_eval_y,
+        probabilities,
+        labels=np.arange(integer_model.n_classes_),
+    )
+    actual_logloss = integer_model.evals_result_["valid_0"]["binary_logloss"][-1]
+
+    assert actual_logloss == pytest.approx(expected_logloss)
