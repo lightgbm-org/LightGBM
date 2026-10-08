@@ -8,6 +8,7 @@ import textwrap
 import warnings
 from functools import partial
 from pathlib import Path
+from unittest import mock
 
 import joblib
 import numpy as np
@@ -2531,19 +2532,11 @@ def test_eval_X_eval_y_eval_set_equivalence():
     ],
 )
 @pytest.mark.parametrize("pass_as_tuples", [False, True])
-def test_classifier_eval_X_eval_y_encodes_labels(classes, pass_as_tuples, monkeypatch):
+def test_classifier_eval_X_eval_y_encodes_labels(classes, pass_as_tuples, rng):
     """Test that eval_y labels use the classifier's label encoding."""
-    X, y, *_ = _create_data(task="binary-classification")
-    y = classes[y]
+    X = rng.uniform(low=0.01, high=0.06, size=(1_000, 3))
+    y = rng.choice(classes, size=(X.shape[0],))
     X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.25, random_state=42)
-    forwarded_eval_y = None
-
-    def capture_fit(self, *_args, **kwargs):
-        nonlocal forwarded_eval_y
-        forwarded_eval_y = kwargs["eval_y"]
-        return self
-
-    monkeypatch.setattr(lgb.LGBMModel, "fit", capture_fit)
 
     if pass_as_tuples:
         eval_X = (X_test,)
@@ -2551,13 +2544,17 @@ def test_classifier_eval_X_eval_y_encodes_labels(classes, pass_as_tuples, monkey
     else:
         eval_X = X_test
         eval_y = y_test
-    model = lgb.LGBMClassifier().fit(
-        X_train,
-        y_train,
-        eval_X=eval_X,
-        eval_y=eval_y,
-    )
 
+    with mock.patch.object(lgb.LGBMModel, "fit") as mock_fit:
+        model = lgb.LGBMClassifier().fit(
+            X_train,
+            y_train,
+            eval_X=eval_X,
+            eval_y=eval_y,
+        )
+
+    mock_fit.assert_called_once()
+    forwarded_eval_y = mock_fit.call_args.kwargs["eval_y"]
     expected_eval_y = model._le.transform(y_test)
     if pass_as_tuples:
         assert isinstance(forwarded_eval_y, tuple)
