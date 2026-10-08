@@ -1,5 +1,3 @@
-"""Regression tests for per-feature configuration during distributed binning."""
-
 import ctypes
 import json
 import multiprocessing
