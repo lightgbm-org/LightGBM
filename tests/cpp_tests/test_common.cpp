@@ -10,6 +10,7 @@
 #include <vector>
 
 #include "../include/LightGBM/utils/common.h"
+#include "../include/LightGBM/utils/openmp_wrapper.h"
 #include "../include/LightGBM/utils/pipeline_reader.h"
 #include "../include/LightGBM/utils/threading.h"
 
@@ -190,4 +191,23 @@ TEST(PipelineReaderTest, ExceptionInProcessFunctionPropagates) {
     LightGBM::PipelineReader::Read(
         filename, 0, [](const char*, size_t) -> size_t { throw std::runtime_error("process failed"); }),
     std::runtime_error);
+}
+
+// OMP_THROW_EX() rethrows an exception captured inside a parallel loop.
+// The helper's destructor must not rethrow the same exception again while the stack unwinds,
+// which would call std::terminate().
+TEST(ThreadExceptionHelperTest, ReThrowPropagatesExceptionOnce) {
+  bool caught = false;
+  try {
+    ThreadExceptionHelper helper;
+    try {
+      throw std::runtime_error("worker failed");
+    } catch (...) {
+      helper.CaptureException();
+    }
+    helper.ReThrow();
+  } catch (const std::runtime_error&) {
+    caught = true;
+  }
+  EXPECT_TRUE(caught);
 }
