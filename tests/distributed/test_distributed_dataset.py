@@ -1,8 +1,6 @@
 import ctypes
 import json
 import multiprocessing
-import socket
-from contextlib import ExitStack
 
 import numpy as np
 import pytest
@@ -10,6 +8,8 @@ from scipy import sparse
 
 import lightgbm as lgb
 from lightgbm.basic import _LIB, _c_str, _safe_call
+
+from .utils import find_random_open_port
 
 
 def _construct_distributed_dataset(data, params, machines, port, output):
@@ -61,12 +61,9 @@ def test_distributed_bin_feature_indices(tmp_path, input_type, per_feature_max_b
     lgb.Dataset(data, params=params)._dump_text(expected_file)
     expected = expected_file.read_text()
 
-    # Reserve both ports together to ensure they are distinct.
-    with ExitStack() as stack:
-        sockets = [stack.enter_context(socket.socket(socket.AF_INET, socket.SOCK_STREAM)) for _ in range(2)]
-        for sock in sockets:
-            sock.bind(("127.0.0.1", 0))
-        ports = [sock.getsockname()[1] for sock in sockets]
+    ports = {find_random_open_port()}
+    while len(ports) < 2:
+        ports.add(find_random_open_port())
     machines = ",".join(f"127.0.0.1:{port}" for port in ports)
     context = multiprocessing.get_context("spawn")
     workers = []
