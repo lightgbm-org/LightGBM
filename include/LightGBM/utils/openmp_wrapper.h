@@ -58,7 +58,11 @@ class ThreadExceptionHelper {
   }
   void ReThrow() {
     if (ex_ptr_ != nullptr) {
-      std::rethrow_exception(ex_ptr_);
+      // clear the stored exception before rethrowing, so the destructor
+      // doesn't rethrow it again while the stack is unwinding
+      std::exception_ptr ex_ptr = ex_ptr_;
+      ex_ptr_ = nullptr;
+      std::rethrow_exception(ex_ptr);
     }
   }
   void CaptureException() {
