@@ -1008,6 +1008,24 @@ def test_set_feature_name_updates_has_non_default_feature_names(rng):
     assert ds.get_feature_name() == ["a", "b", "c"]
 
 
+@pytest.mark.parametrize(
+    ("feature_name", "duplicate_name"),
+    [
+        (["a", "a"], "a"),
+        (["_", " "], "_"),
+        (["a b", "a_b"], "a_b"),
+    ],
+)
+def test_construct_raises_informative_error_on_duplicate_feature_names(rng, feature_name, duplicate_name):
+    X = rng.uniform(size=(10, len(feature_name)))
+    expected_error = (
+        f"After preprocessing (including replacing whitespace with '_'), multiple features named '{duplicate_name}' "
+        "found in Dataset. Ensure that feature names are unique and do not contain whitespace."
+    )
+    with pytest.raises(lgb.basic.LightGBMError, match=f"^{re.escape(expected_error)}$"):
+        lgb.Dataset(X, feature_name=feature_name).construct()
+
+
 # NOTE: this intentionally contains values where num_leaves <, ==, and > (max_depth^2)
 @pytest.mark.parametrize(("max_depth", "num_leaves"), [(-1, 3), (-1, 50), (5, 3), (5, 31), (5, 32), (8, 3), (8, 31)])
 def test_max_depth_warning_is_not_raised_if_num_leaves_is_also_provided(capsys, num_leaves, max_depth):
