@@ -66,8 +66,8 @@ RUN apt-get update && \
 RUN mkdir -p /etc/OpenCL/vendors && \
     echo "libnvidia-opencl.so.1" > /etc/OpenCL/vendors/nvidia.icd
 
-
-RUN pip install --break-system-packages numpy scipy scikit-learn jupyter notebook ipython pandas matplotlib
+ENV PIP_BREAK_SYSTEM_PACKAGES=true
+RUN pip install --no-cache-dir build numpy scipy scikit-learn jupyter notebook ipython pandas matplotlib
 
 #################################################################################################################
 #           LightGBM
@@ -77,7 +77,7 @@ RUN cd /usr/local/src && mkdir lightgbm && cd lightgbm && \
     git clone \
         --recursive \
         "${LIGHTGBM_GIT_URL}" && \
-    git -C ./LightGBM checkout ${LIGHTGBM_GIT_REF} && \
+    git -C ./LightGBM checkout "${LIGHTGBM_GIT_REF}" && \
     cd LightGBM && \
     cmake -B build -S . \
         -DUSE_GPU=1 \
@@ -87,7 +87,7 @@ RUN cd /usr/local/src && mkdir lightgbm && cd lightgbm && \
 
 ENV PATH=/usr/local/src/lightgbm/LightGBM:${PATH}
 
-RUN /bin/bash -c "pip install build && cd /usr/local/src/lightgbm/LightGBM && sh ./build-python.sh install --precompile"
+RUN /bin/bash -c "cd /usr/local/src/lightgbm/LightGBM && sh ./build-python.sh install --precompile"
 
 #################################################################################################################
 #           System CleanUp

@@ -8,13 +8,6 @@ on:
     branches:
       - main
   workflow_dispatch:
-    inputs:
-      test-gpu:
-        type: boolean
-        default: false
-        description: |
-          If true, also run tests for GPU images.
-          False by default, because it requires GPU runners that cost money.
 
 # automatically cancel in-progress builds if another commit is pushed
 concurrency:
@@ -101,7 +94,7 @@ jobs:
             python -c "import lightgbm; print(f'lightgbm version: {lightgbm.__version__}')"
   build-gpu:
     name: build (GPU)
-    runs-on: ${{ inputs.test-gpu && 'github-hosted-linux-gpu-amd64' || 'ubuntu-latest' }}
+    runs-on: ubuntu-latest
     permissions:
       contents: read
     steps:
@@ -154,7 +147,6 @@ jobs:
             --build-arg LIGHTGBM_GIT_URL=https://github.com/${{ github.repository }} \
             - < ./docker/gpu/dockerfile-cli-only-distroless.gpu
       - name: dockerfile-cli-only-distroless.gpu (test)
-        if: ${{ inputs.test-gpu }}
         run: |
           docker run \
             --entrypoint="" \
