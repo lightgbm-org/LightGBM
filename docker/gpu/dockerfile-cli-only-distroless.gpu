@@ -47,7 +47,7 @@ RUN git clone \
     git -C ./LightGBM checkout ${LIGHTGBM_GIT_REF} && \
     cd LightGBM && \
     cmake -B build -S . -DUSE_GPU=1 -DOpenCL_LIBRARY=${OPENCL_LIBRARIES}/libOpenCL.so.1 -DOpenCL_INCLUDE_DIR=$OPENCL_INCLUDE_DIR && \
-    OPENCL_HEADERS=$OPENCL_INCLUDE_DIR LIBOPENCL=$OPENCL_LIBRARIES cmake --build build
+    OPENCL_HEADERS=$OPENCL_INCLUDE_DIR LIBOPENCL=$OPENCL_LIBRARIES cmake --build build cmake -j$(nproc --ignore=1)
 
 FROM gcr.io/distroless/cc-debian10:latest
 

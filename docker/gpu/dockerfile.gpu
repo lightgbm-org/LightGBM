@@ -95,11 +95,17 @@ RUN cd /usr/local/src && mkdir lightgbm && cd lightgbm && \
         -DUSE_GPU=1 \
         -DOpenCL_LIBRARY=${OPENCL_LIBRARIES}/libOpenCL.so \
         -DOpenCL_INCLUDE_DIR=${OPENCL_INCLUDE_DIR} && \
-    cmake --build build
+    cmake --build build -j$(nproc --ignore=1)
 
 ENV PATH=/usr/local/src/lightgbm/LightGBM:${PATH}
 
-RUN /bin/bash -c "source activate py3 && cd /usr/local/src/lightgbm/LightGBM && sh ./build-python.sh install --precompile && source deactivate"
+RUN <<EOF
+source activate py3
+pip install 'build'
+cd /usr/local/src/lightgbm/LightGBM
+sh ./build-python.sh install --precompile
+source deactivate
+EOF
 
 #################################################################################################################
 #           System CleanUp
