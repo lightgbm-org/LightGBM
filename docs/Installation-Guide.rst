@@ -21,7 +21,13 @@ code using a previous version.
 This means that **new minor versions can contain breaking changes**, but these are typically
 small or limited to less-frequently-used parts of the project.
 
-When built from source on an unreleased commit, this version takes the following form:
+For more details on why LightGBM uses EffVer instead of other schemes like semantic versioning,
+see https://jacobtomlinson.dev/effver/.
+
+Nightly Packages
+~~~~~~~~~~~~~~~~
+
+When built from source on an unreleased commit, the package version takes the following form:
 
 .. code::
 
@@ -38,11 +44,11 @@ To download such artifacts, run the following from the root of this repository.
 
    bash .ci/download-artifacts.sh ${COMMIT_ID}
 
-Where `COMMIT_ID` is the full commit SHA pointing to a commit on ``master``.
+Where ``COMMIT_ID`` is the full commit SHA pointing to a commit on ``main``.
 The artifacts can then be found in the ``release-artifacts/`` directory.
 
-For more details on why LightGBM uses EffVer instead of other schemes like semantic versioning,
-see https://jacobtomlinson.dev/effver/.
+For the Python package, nightly packages are also available via installers like ``pip``.
+See `the python-package documentation`_ for details.
 
 General Installation Notes
 ~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -227,7 +233,7 @@ Install Using ``MacPorts``
 
   sudo port install LightGBM
 
-Refer to https://ports.macports.org/port/LightGBM for more details.
+Refer to https://ports.macports.org/port/LightGBM/ for more details.
 
 **Note**: Port for LightGBM is not maintained by LightGBM's maintainers.
 
@@ -276,7 +282,7 @@ gcc
 Docker
 ~~~~~~
 
-Refer to `Docker folder <https://github.com/lightgbm-org/LightGBM/tree/master/docker>`__.
+Refer to `Docker folder <https://github.com/lightgbm-org/LightGBM/tree/main/docker>`__.
 
 Build Threadless Version (not Recommended)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -687,7 +693,7 @@ The GPU version is not supported on macOS.
 Docker
 ^^^^^^
 
-Refer to `GPU Docker folder <https://github.com/lightgbm-org/LightGBM/tree/master/docker/gpu>`__.
+Refer to `GPU Docker folder <https://github.com/lightgbm-org/LightGBM/tree/main/docker/gpu>`__.
 
 Build CUDA Version
 ~~~~~~~~~~~~~~~~~~
@@ -714,6 +720,21 @@ On Linux, a CUDA version of LightGBM can be built using
 Please refer to `this detailed guide`_ for **CUDA** libraries installation.
 
 After compilation the executable and ``.so`` files will be in ``LightGBM/`` folder.
+
+.. note::
+
+   By default, the library will be built with support for a hard-coded list of GPU architectures
+   based on the detected CUDA Toolkit version.
+
+   To build the library with support for more architectures, set ``CMAKE_CUDA_ARCHITECTURES``.
+
+   .. code:: sh
+
+      # example: all Blackwell arches, including DGX Spark
+      cmake -B build -S . -DUSE_CUDA=ON -DCMAKE_CUDA_ARCHITECTURES="100;120;121-real;121-virtual"
+
+      # example: just the local GPU
+      cmake -B build -S . -DUSE_CUDA=ON -DCMAKE_CUDA_ARCHITECTURES="native"
 
 gcc
 ***
@@ -947,12 +968,12 @@ gcc
 Build Python-package
 ~~~~~~~~~~~~~~~~~~~~
 
-Refer to `Python-package folder <https://github.com/lightgbm-org/LightGBM/tree/master/python-package>`__.
+Refer to `the python-package documentation`_.
 
 Build R-package
 ~~~~~~~~~~~~~~~
 
-Refer to `R-package folder <https://github.com/lightgbm-org/LightGBM/tree/master/R-package>`__.
+Refer to `R-package folder <https://github.com/lightgbm-org/LightGBM/tree/main/R-package>`__.
 
 Build C++ Unit Tests
 ~~~~~~~~~~~~~~~~~~~~
@@ -1112,6 +1133,8 @@ gcc
 .. _SWIG: https://www.swig.org/download.html
 
 .. _this detailed guide: https://docs.nvidia.com/cuda/cuda-installation-guide-linux/index.html
+
+.. _the python-package documentation: https://github.com/lightgbm-org/LightGBM/tree/main/python-package
 
 .. _the ROCm docs: https://rocm.docs.amd.com/projects/install-on-linux/en/latest/
 

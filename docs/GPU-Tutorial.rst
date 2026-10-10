@@ -185,7 +185,7 @@ Huan Zhang, Si Si and Cho-Jui Hsieh. "`GPU Acceleration for Large-scale Tree Boo
 
 .. _AMDGPU-Pro: https://www.amd.com/en/support.html
 
-.. _Python-package Examples: https://github.com/lightgbm-org/LightGBM/tree/master/examples/python-guide
+.. _Python-package Examples: https://github.com/lightgbm-org/LightGBM/tree/main/examples/python-guide
 
 .. _GPU Acceleration for Large-scale Tree Boosting: https://arxiv.org/abs/1706.08359
 

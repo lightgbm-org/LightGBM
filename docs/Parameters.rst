@@ -631,7 +631,7 @@ Learning Control Parameters
 
    -  **Note**: the forced split logic will be ignored, if the split makes gain worse
 
-   -  see `this file <https://github.com/lightgbm-org/LightGBM/blob/master/examples/binary_classification/forced_splits.json>`__ as an example
+   -  see `this file <https://github.com/lightgbm-org/LightGBM/blob/main/examples/binary_classification/forced_splits.json>`__ as an example
 
 -  ``refit_decay_rate`` :raw-html:`<a id="refit_decay_rate" title="Permalink to this parameter" href="#refit_decay_rate">&#x1F517;&#xFE0E;</a>`, default = ``0.9``, type = double, constraints: ``0.0 <= refit_decay_rate <= 1.0``
 
@@ -951,6 +951,8 @@ Dataset Parameters
 
    -  **Note**: all values will be cast to ``int32`` (integer codes will be extracted from pandas categoricals in the Python-package)
 
+   -  **Note**: in the Python-package, when ``categorical_feature="auto"`` and the input is a dataframe with a categorical dtype, only unordered categoricals are auto-detected. Ordered categoricals are treated as ordinal numeric features (see `Categorical Feature Support <./Advanced-Topics.rst#categorical-feature-support>`__)
+
    -  **Note**: index starts from ``0`` and it doesn't count the label column when passing type is ``int``
 
    -  **Note**: all values should be less than ``Int32.MaxValue`` (2147483647)
@@ -969,7 +971,7 @@ Dataset Parameters
 
    -  ``.json`` file should contain an array of objects, each containing the word ``feature`` (integer feature index) and ``bin_upper_bound`` (array of thresholds for binning)
 
-   -  see `this file <https://github.com/lightgbm-org/LightGBM/blob/master/examples/regression/forced_bins.json>`__ as an example
+   -  see `this file <https://github.com/lightgbm-org/LightGBM/blob/main/examples/regression/forced_bins.json>`__ as an example
 
 -  ``save_binary`` :raw-html:`<a id="save_binary" title="Permalink to this parameter" href="#save_binary">&#x1F517;&#xFE0E;</a>`, default = ``false``, type = bool, aliases: ``is_save_binary``, ``is_save_binary_file``
 
@@ -989,9 +991,9 @@ Dataset Parameters
 
    -  path to a ``.json`` file that specifies customized parser initialized configuration
 
-   -  see `lightgbm-transform <https://github.com/lightgbm-org/LightGBM-transform>`__ for usage examples
+   -  see `lightgbm-transform <https://github.com/Microsoft/LightGBM-transform>`__ for usage examples
 
-   -  **Note**: ``lightgbm-transform`` is not maintained by LightGBM's maintainers. Bug reports or feature requests should go to `issues page <https://github.com/lightgbm-org/LightGBM-transform/issues>`__
+   -  **Note**: ``lightgbm-transform`` is not maintained by LightGBM's maintainers. Bug reports or feature requests should go to `issues page <https://github.com/Microsoft/LightGBM-transform/issues>`__
 
    -  *New in version 4.0.0*
 
@@ -1261,7 +1263,7 @@ Metric Parameters
 
       -  ``average_precision``, `average precision score <https://scikit-learn.org/stable/modules/generated/sklearn.metrics.average_precision_score.html>`__
 
-      -  ``r2``, `R-squared <https://scikit-learn.org/stable/modules/generated/sklearn.metrics.r2_score.html>`__
+      -  ``r2``, `R-squared <https://scikit-learn.org/stable/modules/generated/sklearn.metrics.r2_score.html>`__ (*New in version 4.7.0*)
 
       -  ``binary_logloss``, `log loss <https://en.wikipedia.org/wiki/Cross_entropy>`__, aliases: ``binary``
 
@@ -1384,6 +1386,8 @@ GPU Parameters
    -  **Note**: can be used only in CUDA implementation (``device_type="cuda"``) and when ``num_gpu>1``
 
    -  if empty, the devices with the smallest IDs will be used
+
+   -  *New in version 4.7.0*
 
 -  ``gpu_use_dp`` :raw-html:`<a id="gpu_use_dp" title="Permalink to this parameter" href="#gpu_use_dp">&#x1F517;&#xFE0E;</a>`, default = ``false``, type = bool
 

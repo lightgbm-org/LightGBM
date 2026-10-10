@@ -112,22 +112,28 @@ class Metadata {
                         const std::vector<data_size_t>& used_data_indices);
 
   void SetLabel(const label_t* label, data_size_t len);
-  void SetLabel(const ArrowChunkedArray& array);
+  void SetLabel(struct ArrowArrayStream* stream);
+  void SetLabel(int64_t n_chunks, struct ArrowArray* chunks, struct ArrowSchema* schema);
 
   void SetWeights(const label_t* weights, data_size_t len);
-  void SetWeights(const ArrowChunkedArray& array);
+  void SetWeights(struct ArrowArrayStream* stream);
+  void SetWeights(int64_t n_chunks, struct ArrowArray* chunks, struct ArrowSchema* schema);
 
   void SetQuery(const data_size_t* query, data_size_t len);
-  void SetQuery(const ArrowChunkedArray& array);
+  void SetQuery(struct ArrowArrayStream* stream);
+  void SetQuery(int64_t n_chunks, struct ArrowArray* chunks, struct ArrowSchema* schema);
 
   void SetPosition(const data_size_t* position, data_size_t len);
+  void SetPosition(struct ArrowArrayStream* stream);
+  void SetPosition(int64_t n_chunks, struct ArrowArray* chunks, struct ArrowSchema* schema);
 
   /*!
   * \brief Set initial scores
   * \param init_score Initial scores, this class will manage memory for init_score.
   */
   void SetInitScore(const double* init_score, data_size_t len);
-  void SetInitScore(const ArrowChunkedArray& array);
+  void SetInitScore(struct ArrowArrayStream* stream);
+  void SetInitScore(int64_t n_chunks, struct ArrowArray* chunks, struct ArrowSchema* schema);
 
 
   /*!
@@ -683,7 +689,10 @@ class Dataset {
 
   LIGHTGBM_EXPORT void FinishLoad();
 
-  bool SetFieldFromArrow(const char* field_name, const ArrowChunkedArray& ca);
+  bool SetFieldFromArrow(const char* field_name, struct ArrowArrayStream* stream);
+
+  bool SetFieldFromArrow(const char* field_name, int64_t n_chunks,
+                         struct ArrowArray* chunks, struct ArrowSchema* schema);
 
   LIGHTGBM_EXPORT bool SetFloatField(const char* field_name, const float* field_data, data_size_t num_element);
 
@@ -915,7 +924,8 @@ class Dataset {
         std::replace(feature_name.begin(), feature_name.end(), ' ', '_');
       }
       if (feature_name_set.count(feature_name) > 0) {
-        Log::Fatal("Feature (%s) appears more than one time.", feature_name.c_str());
+        Log::Fatal("After preprocessing (including replacing whitespace with '_'), multiple features named '%s' found in Dataset. "
+                   "Ensure that feature names are unique and do not contain whitespace.", feature_name.c_str());
       }
       feature_name_set.insert(feature_name);
     }

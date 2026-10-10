@@ -47,7 +47,13 @@ struct LocalFile : VirtualFileReader, VirtualFileWriter {
   }
 
   size_t Write(const void* buffer, size_t bytes) {
-    return fwrite(buffer, bytes, 1, file_) == 1 ? bytes : 0;
+    size_t bytes_written = fwrite(buffer, 1, bytes, file_);
+    if (bytes_written != bytes) {
+      Log::Fatal(
+          "Cannot write binary data to %s, wrote %zu of %zu bytes",
+          filename_.c_str(), bytes_written, bytes);
+    }
+    return bytes_written;
   }
 
  private:

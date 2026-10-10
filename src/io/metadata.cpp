@@ -11,6 +11,10 @@
 #include <unordered_map>
 #include <vector>
 
+#ifndef LGB_R_BUILD
+#include "../arrow/array.hpp"
+#endif  // LGB_R_BUILD
+
 namespace LightGBM {
 
 Metadata::Metadata() {
@@ -393,9 +397,39 @@ void Metadata::SetInitScore(const double* init_score, data_size_t len) {
   SetInitScoresFromIterator(init_score, init_score + len);
 }
 
-void Metadata::SetInitScore(const ArrowChunkedArray& array) {
-  SetInitScoresFromIterator(array.begin<double>(), array.end<double>());
+#ifndef LGB_R_BUILD
+ArrowChunkedArray::View InitScoreView(const ArrowChunkedArray& chunked_array) {
+  auto view = chunked_array.view();
+  // For multiclass classification, the init scores are provided in multiple columns. In this
+  // case, we must concatenate all fields of the chunked array.
+  if (chunked_array.is_struct()) {
+    std::vector<ArrowChunkedArray::View> concat_views;
+    concat_views.reserve(chunked_array.get_num_fields());
+    for (int64_t i = 0; i < chunked_array.get_num_fields(); ++i) {
+      concat_views.push_back(view.field(i));
+    }
+    view = ArrowChunkedArray::View(concat_views);
+  }
+  return view;
 }
+
+void Metadata::SetInitScore(struct ArrowArrayStream* stream) {
+  ArrowChunkedArray chunked_array(stream);
+  auto view = InitScoreView(chunked_array);
+  view.visit<double>([&](auto&& visitor) {
+    SetInitScoresFromIterator(visitor.begin(), visitor.end());
+  });
+}
+
+void Metadata::SetInitScore(int64_t n_chunks, struct ArrowArray* chunks,
+                            struct ArrowSchema* schema) {
+  ArrowChunkedArray chunked_array(n_chunks, chunks, schema);
+  auto view = InitScoreView(chunked_array);
+  view.visit<double>([&](auto&& visitor) {
+    SetInitScoresFromIterator(visitor.begin(), visitor.end());
+  });
+}
+#endif  // LGB_R_BUILD
 
 void Metadata::InsertInitScores(const double* init_scores, data_size_t start_index, data_size_t len, data_size_t source_size) {
   if (num_init_score_ <= 0) {
@@ -450,9 +484,22 @@ void Metadata::SetLabel(const label_t* label, data_size_t len) {
   SetLabelsFromIterator(label, label + len);
 }
 
-void Metadata::SetLabel(const ArrowChunkedArray& array) {
-  SetLabelsFromIterator(array.begin<label_t>(), array.end<label_t>());
+#ifndef LGB_R_BUILD
+void Metadata::SetLabel(struct ArrowArrayStream* stream) {
+  ArrowChunkedArray chunked_array(stream);
+  chunked_array.view().visit<label_t>([&](auto&& visitor) {
+    SetLabelsFromIterator(visitor.begin(), visitor.end());
+  });
 }
+
+void Metadata::SetLabel(int64_t n_chunks, struct ArrowArray* chunks,
+                        struct ArrowSchema* schema) {
+  ArrowChunkedArray chunked_array(n_chunks, chunks, schema);
+  chunked_array.view().visit<label_t>([&](auto&& visitor) {
+    SetLabelsFromIterator(visitor.begin(), visitor.end());
+  });
+}
+#endif  // LGB_R_BUILD
 
 void Metadata::InsertLabels(const label_t* labels, data_size_t start_index, data_size_t len) {
   if (labels == nullptr) {
@@ -505,9 +552,22 @@ void Metadata::SetWeights(const label_t* weights, data_size_t len) {
   SetWeightsFromIterator(weights, weights + len);
 }
 
-void Metadata::SetWeights(const ArrowChunkedArray& array) {
-  SetWeightsFromIterator(array.begin<label_t>(), array.end<label_t>());
+#ifndef LGB_R_BUILD
+void Metadata::SetWeights(struct ArrowArrayStream* stream) {
+  ArrowChunkedArray chunked_array(stream);
+  chunked_array.view().visit<label_t>([&](auto&& visitor) {
+    SetWeightsFromIterator(visitor.begin(), visitor.end());
+  });
 }
+
+void Metadata::SetWeights(int64_t n_chunks, struct ArrowArray* chunks,
+                          struct ArrowSchema* schema) {
+  ArrowChunkedArray chunked_array(n_chunks, chunks, schema);
+  chunked_array.view().visit<label_t>([&](auto&& visitor) {
+    SetWeightsFromIterator(visitor.begin(), visitor.end());
+  });
+}
+#endif  // LGB_R_BUILD
 
 void Metadata::InsertWeights(const label_t* weights, data_size_t start_index, data_size_t len) {
   if (!weights) {
@@ -573,9 +633,22 @@ void Metadata::SetQuery(const data_size_t* query, data_size_t len) {
   SetQueriesFromIterator(query, query + len);
 }
 
-void Metadata::SetQuery(const ArrowChunkedArray& array) {
-  SetQueriesFromIterator(array.begin<data_size_t>(), array.end<data_size_t>());
+#ifndef LGB_R_BUILD
+void Metadata::SetQuery(struct ArrowArrayStream* stream) {
+  ArrowChunkedArray chunked_array(stream);
+  chunked_array.view().visit<data_size_t>([&](auto&& visitor) {
+    SetQueriesFromIterator(visitor.begin(), visitor.end());
+  });
 }
+
+void Metadata::SetQuery(int64_t n_chunks, struct ArrowArray* chunks,
+                        struct ArrowSchema* schema) {
+  ArrowChunkedArray chunked_array(n_chunks, chunks, schema);
+  chunked_array.view().visit<data_size_t>([&](auto&& visitor) {
+    SetQueriesFromIterator(visitor.begin(), visitor.end());
+  });
+}
+#endif  // LGB_R_BUILD
 
 void Metadata::SetPosition(const data_size_t* positions, data_size_t len) {
   std::lock_guard<std::mutex> lock(mutex_);
@@ -617,6 +690,33 @@ void Metadata::SetPosition(const data_size_t* positions, data_size_t len) {
     positions_[i] = map_id2pos.at(positions[i]);
   }
 }
+
+#ifndef LGB_R_BUILD
+void Metadata::SetPosition(struct ArrowArrayStream* stream) {
+  ArrowChunkedArray chunked_array(stream);
+  chunked_array.view().visit<data_size_t>([&](auto&& visitor) {
+    std::vector<data_size_t> positions;
+    positions.reserve(visitor.end() - visitor.begin());
+    for (auto it = visitor.begin(); it != visitor.end(); ++it) {
+      positions.push_back(*it);
+    }
+    SetPosition(positions.data(), static_cast<data_size_t>(positions.size()));
+  });
+}
+
+void Metadata::SetPosition(int64_t n_chunks, struct ArrowArray* chunks,
+                           struct ArrowSchema* schema) {
+  ArrowChunkedArray chunked_array(n_chunks, chunks, schema);
+  chunked_array.view().visit<data_size_t>([&](auto&& visitor) {
+    std::vector<data_size_t> positions;
+    positions.reserve(visitor.end() - visitor.begin());
+    for (auto it = visitor.begin(); it != visitor.end(); ++it) {
+      positions.push_back(*it);
+    }
+    SetPosition(positions.data(), static_cast<data_size_t>(positions.size()));
+  });
+}
+#endif  // LGB_R_BUILD
 
 void Metadata::InsertQueries(const data_size_t* queries, data_size_t start_index, data_size_t len) {
   if (!queries) {

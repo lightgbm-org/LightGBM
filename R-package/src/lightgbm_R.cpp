@@ -95,7 +95,7 @@ const void* get_altrepped_raw_dataptr_or_null(SEXP R_raw) {
   return get_ptr_from_altrepped_raw(R_raw)->data();
 }
 
-void* get_altrepped_raw_dataptr(SEXP R_raw, Rboolean writeable) {
+void* get_altrepped_raw_dataptr(SEXP R_raw, Rboolean writable) {
   return get_ptr_from_altrepped_raw(R_raw)->data();
 }
 
@@ -173,7 +173,7 @@ const void* get_altrepped_vec_dataptr_or_null(SEXP R_vec) {
   return R_ExternalPtrAddr(R_altrep_data1(R_vec));
 }
 
-void* get_altrepped_vec_dataptr(SEXP R_vec, Rboolean writeable) {
+void* get_altrepped_vec_dataptr(SEXP R_vec, Rboolean writable) {
   return R_ExternalPtrAddr(R_altrep_data1(R_vec));
 }
 

@@ -33,7 +33,10 @@
 #                     location of the nccl library. This would disable
 #                     switching between static and shared.
 #
-# This module assumes that the user has already called find_package(CUDA)
+# It creates an imported target 'NCCL::NCCL' for convenience in linking.
+#
+# This module assumes that the CUDA toolkit has already been found.
+#
 
 if(NCCL_LIBRARY)
   if(NOT USE_NCCL_LIB_PATH)
@@ -45,18 +48,20 @@ endif()
 if(BUILD_WITH_SHARED_NCCL)
   # libnccl.so
   set(NCCL_LIB_NAME nccl)
+  set(_nccl_lib_type "SHARED")
 else()
   # libnccl_static.a
   set(NCCL_LIB_NAME nccl_static)
+  set(_nccl_lib_type "STATIC")
 endif()
 
 find_path(NCCL_INCLUDE_DIR
   NAMES nccl.h
-  PATHS $ENV{NCCL_ROOT}/include ${NCCL_ROOT}/include)
+  HINTS $ENV{NCCL_ROOT}/include ${NCCL_ROOT}/include)
 
 find_library(NCCL_LIBRARY
   NAMES ${NCCL_LIB_NAME}
-  PATHS $ENV{NCCL_ROOT}/lib/ ${NCCL_ROOT}/lib)
+  HINTS $ENV{NCCL_ROOT}/lib ${NCCL_ROOT}/lib)
 
 message(STATUS "Using nccl library: ${NCCL_LIBRARY}")
 
@@ -68,3 +73,12 @@ mark_as_advanced(
   NCCL_INCLUDE_DIR
   NCCL_LIBRARY
 )
+
+if(NCCL_FOUND AND NOT TARGET NCCL::NCCL)
+  add_library(NCCL::NCCL ${_nccl_lib_type} IMPORTED)
+  set_target_properties(NCCL::NCCL PROPERTIES
+    IMPORTED_LOCATION "${NCCL_LIBRARY}"
+    INTERFACE_INCLUDE_DIRECTORIES "${NCCL_INCLUDE_DIR}")
+endif()
+
+unset(_nccl_lib_type)

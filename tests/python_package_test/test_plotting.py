@@ -5,16 +5,16 @@ import pytest
 from sklearn.model_selection import train_test_split
 
 import lightgbm as lgb
-from lightgbm.compat import GRAPHVIZ_INSTALLED, MATPLOTLIB_INSTALLED, PANDAS_INSTALLED, pd_DataFrame
-
-if MATPLOTLIB_INSTALLED:
-    import matplotlib
-
-    matplotlib.use("Agg")
-if GRAPHVIZ_INSTALLED:
-    import graphviz
 
 from .utils import load_breast_cancer, make_synthetic_regression
+
+
+@pytest.fixture(scope="function")
+def matplotlib():
+    mpl = pytest.importorskip("matplotlib")
+    # use non-interactive, in-memory renderer
+    mpl.use("Agg")
+    return mpl
 
 
 @pytest.fixture(scope="module")
@@ -44,8 +44,7 @@ def params():
     return {"objective": "binary", "verbose": -1, "num_leaves": 3}
 
 
-@pytest.mark.skipif(not MATPLOTLIB_INSTALLED, reason="matplotlib is not installed")
-def test_plot_importance(params, breast_cancer_split, train_data):
+def test_plot_importance(params, breast_cancer_split, train_data, matplotlib):
     X_train, _, y_train, _ = breast_cancer_split
 
     gbm0 = lgb.train(params, train_data, num_boost_round=10)
@@ -130,7 +129,7 @@ def test_plot_importance(params, breast_cancer_split, train_data):
     # verify the 5 displayed features are the top 5 by importance
     importance = gbm0.feature_importance()
     feature_names = gbm0.feature_name()
-    sorted_pairs = sorted(zip(feature_names, importance), key=lambda x: x[1])
+    sorted_pairs = sorted(zip(feature_names, importance, strict=True), key=lambda x: x[1])
     top5_names = [name for name, _ in sorted_pairs[-5:]]
     displayed_labels = [label.get_text() for label in ax7.get_yticklabels()]
     assert displayed_labels == top5_names
@@ -155,8 +154,7 @@ def test_plot_importance(params, breast_cancer_split, train_data):
     assert first_bar1 != first_bar3
 
 
-@pytest.mark.skipif(not MATPLOTLIB_INSTALLED, reason="matplotlib is not installed")
-def test_plot_importance_zero_splits():
+def test_plot_importance_zero_splits(matplotlib):
     X, y = load_breast_cancer(return_X_y=True)
     model = lgb.train(
         params={
@@ -175,8 +173,7 @@ def test_plot_importance_zero_splits():
     assert len(ax.patches) == X.shape[1]
 
 
-@pytest.mark.skipif(not MATPLOTLIB_INSTALLED, reason="matplotlib is not installed")
-def test_plot_split_value_histogram(params, breast_cancer_split, train_data):
+def test_plot_split_value_histogram(params, breast_cancer_split, train_data, matplotlib):
     X_train, _, y_train, _ = breast_cancer_split
 
     gbm0 = lgb.train(params, train_data, num_boost_round=10)
@@ -248,10 +245,8 @@ def test_plot_split_value_histogram(params, breast_cancer_split, train_data):
         lgb.plot_split_value_histogram(gbm0, 0)  # was not used in splitting
 
 
-@pytest.mark.skipif(
-    not MATPLOTLIB_INSTALLED or not GRAPHVIZ_INSTALLED, reason="matplotlib or graphviz is not installed"
-)
-def test_plot_tree(breast_cancer_split):
+def test_plot_tree(breast_cancer_split, matplotlib):
+    pytest.importorskip("graphviz")
     X_train, _, y_train, _ = breast_cancer_split
     gbm = lgb.LGBMClassifier(n_estimators=10, num_leaves=3, verbose=-1)
     gbm.fit(X_train, y_train)
@@ -266,8 +261,8 @@ def test_plot_tree(breast_cancer_split):
     assert int(h) == 8
 
 
-@pytest.mark.skipif(not GRAPHVIZ_INSTALLED, reason="graphviz is not installed")
 def test_create_tree_digraph(tmp_path, breast_cancer_split):
+    graphviz = pytest.importorskip("graphviz")
     X_train, _, y_train, _ = breast_cancer_split
 
     constraints = [-1, 1] * int(X_train.shape[1] / 2)
@@ -303,8 +298,8 @@ def test_create_tree_digraph(tmp_path, breast_cancer_split):
     assert "count" not in graph_body
 
 
-@pytest.mark.skipif(not GRAPHVIZ_INSTALLED, reason="graphviz is not installed")
 def test_tree_with_categories_below_max_category_values(tmp_path):
+    graphviz = pytest.importorskip("graphviz")
     X_train, y_train = _categorical_data(2, 10)
     params = {
         "n_estimators": 10,
@@ -348,8 +343,8 @@ def test_tree_with_categories_below_max_category_values(tmp_path):
     assert "||...||" not in graph_body
 
 
-@pytest.mark.skipif(not GRAPHVIZ_INSTALLED, reason="graphviz is not installed")
 def test_tree_with_categories_above_max_category_values(tmp_path):
+    graphviz = pytest.importorskip("graphviz")
     X_train, y_train = _categorical_data(20, 30)
     params = {
         "n_estimators": 10,
@@ -446,8 +441,8 @@ def test_numeric_split_direction(use_missing, zero_as_missing):
             assert expected_leaf_zero != expected_leaf_nan
 
 
-@pytest.mark.skipif(not GRAPHVIZ_INSTALLED, reason="graphviz is not installed")
 def test_example_case_in_tree_digraph():
+    pytest.importorskip("graphviz")
     rng = np.random.RandomState(0)
     x1 = rng.rand(100)
     cat = rng.randint(1, 3, size=x1.size)
@@ -512,25 +507,23 @@ def test_example_case_in_tree_digraph():
     assert makes_categorical_splits
 
 
-@pytest.mark.skipif(not GRAPHVIZ_INSTALLED, reason="graphviz is not installed")
 @pytest.mark.parametrize("input_type", ["array", "dataframe"])
 def test_empty_example_case_on_tree_digraph_raises_error(input_type):
+    pytest.importorskip("graphviz")
     X, y = make_synthetic_regression()
     if input_type == "dataframe":
-        if not PANDAS_INSTALLED:
-            pytest.skip(reason="pandas is not installed")
-        X = pd_DataFrame(X)
+        pd = pytest.importorskip("pandas")
+        X = pd.DataFrame(X)
+        example_case = pd.DataFrame(X[:0])
+    else:
+        example_case = X[:0]
     ds = lgb.Dataset(X, y)
     bst = lgb.train({"num_leaves": 3}, ds, num_boost_round=1)
-    example_case = X[:0]
-    if input_type == "dataframe":
-        example_case = pd_DataFrame(example_case)
     with pytest.raises(ValueError, match="example_case must have a single row."):
         lgb.create_tree_digraph(bst, tree_index=0, example_case=example_case)
 
 
-@pytest.mark.skipif(not MATPLOTLIB_INSTALLED, reason="matplotlib is not installed")
-def test_plot_metrics(params, breast_cancer_split, train_data):
+def test_plot_metrics(params, breast_cancer_split, train_data, matplotlib):
     X_train, X_test, y_train, y_test = breast_cancer_split
     test_data = lgb.Dataset(X_test, y_test, reference=train_data)
     params.update({"metric": {"binary_logloss", "binary_error"}})

@@ -1,8 +1,7 @@
 Package: lightgbm
 Type: Package
 Title: Light Gradient Boosting Machine
-Version: ~~VERSION~~
-Date: ~~DATE~~
+Version: 4.7.0.99
 Authors@R: c(
     person("Yu", "Shi", email = "yushi2@microsoft.com", role = c("aut")),
     person("Guolin", "Ke", email = "guolin.ke@outlook.com", role = c("aut")),
@@ -63,4 +62,4 @@ Imports:
     utils
 SystemRequirements:
     C++17
-RoxygenNote: 7.3.3
+Config/roxygen2/version: 8.1.0

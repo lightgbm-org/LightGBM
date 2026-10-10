@@ -5,10 +5,10 @@ name: Static Analysis
 on:
   push:
     branches:
-      - master
+      - main
   pull_request:
     branches:
-      - master
+      - main
 
 # automatically cancel in-progress builds if another commit is pushed
 concurrency:
@@ -32,7 +32,7 @@ jobs:
     timeout-minutes: 60
     steps:
       - name: Checkout repository
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
         with:
           fetch-depth: 5
           persist-credentials: false
@@ -53,11 +53,11 @@ jobs:
       contents: read
     steps:
       - name: Checkout repository
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
         with:
           fetch-depth: 5
           persist-credentials: false
-          submodules: false
+          submodules: true
       - name: Setup and run tests
         shell: bash
         run: |
@@ -70,7 +70,7 @@ jobs:
     name: r-package-check-docs
     timeout-minutes: 60
     runs-on: ubuntu-latest
-    container: rocker/verse
+    container: rocker/verse  # zizmor: ignore[unpinned-images]
     permissions:
       contents: read
     steps:
@@ -78,7 +78,7 @@ jobs:
         run: |
           git config --global --add safe.directory "${GITHUB_WORKSPACE}"
       - name: Checkout repository
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
         with:
           fetch-depth: 5
           persist-credentials: false
@@ -92,7 +92,7 @@ jobs:
       - name: Test documentation
         shell: bash --noprofile --norc {0}
         run: |
-          Rscript --vanilla -e "roxygen2::roxygenize('R-package/', load = 'installed')" || exit 1
+          Rscript .ci/build-docs.R || exit 1
           num_doc_files_changed=$(
               git diff --name-only | grep --count -E "\.Rd|NAMESPACE"
           )
@@ -116,6 +116,6 @@ jobs:
       statuses: read
     steps:
       - name: Note that all tests succeeded
-        uses: re-actors/alls-green@05ac9388f0aebcb5727afa17fcccfecd6f8ec5fe  # v1.2.2
+        uses: re-actors/alls-green@b5b5b37504aa4183270bd3d855c52a67f212be35  # v1.3.0
         with:
           jobs: ${{ toJSON(needs) }}

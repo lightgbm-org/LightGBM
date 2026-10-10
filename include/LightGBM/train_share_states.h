@@ -275,6 +275,8 @@ struct TrainingShareStates {
 
   TrainingShareStates() {
     multi_val_bin_wrapper_.reset(nullptr);
+    bagging_use_indices = nullptr;
+    bagging_indices_cnt = 0;
   }
 
   int num_hist_total_bin() const { return num_hist_total_bin_; }
