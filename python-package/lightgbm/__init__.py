@@ -17,8 +17,10 @@ from .engine import CVBooster, cv, train
 from .sklearn import LGBMClassifier, LGBMModel, LGBMRanker, LGBMRegressor
 
 # isort: split
-from .dask import DaskLGBMClassifier, DaskLGBMRanker, DaskLGBMRegressor
 from .plotting import create_tree_digraph, plot_importance, plot_metric, plot_split_value_histogram, plot_tree
+
+# isort: split
+from .dask import DaskLGBMClassifier, DaskLGBMRanker, DaskLGBMRegressor
 
 _version_path = Path(__file__).resolve().parent / "VERSION.txt"
 if _version_path.is_file():
