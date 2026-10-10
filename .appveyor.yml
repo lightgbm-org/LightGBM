@@ -1,14 +1,14 @@
-version: 4.6.0.99.{build}
+version: 4.7.0.99.{build}
 
 image: Visual Studio 2017
 platform: x64
 configuration:
-  - '3.9'
+  - '3.10'
 
-# only build on 'master' and pull requests targeting it
+# only build on 'main' and pull requests targeting it
 branches:
   only:
-    - master
+    - main
 
 environment:
   matrix:
@@ -23,11 +23,12 @@ install:
   - git submodule update --init --recursive  # get `external_libs` folder
   - set PATH=C:\mingw-w64\x86_64-8.1.0-posix-seh-rt_v6-rev0\mingw64\bin;%PATH%
   - set PYTHON_VERSION=%CONFIGURATION%
+  # yamllint disable-line rule:line-length
+  - powershell.exe -ExecutionPolicy ByPass -c "Invoke-RestMethod https://pixi.prefix.dev/install.ps1 | Invoke-Expression"
+  - set PATH=C:\Users\appveyor\.pixi\bin;%PATH%
   - ps: |
       $env:APPVEYOR = "true"
       $env:CMAKE_BUILD_PARALLEL_LEVEL = 4
-      $env:MINICONDA = "C:\Miniconda3-x64"
-      $env:PATH = "$env:MINICONDA;$env:MINICONDA\Scripts;$env:PATH"
       $env:BUILD_SOURCESDIRECTORY = "$env:APPVEYOR_BUILD_FOLDER"
       # tell scripts where to put artifacts
       # (this variable name is left over from when jobs ran on Azure DevOps)
@@ -36,9 +37,4 @@ install:
 build: false
 
 test_script:
-  - conda config --remove channels defaults
-  - conda config --add channels nodefaults
-  - conda config --add channels conda-forge
-  - conda config --set channel_priority strict
-  - conda init powershell
   - powershell.exe -ExecutionPolicy Bypass -File %APPVEYOR_BUILD_FOLDER%\.ci\test-windows.ps1
