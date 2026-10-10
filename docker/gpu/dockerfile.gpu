@@ -47,6 +47,7 @@ RUN apt-get update && \
     libxext6 \
     libsm6 \
     libxrender1 \
+    python-is-python3 \
     python3-pip \
     python3-virtualenv \
     git \
@@ -83,7 +84,7 @@ RUN cd /usr/local/src && mkdir lightgbm && cd lightgbm && \
         -DUSE_GPU=1 \
         -DOpenCL_LIBRARY="${OPENCL_LIBRARIES}/libOpenCL.so" \
         -DOpenCL_INCLUDE_DIR="${OPENCL_INCLUDE_DIR}" && \
-    cmake --build build -j$(nproc --ignore=1)
+    cmake --build build -j"$(nproc --ignore=1)"
 
 ENV PATH=/usr/local/src/lightgbm/LightGBM:${PATH}
 
@@ -120,4 +121,4 @@ WORKDIR /home
 EXPOSE 8888
 
 ENTRYPOINT ["/tini", "--"]
-CMD ["/bin/bash -c", "jupyter notebook --allow-root --no-browser --NotebookApp.password='sha1:98b767162d34:8da1bc3c75a0f29145769edc977375a373407824'"]
+CMD ["jupyter", "notebook", "--allow-root", "--no-browser", "--NotebookApp.password=sha1:98b767162d34:8da1bc3c75a0f29145769edc977375a373407824"]

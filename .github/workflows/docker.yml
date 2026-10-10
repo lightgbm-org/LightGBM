@@ -120,7 +120,7 @@ jobs:
             --entrypoint="" \
             --rm \
             -t lightgbm:gpu \
-            python -c "import lightgbm; print('lightgbm version: {lightgbm.__version__}')"
+            python -c "import lightgbm; print(f'lightgbm version: {lightgbm.__version__}')"
       - name: dockerfile-cli-only.gpu (build)
         env:
           LIGHTGBM_GIT_REF: ${{ github.head_ref }}
@@ -133,10 +133,14 @@ jobs:
       - name: dockerfile-cli-only.gpu (test)
         run: |
           docker run \
-            --entrypoint="" \
             --rm \
+            -v "${PWD}/examples/binary_classification:/data:ro" \
+            -w /data \
             lightgbm:cli-only.gpu \
-            which lightgbm
+            config=train.conf \
+            num_trees=5 \
+            device_type=cpu \
+            output_model=/tmp/model.txt
       - name: dockerfile-cli-only-distroless.gpu (build)
         env:
           LIGHTGBM_GIT_REF: ${{ github.head_ref }}
@@ -149,10 +153,14 @@ jobs:
       - name: dockerfile-cli-only-distroless.gpu (test)
         run: |
           docker run \
-            --entrypoint="" \
             --rm \
+            -v "${PWD}/examples/binary_classification:/data:ro" \
+            -w /data \
             lightgbm:cli-only-distroless.gpu \
-            which lightgbm
+            config=train.conf \
+            num_trees=5 \
+            device_type=cpu \
+            output_model=/tmp/model.txt
   all-docker-jobs-successful:
     if: always()
     runs-on: ubuntu-latest
