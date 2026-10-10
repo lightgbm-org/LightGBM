@@ -127,7 +127,7 @@ jobs:
             --entrypoint="" \
             --rm \
             -t lightgbm:gpu \
-            python -c "import lightgbm; print(f'lightgbm version: {lightgbm.__version__}')"
+            python -c "import lightgbm; print('lightgbm version: {lightgbm.__version__}')"
       - name: dockerfile-cli-only.gpu (build)
         env:
           LIGHTGBM_GIT_REF: ${{ github.head_ref }}

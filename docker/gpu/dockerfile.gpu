@@ -1,4 +1,4 @@
-FROM nvidia/cuda:12.9.1-cudnn-devel-ubuntu24.04
+FROM nvidia/cuda:12.9.1-devel-ubuntu24.04
 
 #################################################################################################################
 #           Global
@@ -47,6 +47,8 @@ RUN apt-get update && \
     libxext6 \
     libsm6 \
     libxrender1 \
+    python3-pip \
+    python3-virtualenv \
     git \
     vim \
     mercurial \
@@ -64,22 +66,8 @@ RUN apt-get update && \
 RUN mkdir -p /etc/OpenCL/vendors && \
     echo "libnvidia-opencl.so.1" > /etc/OpenCL/vendors/nvidia.icd
 
-#################################################################################################################
-#           CONDA
-#################################################################################################################
 
-ARG CONDA_DIR=/opt/miniforge
-# add to path
-ENV PATH=$CONDA_DIR/bin:$PATH
-
-# Install miniforge
-RUN echo "export PATH=$CONDA_DIR/bin:\$PATH" > /etc/profile.d/conda.sh && \
-    curl -sL https://github.com/conda-forge/miniforge/releases/latest/download/Miniforge3-Linux-x86_64.sh -o ~/miniforge.sh && \
-    /bin/bash ~/miniforge.sh -b -p $CONDA_DIR && \
-    rm ~/miniforge.sh
-
-RUN conda config --set always_yes yes --set changeps1 no && \
-    conda create -y -q -n py3 numpy scipy scikit-learn jupyter notebook ipython pandas matplotlib
+RUN pip install --break-system-packages numpy scipy scikit-learn jupyter notebook ipython pandas matplotlib
 
 #################################################################################################################
 #           LightGBM
@@ -93,13 +81,13 @@ RUN cd /usr/local/src && mkdir lightgbm && cd lightgbm && \
     cd LightGBM && \
     cmake -B build -S . \
         -DUSE_GPU=1 \
-        -DOpenCL_LIBRARY=${OPENCL_LIBRARIES}/libOpenCL.so \
-        -DOpenCL_INCLUDE_DIR=${OPENCL_INCLUDE_DIR} && \
+        -DOpenCL_LIBRARY="${OPENCL_LIBRARIES}/libOpenCL.so" \
+        -DOpenCL_INCLUDE_DIR="${OPENCL_INCLUDE_DIR}" && \
     cmake --build build -j$(nproc --ignore=1)
 
 ENV PATH=/usr/local/src/lightgbm/LightGBM:${PATH}
 
-RUN /bin/bash -c "source activate py3 && pip install build && cd /usr/local/src/lightgbm/LightGBM && sh ./build-python.sh install --precompile"
+RUN /bin/bash -c "pip install build && cd /usr/local/src/lightgbm/LightGBM && sh ./build-python.sh install --precompile"
 
 #################################################################################################################
 #           System CleanUp
@@ -109,8 +97,7 @@ RUN /bin/bash -c "source activate py3 && pip install build && cd /usr/local/src/
 # have to be downloaded again if you reinstall them.
 
 RUN apt-get autoremove -y && apt-get clean && \
-    rm -rf /var/lib/apt/lists/* && \
-    conda clean -a -y
+    rm -rf /var/lib/apt/lists/*
 
 #################################################################################################################
 #           JUPYTER
@@ -133,4 +120,4 @@ WORKDIR /home
 EXPOSE 8888
 
 ENTRYPOINT ["/tini", "--"]
-CMD ["/bin/bash -c", "source activate py3 && jupyter notebook --allow-root --no-browser --NotebookApp.password='sha1:98b767162d34:8da1bc3c75a0f29145769edc977375a373407824' && source deactivate"]
+CMD ["/bin/bash -c", "jupyter notebook --allow-root --no-browser --NotebookApp.password='sha1:98b767162d34:8da1bc3c75a0f29145769edc977375a373407824'"]
