@@ -1,11 +1,13 @@
 /*!
- * Copyright (c) 2022 Microsoft Corporation. All rights reserved.
+ * Copyright (c) 2022-2026 Microsoft Corporation. All rights reserved.
+ * Copyright (c) 2022-2026 The LightGBM developers. All rights reserved.
  * Licensed under the MIT License. See LICENSE file in the project root for license information.
  */
 
 #include <gtest/gtest.h>
 #include <LightGBM/utils/byte_buffer.h>
 
+#include <memory>
 #include <random>
 
 using LightGBM::ByteBuffer;
@@ -30,7 +32,7 @@ TEST(ByteBuffer, JustWorks) {
   EXPECT_EQ(cumulativeSize, buffer->GetSize());
   int16_t serializedInt16 = 0;
   char* int16Ptr = reinterpret_cast<char*>(&serializedInt16);
-  for (int i = 0; i < sizeof(int16_t); i++) {
+  for (unsigned int i = 0; i < sizeof(int16_t); i++) {
     int16Ptr[i] = buffer->GetAt(cumulativeSize - (sizeof(int16_t) - i));
   }
   EXPECT_EQ(int16Val, serializedInt16);
@@ -41,7 +43,7 @@ TEST(ByteBuffer, JustWorks) {
   EXPECT_EQ(cumulativeSize, buffer->GetSize());
   int64_t serializedInt64 = 0;
   char* int64Ptr = reinterpret_cast<char*>(&serializedInt64);
-  for (int i = 0; i < sizeof(int64_t); i++) {
+  for (unsigned int i = 0; i < sizeof(int64_t); i++) {
     int64Ptr[i] = buffer->GetAt(cumulativeSize - (sizeof(int64_t) - i));
   }
   EXPECT_EQ(int64Val, serializedInt64);
@@ -52,7 +54,7 @@ TEST(ByteBuffer, JustWorks) {
   EXPECT_EQ(cumulativeSize, buffer->GetSize());
   double serializedDouble = 0;
   char* doublePtr = reinterpret_cast<char*>(&serializedDouble);
-  for (int i = 0; i < sizeof(double); i++) {
+  for (unsigned int i = 0; i < sizeof(double); i++) {
     doublePtr[i] = buffer->GetAt(cumulativeSize - (sizeof(double) - i));
   }
   EXPECT_EQ(doubleVal, serializedDouble);

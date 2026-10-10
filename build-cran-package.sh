@@ -1,13 +1,13 @@
 #!/bin/sh
 
 # [description]
-#     Prepare a source distribution of the R package
+#     Prepare a source distribution of the R-package
 #     to be submitted to CRAN.
 #
-# [arguments] 
+# [arguments]
 #
 #     --r-executable Customize the R executable used by `R CMD build`.
-#                    Useful if building the R package in an environment with
+#                    Useful if building the R-package in an environment with
 #                    non-standard builds of R, such as those provided in
 #                    https://github.com/wch/r-debug.
 #
@@ -27,7 +27,7 @@
 #     # skip vignette building
 #     sh build-cran-package.sh --no-build-vignettes
 
-set -e
+set -e -u
 
 # Default values of arguments
 BUILD_VIGNETTES=true
@@ -43,7 +43,7 @@ while [ $# -gt 0 ]; do
       ;;
     *)
       echo "invalid argument '${1}'"
-      exit -1
+      exit 1
       ;;
   esac
   shift
@@ -59,11 +59,9 @@ if test -d "${TEMP_R_DIR}"; then
 fi
 mkdir -p "${TEMP_R_DIR}"
 
-CURRENT_DATE=$(date +'%Y-%m-%d')
-
 # R packages cannot have versions like 3.0.0rc1, but
 # 3.0.0-1 is acceptable
-LGB_VERSION=$(cat VERSION.txt | sed "s/rc/-/g")
+LGB_VERSION=$(head -1 ./VERSION.txt | sed "s/rc/-/g")
 
 # move relevant files
 cp -R R-package/* "${TEMP_R_DIR}"
@@ -76,14 +74,14 @@ fi
 
 cp \
     external_libs/fast_double_parser/include/fast_double_parser.h \
-    "${TEMP_R_DIR}/src/include/LightGBM"
+    "${TEMP_R_DIR}/src/include/LightGBM/utils"
 
-mkdir -p "${TEMP_R_DIR}/src/include/LightGBM/fmt"
+mkdir -p "${TEMP_R_DIR}/src/include/LightGBM/utils/fmt"
 cp \
     external_libs/fmt/include/fmt/*.h \
-    "${TEMP_R_DIR}/src/include/LightGBM/fmt/"
+    "${TEMP_R_DIR}/src/include/LightGBM/utils/fmt"
 
-# including only specific files from Eigen, to keep the R package
+# including only specific files from Eigen, to keep the R-package
 # small and avoid redistributing code with licenses incompatible with
 # LightGBM's license
 EIGEN_R_DIR="${TEMP_R_DIR}/src/include/Eigen"
@@ -91,10 +89,10 @@ mkdir -p "${EIGEN_R_DIR}"
 
 modules="Cholesky Core Dense Eigenvalues Geometry Householder Jacobi LU QR SVD"
 for eigen_module in ${modules}; do
-    cp external_libs/eigen/Eigen/${eigen_module} "${EIGEN_R_DIR}/${eigen_module}"
-    if [ ${eigen_module} != "Dense" ]; then
+    cp "external_libs/eigen/Eigen/${eigen_module}" "${EIGEN_R_DIR}/${eigen_module}"
+    if [ "${eigen_module}" != "Dense" ]; then
         mkdir -p "${EIGEN_R_DIR}/src/${eigen_module}/"
-        cp -R external_libs/eigen/Eigen/src/${eigen_module}/* "${EIGEN_R_DIR}/src/${eigen_module}/"
+        cp -R "external_libs/eigen/Eigen/src/${eigen_module}"/* "${EIGEN_R_DIR}/src/${eigen_module}/"
     fi
 done
 
@@ -116,33 +114,17 @@ cd "${TEMP_R_DIR}"
     rm recreate-configure.sh
 
     # files only used by the lightgbm CLI aren't needed for
-    # the R package
+    # the R-package
     rm src/application/application.cpp
     rm src/include/LightGBM/application.h
     rm src/main.cpp
-
-    # configure.ac and DESCRIPTION have placeholders for version
-    # and date so they don't have to be updated manually
-    sed -i.bak -e "s/~~VERSION~~/${LGB_VERSION}/" configure.ac
-    sed -i.bak -e "s/~~VERSION~~/${LGB_VERSION}/" DESCRIPTION
-    sed -i.bak -e "s/~~DATE~~/${CURRENT_DATE}/" DESCRIPTION
-
-    # Rtools35 (used with R 3.6 on Windows) doesn't support C++17
-    LGB_CXX_STD="C++17"
-    using_windows_and_r3=$(
-        Rscript -e 'cat(.Platform$OS.type == "windows" && R.version[["major"]] < 4)'
-    )
-    if [[ ${using_windows_and_r3} == "TRUE" ]]; then
-        LGB_CXX_STD="C++11"
-    fi
-    sed -i.bak -e "s/~~CXXSTD~~/${LGB_CXX_STD}/" DESCRIPTION
 
     # Remove 'region', 'endregion', and 'warning' pragmas.
     # This won't change the correctness of the code. CRAN does
     # not allow you to use compiler flag '-Wno-unknown-pragmas' or
     # pragmas that suppress warnings.
     echo "Removing unknown pragmas in headers"
-    for file in $(find . -name '*.h' -o -name '*.hpp' -o -name '*.cpp'); do
+    find . \( -name '*.h' -o -name '*.hpp' -o -name '*.cpp' \) -exec \
       sed \
         -i.bak \
         -e 's/^.*#pragma clang diagnostic.*$//' \
@@ -151,36 +133,7 @@ cd "${TEMP_R_DIR}"
         -e 's/^.*#pragma region.*$//' \
         -e 's/^.*#pragma endregion.*$//' \
         -e 's/^.*#pragma warning.*$//' \
-        "${file}"
-    done
-    find . -name '*.h.bak' -o -name '*.hpp.bak' -o -name '*.cpp.bak' -exec rm {} \;
-
-    sed \
-        -i.bak \
-        -e 's/\.\..*fmt\/format\.h/LightGBM\/fmt\/format\.h/' \
-        src/include/LightGBM/utils/common.h
-
-    sed \
-        -i.bak \
-        -e 's/\.\..*fast_double_parser\.h/LightGBM\/fast_double_parser\.h/' \
-        src/include/LightGBM/utils/common.h
-
-    # When building an R package with 'configure', it seems
-    # you're guaranteed to get a shared library called
-    #  <packagename>.so/dll. The package source code expects
-    # 'lib_lightgbm.so', not 'lightgbm.so', to comply with the way
-    # this project has historically handled installation
-    echo "Changing lib_lightgbm to lightgbm"
-    for file in R/*.R; do
-        sed \
-            -i.bak \
-            -e 's/lib_lightgbm/lightgbm/' \
-            "${file}"
-    done
-    sed \
-        -i.bak \
-        -e 's/lib_lightgbm/lightgbm/' \
-        NAMESPACE
+        {} +
 
     # 'processx' is listed as a 'Suggests' dependency in DESCRIPTION
     # because it is used in install.libs.R, a file that is not
@@ -191,8 +144,7 @@ cd "${TEMP_R_DIR}"
         DESCRIPTION
 
     echo "Cleaning sed backup files"
-    rm R/*.R.bak
-    rm NAMESPACE.bak
+    find . -name '*.bak' -exec rm {} \;
 
 cd "${ORIG_WD}"
 
@@ -219,7 +171,7 @@ if ${BUILD_VIGNETTES} ; then
         #
         # Removing them manually here removes the need to use tar --exclude.
         #
-        # For background, see https://github.com/microsoft/LightGBM/pull/3946#pullrequestreview-799415812.
+        # For background, see https://github.com/lightgbm-org/LightGBM/pull/3946#pullrequestreview-799415812.
         rm -f ./lightgbm/src/*.o
         rm -f ./lightgbm/src/boosting/*.o
         rm -f ./lightgbm/src/io/*.o
@@ -227,10 +179,15 @@ if ${BUILD_VIGNETTES} ; then
         rm -f ./lightgbm/src/network/*.o
         rm -f ./lightgbm/src/objective/*.o
         rm -f ./lightgbm/src/treelearner/*.o
+        rm -f ./lightgbm/src/utils/*.o
 
         echo "re-tarring ${TARBALL_NAME}"
+        # --no-xattrs is the default in GNU tar but not some distributions of BSD tar.
+        # Enable it here to avoid errors on macOS.
+        # ref: https://stackoverflow.com/a/74373784/3986677
         tar \
             -cz \
+            --no-xattrs \
             -f "${TARBALL_NAME}" \
             lightgbm \
         > /dev/null 2>&1
@@ -246,4 +203,4 @@ else
         lightgbm_r
 fi
 
-echo "Done building R package"
+echo "Done building R-package"

@@ -1,14 +1,17 @@
 /*!
- * Copyright (c) 2021 Microsoft Corporation. All rights reserved.
+ * Copyright (c) 2021-2026 Microsoft Corporation. All rights reserved.
+ * Copyright (c) 2021-2026 The LightGBM developers. All rights reserved.
  * Licensed under the MIT License. See LICENSE file in the project root for
  * license information.
+ * Modifications Copyright(C) 2023 Advanced Micro Devices, Inc. All rights reserved.
  */
 
 #ifdef USE_CUDA
 
-#include <LightGBM/cuda/cuda_algorithms.hpp>
-
 #include "cuda_single_gpu_tree_learner.hpp"
+
+#include <LightGBM/cuda/cuda_algorithms.hpp>
+#include <LightGBM/cuda/cuda_rocm_interop.h>
 
 #include <algorithm>
 
@@ -129,18 +132,18 @@ void CUDASingleGPUTreeLearner::LaunchReduceLeafStatKernel(
   if (num_leaves <= 2048) {
     ReduceLeafStatKernel_SharedMemory<<<num_block, CUDA_SINGLE_GPU_TREE_LEARNER_BLOCK_SIZE, 2 * num_leaves * sizeof(double)>>>(
       gradients, hessians, num_leaves, num_data, cuda_data_partition_->cuda_data_index_to_leaf_index(),
-      cuda_leaf_gradient_stat_buffer_, cuda_leaf_hessian_stat_buffer_);
+      cuda_leaf_gradient_stat_buffer_.RawData(), cuda_leaf_hessian_stat_buffer_.RawData());
   } else {
     ReduceLeafStatKernel_GlobalMemory<<<num_block, CUDA_SINGLE_GPU_TREE_LEARNER_BLOCK_SIZE>>>(
       gradients, hessians, num_leaves, num_data, cuda_data_partition_->cuda_data_index_to_leaf_index(),
-      cuda_leaf_gradient_stat_buffer_, cuda_leaf_hessian_stat_buffer_);
+      cuda_leaf_gradient_stat_buffer_.RawData(), cuda_leaf_hessian_stat_buffer_.RawData());
   }
   const bool use_l1 = config_->lambda_l1 > 0.0f;
   const bool use_smoothing = config_->path_smooth > 0.0f;
   num_block = (num_leaves + CUDA_SINGLE_GPU_TREE_LEARNER_BLOCK_SIZE - 1) / CUDA_SINGLE_GPU_TREE_LEARNER_BLOCK_SIZE;
 
   #define CalcRefitLeafOutputKernel_ARGS \
-    num_leaves, cuda_leaf_gradient_stat_buffer_, cuda_leaf_hessian_stat_buffer_, num_data_in_leaf, \
+    num_leaves, cuda_leaf_gradient_stat_buffer_.RawData(), cuda_leaf_hessian_stat_buffer_.RawData(), num_data_in_leaf, \
     leaf_parent, left_child, right_child, \
     config_->lambda_l1, config_->lambda_l2, config_->path_smooth, \
     shrinkage_rate, config_->refit_decay_rate, cuda_leaf_value
@@ -162,11 +165,12 @@ void CUDASingleGPUTreeLearner::LaunchReduceLeafStatKernel(
         <<<num_block, CUDA_SINGLE_GPU_TREE_LEARNER_BLOCK_SIZE>>>(CalcRefitLeafOutputKernel_ARGS);
     }
   }
+  #undef CalcRefitLeafOutputKernel_ARGS
 }
 
 template <typename T, bool IS_INNER>
 __global__ void CalcBitsetLenKernel(const CUDASplitInfo* best_split_info, size_t* out_len_buffer) {
-  __shared__ size_t shared_mem_buffer[32];
+  __shared__ size_t shared_mem_buffer[WARPSIZE];
   const T* vals = nullptr;
   if (IS_INNER) {
     vals = reinterpret_cast<const T*>(best_split_info->cat_threshold);
@@ -177,7 +181,7 @@ __global__ void CalcBitsetLenKernel(const CUDASplitInfo* best_split_info, size_t
   size_t len = 0;
   if (i < best_split_info->num_cat_threshold) {
     const T val = vals[i];
-    len = (val / 32) + 1;
+    len = (val / WARPSIZE) + 1;
   }
   const size_t block_max_len = ShuffleReduceMax<size_t>(len, shared_mem_buffer, blockDim.x);
   if (threadIdx.x == 0) {
@@ -186,7 +190,7 @@ __global__ void CalcBitsetLenKernel(const CUDASplitInfo* best_split_info, size_t
 }
 
 __global__ void ReduceBlockMaxLen(size_t* out_len_buffer, const int num_blocks) {
-  __shared__ size_t shared_mem_buffer[32];
+  __shared__ size_t shared_mem_buffer[WARPSIZE];
   size_t max_len = 0;
   for (int i = static_cast<int>(threadIdx.x); i < num_blocks; i += static_cast<int>(blockDim.x)) {
     max_len = max(out_len_buffer[i], max_len);
@@ -209,7 +213,7 @@ __global__ void CUDAConstructBitsetKernel(const CUDASplitInfo* best_split_info, 
   if (i < best_split_info->num_cat_threshold) {
     const T val = vals[i];
     // can use add instead of or here, because each bit will only be added once
-    atomicAdd_system(out + (val / 32), (0x1 << (val % 32)));
+    atomicAdd_system(out + (val / WARPSIZE), (0x1 << (val % WARPSIZE)));
   }
 }
 
@@ -254,6 +258,37 @@ void CUDASingleGPUTreeLearner::LaunchConstructBitsetForCategoricalSplitKernel(
   CUDAConstructBitset<uint32_t, true>(best_split_info, num_cat_threshold_, cuda_bitset_inner_, cuda_bitset_inner_len_);
   cuda_bitset_len_ = CUDABitsetLen<int, false>(best_split_info, num_cat_threshold_, cuda_block_bitset_len_buffer_);
   CUDAConstructBitset<int, false>(best_split_info, num_cat_threshold_, cuda_bitset_, cuda_bitset_len_);
+}
+
+void CUDASingleGPUTreeLearner::LaunchCalcLeafValuesGivenGradStat(
+  CUDATree* cuda_tree, const data_size_t* num_data_in_leaf) {
+  #define CalcRefitLeafOutputKernel_ARGS \
+    cuda_tree->num_leaves(), cuda_leaf_gradient_stat_buffer_.RawData(), cuda_leaf_hessian_stat_buffer_.RawData(), num_data_in_leaf, \
+    cuda_tree->cuda_leaf_parent(), cuda_tree->cuda_left_child(), cuda_tree->cuda_right_child(), \
+    config_->lambda_l1, config_->lambda_l2, config_->path_smooth, \
+    1.0f, config_->refit_decay_rate, cuda_tree->cuda_leaf_value_ref()
+  const bool use_l1 = config_->lambda_l1 > 0.0f;
+  const bool use_smoothing = config_->path_smooth > 0.0f;
+  const int num_block = (cuda_tree->num_leaves() + CUDA_SINGLE_GPU_TREE_LEARNER_BLOCK_SIZE - 1) / CUDA_SINGLE_GPU_TREE_LEARNER_BLOCK_SIZE;
+  if (!use_l1) {
+    if (!use_smoothing) {
+      CalcRefitLeafOutputKernel<false, false>
+        <<<num_block, CUDA_SINGLE_GPU_TREE_LEARNER_BLOCK_SIZE>>>(CalcRefitLeafOutputKernel_ARGS);
+    } else {
+      CalcRefitLeafOutputKernel<false, true>
+        <<<num_block, CUDA_SINGLE_GPU_TREE_LEARNER_BLOCK_SIZE>>>(CalcRefitLeafOutputKernel_ARGS);
+    }
+  } else {
+    if (!use_smoothing) {
+      CalcRefitLeafOutputKernel<true, false>
+        <<<num_block, CUDA_SINGLE_GPU_TREE_LEARNER_BLOCK_SIZE>>>(CalcRefitLeafOutputKernel_ARGS);
+    } else {
+      CalcRefitLeafOutputKernel<true, true>
+        <<<num_block, CUDA_SINGLE_GPU_TREE_LEARNER_BLOCK_SIZE>>>(CalcRefitLeafOutputKernel_ARGS);
+    }
+  }
+
+  #undef CalcRefitLeafOutputKernel_ARGS
 }
 
 }  // namespace LightGBM

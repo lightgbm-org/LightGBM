@@ -1,5 +1,6 @@
 /*!
- * Copyright (c) 2020 Microsoft Corporation. All rights reserved.
+ * Copyright (c) 2020-2026 Microsoft Corporation. All rights reserved.
+ * Copyright (c) 2020-2026 The LightGBM developers. All rights reserved.
  * Licensed under the MIT License. See LICENSE file in the project root for license information.
  */
 #include "linear_tree_learner.h"
@@ -7,23 +8,27 @@
 #include <Eigen/Dense>
 
 #include <algorithm>
+#include <memory>
+#include <vector>
 
 namespace LightGBM {
 
-void LinearTreeLearner::Init(const Dataset* train_data, bool is_constant_hessian) {
-  SerialTreeLearner::Init(train_data, is_constant_hessian);
-  LinearTreeLearner::InitLinear(train_data, config_->num_leaves);
+template <typename TREE_LEARNER_TYPE>
+void LinearTreeLearner<TREE_LEARNER_TYPE>::Init(const Dataset* train_data, bool is_constant_hessian) {
+  TREE_LEARNER_TYPE::Init(train_data, is_constant_hessian);
+  LinearTreeLearner::InitLinear(train_data, this->config_->num_leaves);
 }
 
-void LinearTreeLearner::InitLinear(const Dataset* train_data, const int max_leaves) {
+template <typename TREE_LEARNER_TYPE>
+void LinearTreeLearner<TREE_LEARNER_TYPE>::InitLinear(const Dataset* train_data, const int max_leaves) {
   leaf_map_ = std::vector<int>(train_data->num_data(), -1);
   contains_nan_ = std::vector<int8_t>(train_data->num_features(), 0);
   // identify features containing nans
-#pragma omp parallel for schedule(static)
+#pragma omp parallel for num_threads(OMP_NUM_THREADS()) schedule(static)
   for (int feat = 0; feat < train_data->num_features(); ++feat) {
-    auto bin_mapper = train_data_->FeatureBinMapper(feat);
+    auto bin_mapper = this->train_data_->FeatureBinMapper(feat);
     if (bin_mapper->bin_type() == BinType::NumericalBin) {
-      const float* feat_ptr = train_data_->raw_index(feat);
+      const float* feat_ptr = this->train_data_->raw_index(feat);
       for (int i = 0; i < train_data->num_data(); ++i) {
         if (std::isnan(feat_ptr[i])) {
           contains_nan_[feat] = 1;
@@ -40,7 +45,7 @@ void LinearTreeLearner::InitLinear(const Dataset* train_data, const int max_leav
     }
   }
   // preallocate the matrix used to calculate linear model coefficients
-  int max_num_feat = std::min(max_leaves, train_data_->num_numeric_features());
+  int max_num_feat = std::min(max_leaves, this->train_data_->num_numeric_features());
   XTHX_.clear();
   XTg_.clear();
   for (int i = 0; i < max_leaves; ++i) {
@@ -52,32 +57,33 @@ void LinearTreeLearner::InitLinear(const Dataset* train_data, const int max_leav
   }
   XTHX_by_thread_.clear();
   XTg_by_thread_.clear();
-  int max_threads = omp_get_max_threads();
+  int max_threads = OMP_NUM_THREADS();
   for (int i = 0; i < max_threads; ++i) {
     XTHX_by_thread_.push_back(XTHX_);
     XTg_by_thread_.push_back(XTg_);
   }
 }
 
-Tree* LinearTreeLearner::Train(const score_t* gradients, const score_t *hessians, bool is_first_tree) {
+template <typename TREE_LEARNER_TYPE>
+Tree* LinearTreeLearner<TREE_LEARNER_TYPE>::Train(const score_t* gradients, const score_t *hessians, bool is_first_tree) {
   Common::FunctionTimer fun_timer("SerialTreeLearner::Train", global_timer);
-  gradients_ = gradients;
-  hessians_ = hessians;
+  this->gradients_ = gradients;
+  this->hessians_ = hessians;
   int num_threads = OMP_NUM_THREADS();
-  if (share_state_->num_threads != num_threads && share_state_->num_threads > 0) {
+  if (this->share_state_->num_threads != num_threads && this->share_state_->num_threads > 0) {
     Log::Warning(
         "Detected that num_threads changed during training (from %d to %d), "
         "it may cause unexpected errors.",
-        share_state_->num_threads, num_threads);
+        this->share_state_->num_threads, num_threads);
   }
-  share_state_->num_threads = num_threads;
+  this->share_state_->num_threads = num_threads;
 
   // some initial works before training
-  BeforeTrain();
+  this->BeforeTrain();
 
-  auto tree = std::unique_ptr<Tree>(new Tree(config_->num_leaves, true, true));
+  auto tree = std::unique_ptr<Tree>(new Tree(this->config_->num_leaves, true, true));
   auto tree_ptr = tree.get();
-  constraints_->ShareTreePointer(tree_ptr);
+  this->constraints_->ShareTreePointer(tree_ptr);
 
   // root leaf
   int left_leaf = 0;
@@ -85,25 +91,25 @@ Tree* LinearTreeLearner::Train(const score_t* gradients, const score_t *hessians
   // only root leaf can be splitted on first time
   int right_leaf = -1;
 
-  int init_splits = ForceSplits(tree_ptr, &left_leaf, &right_leaf, &cur_depth);
+  int init_splits = this->ForceSplits(tree_ptr, &left_leaf, &right_leaf, &cur_depth);
 
-  for (int split = init_splits; split < config_->num_leaves - 1; ++split) {
+  for (int split = init_splits; split < this->config_->num_leaves - 1; ++split) {
     // some initial works before finding best split
-    if (BeforeFindBestSplit(tree_ptr, left_leaf, right_leaf)) {
+    if (this->BeforeFindBestSplit(tree_ptr, left_leaf, right_leaf)) {
       // find best threshold for every feature
-      FindBestSplits(tree_ptr);
+      this->FindBestSplits(tree_ptr);
     }
     // Get a leaf with max split gain
-    int best_leaf = static_cast<int>(ArrayArgs<SplitInfo>::ArgMax(best_split_per_leaf_));
+    int best_leaf = static_cast<int>(ArrayArgs<SplitInfo>::ArgMax(this->best_split_per_leaf_));
     // Get split information for best leaf
-    const SplitInfo& best_leaf_SplitInfo = best_split_per_leaf_[best_leaf];
+    const SplitInfo& best_leaf_SplitInfo = this->best_split_per_leaf_[best_leaf];
     // cannot split, quit
     if (best_leaf_SplitInfo.gain <= 0.0) {
       Log::Warning("No further splits with positive gain, best gain: %f", best_leaf_SplitInfo.gain);
       break;
     }
     // split tree with best leaf
-    Split(tree_ptr, best_leaf, &left_leaf, &right_leaf);
+    this->Split(tree_ptr, best_leaf, &left_leaf, &right_leaf);
     cur_depth = std::max(cur_depth, tree->leaf_depth(left_leaf));
   }
 
@@ -120,21 +126,22 @@ Tree* LinearTreeLearner::Train(const score_t* gradients, const score_t *hessians
   GetLeafMap(tree_ptr);
 
   if (has_nan) {
-    CalculateLinear<true>(tree_ptr, false, gradients_, hessians_, is_first_tree);
+    CalculateLinear<true>(tree_ptr, false, this->gradients_, this->hessians_, is_first_tree);
   } else {
-    CalculateLinear<false>(tree_ptr, false, gradients_, hessians_, is_first_tree);
+    CalculateLinear<false>(tree_ptr, false, this->gradients_, this->hessians_, is_first_tree);
   }
 
   Log::Debug("Trained a tree with leaves = %d and depth = %d", tree->num_leaves(), cur_depth);
   return tree.release();
 }
 
-Tree* LinearTreeLearner::FitByExistingTree(const Tree* old_tree, const score_t* gradients, const score_t *hessians) const {
-  auto tree = SerialTreeLearner::FitByExistingTree(old_tree, gradients, hessians);
+template <typename TREE_LEARNER_TYPE>
+Tree* LinearTreeLearner<TREE_LEARNER_TYPE>::FitByExistingTree(const Tree* old_tree, const score_t* gradients, const score_t *hessians) const {
+  auto tree = TREE_LEARNER_TYPE::FitByExistingTree(old_tree, gradients, hessians);
   bool has_nan = false;
   if (any_nan_) {
     for (int i = 0; i < tree->num_leaves() - 1 ; ++i) {
-      if (contains_nan_[train_data_->InnerFeatureIndex(tree->split_feature(i))]) {
+      if (contains_nan_[this->train_data_->InnerFeatureIndex(tree->split_feature(i))]) {
         has_nan = true;
         break;
       }
@@ -149,28 +156,31 @@ Tree* LinearTreeLearner::FitByExistingTree(const Tree* old_tree, const score_t* 
   return tree;
 }
 
-Tree* LinearTreeLearner::FitByExistingTree(const Tree* old_tree, const std::vector<int>& leaf_pred,
+template <typename TREE_LEARNER_TYPE>
+Tree* LinearTreeLearner<TREE_LEARNER_TYPE>::FitByExistingTree(const Tree* old_tree, const std::vector<int>& leaf_pred,
                                            const score_t* gradients, const score_t *hessians) const {
-  data_partition_->ResetByLeafPred(leaf_pred, old_tree->num_leaves());
+  this->data_partition_->ResetByLeafPred(leaf_pred, old_tree->num_leaves());
   return LinearTreeLearner::FitByExistingTree(old_tree, gradients, hessians);
 }
 
-void LinearTreeLearner::GetLeafMap(Tree* tree) const {
+template <typename TREE_LEARNER_TYPE>
+void LinearTreeLearner<TREE_LEARNER_TYPE>::GetLeafMap(Tree* tree) const {
   std::fill(leaf_map_.begin(), leaf_map_.end(), -1);
   // map data to leaf number
-  const data_size_t* ind = data_partition_->indices();
-#pragma omp parallel for schedule(dynamic)
+  const data_size_t* ind = this->data_partition_->indices();
+#pragma omp parallel for num_threads(OMP_NUM_THREADS()) schedule(dynamic)
   for (int i = 0; i < tree->num_leaves(); ++i) {
-    data_size_t idx = data_partition_->leaf_begin(i);
-    for (int j = 0; j < data_partition_->leaf_count(i); ++j) {
+    data_size_t idx = this->data_partition_->leaf_begin(i);
+    for (int j = 0; j < this->data_partition_->leaf_count(i); ++j) {
       leaf_map_[ind[idx + j]] = i;
     }
   }
 }
 
 
-template<bool HAS_NAN>
-void LinearTreeLearner::CalculateLinear(Tree* tree, bool is_refit, const score_t* gradients, const score_t* hessians, bool is_first_tree) const {
+template<typename TREE_LEARNER_TYPE>
+template <bool HAS_NAN>
+void LinearTreeLearner<TREE_LEARNER_TYPE>::CalculateLinear(Tree* tree, bool is_refit, const score_t* gradients, const score_t* hessians, bool is_first_tree) const {
   tree->SetIsLinear(true);
   int num_leaves = tree->num_leaves();
   int num_threads = OMP_NUM_THREADS();
@@ -181,7 +191,7 @@ void LinearTreeLearner::CalculateLinear(Tree* tree, bool is_refit, const score_t
     return;
   }
 
-  // calculate coefficients using the method described in Eq 3 of https://arxiv.org/pdf/1802.05640.pdf
+  // calculate coefficients using the method described in Eq 3 of https://arxiv.org/abs/1802.05640
   // the coefficients vector is given by
   // - (X_T * H * X + lambda) ^ (-1) * (X_T * g)
   // where:
@@ -209,11 +219,11 @@ void LinearTreeLearner::CalculateLinear(Tree* tree, bool is_refit, const score_t
     std::vector<int> numerical_features;
     std::vector<const float*> data_ptr;
     for (size_t j = 0; j < raw_features.size(); ++j) {
-      int feat = train_data_->InnerFeatureIndex(raw_features[j]);
-      auto bin_mapper = train_data_->FeatureBinMapper(feat);
+      int feat = this->train_data_->InnerFeatureIndex(raw_features[j]);
+      auto bin_mapper = this->train_data_->FeatureBinMapper(feat);
       if (bin_mapper->bin_type() == BinType::NumericalBin) {
         numerical_features.push_back(feat);
-        data_ptr.push_back(train_data_->raw_index(feat));
+        data_ptr.push_back(this->train_data_->raw_index(feat));
       }
     }
     leaf_features.push_back(numerical_features);
@@ -224,7 +234,7 @@ void LinearTreeLearner::CalculateLinear(Tree* tree, bool is_refit, const score_t
     }
   }
   // clear the coefficient matrices
-#pragma omp parallel for schedule(static)
+#pragma omp parallel for num_threads(OMP_NUM_THREADS()) schedule(static)
   for (int i = 0; i < num_threads; ++i) {
     for (int leaf_num = 0; leaf_num < num_leaves; ++leaf_num) {
       size_t num_feat = leaf_features[leaf_num].size();
@@ -232,7 +242,7 @@ void LinearTreeLearner::CalculateLinear(Tree* tree, bool is_refit, const score_t
       std::fill(XTg_by_thread_[i][leaf_num].begin(), XTg_by_thread_[i][leaf_num].begin() + num_feat + 1, 0.0f);
     }
   }
-#pragma omp parallel for schedule(static)
+#pragma omp parallel for num_threads(OMP_NUM_THREADS()) schedule(static)
   for (int leaf_num = 0; leaf_num < num_leaves; ++leaf_num) {
     size_t num_feat = leaf_features[leaf_num].size();
     std::fill(XTHX_[leaf_num].begin(), XTHX_[leaf_num].begin() + (num_feat + 1) * (num_feat + 2) / 2, 0.0f);
@@ -245,12 +255,12 @@ void LinearTreeLearner::CalculateLinear(Tree* tree, bool is_refit, const score_t
     }
   }
   OMP_INIT_EX();
-#pragma omp parallel if (num_data_ > 1024)
+#pragma omp parallel num_threads(OMP_NUM_THREADS()) if (this->num_data_ > 1024)
   {
     std::vector<float> curr_row(max_num_features + 1);
     int tid = omp_get_thread_num();
 #pragma omp for schedule(static)
-    for (int i = 0; i < num_data_; ++i) {
+    for (int i = 0; i < this->num_data_; ++i) {
       OMP_LOOP_EX_BEGIN();
       int leaf_num = leaf_map_[i];
       if (leaf_num < 0) {
@@ -296,7 +306,7 @@ void LinearTreeLearner::CalculateLinear(Tree* tree, bool is_refit, const score_t
   auto total_nonzero = std::vector<int>(tree->num_leaves());
   // aggregate results from different threads
   for (int tid = 0; tid < num_threads; ++tid) {
-#pragma omp parallel for schedule(static)
+#pragma omp parallel for num_threads(OMP_NUM_THREADS()) schedule(static)
     for (int leaf_num = 0; leaf_num < num_leaves; ++leaf_num) {
       size_t num_feat = leaf_features[leaf_num].size();
       for (size_t j = 0; j < (num_feat + 1) * (num_feat + 2) / 2; ++j) {
@@ -312,13 +322,13 @@ void LinearTreeLearner::CalculateLinear(Tree* tree, bool is_refit, const score_t
   }
   if (!HAS_NAN) {
     for (int leaf_num = 0; leaf_num < num_leaves; ++leaf_num) {
-      total_nonzero[leaf_num] = data_partition_->leaf_count(leaf_num);
+      total_nonzero[leaf_num] = this->data_partition_->leaf_count(leaf_num);
     }
   }
   double shrinkage = tree->shrinkage();
-  double decay_rate = config_->refit_decay_rate;
+  double decay_rate = this->config_->refit_decay_rate;
   // copy into eigen matrices and solve
-#pragma omp parallel for schedule(static)
+#pragma omp parallel for num_threads(OMP_NUM_THREADS()) schedule(static)
   for (int leaf_num = 0; leaf_num < num_leaves; ++leaf_num) {
     if (total_nonzero[leaf_num] < static_cast<int>(leaf_features[leaf_num].size()) + 1) {
       if (is_refit) {
@@ -340,7 +350,7 @@ void LinearTreeLearner::CalculateLinear(Tree* tree, bool is_refit, const score_t
         XTHX_mat(feat1, feat2) = XTHX_[leaf_num][j];
         XTHX_mat(feat2, feat1) = XTHX_mat(feat1, feat2);
         if ((feat1 == feat2) && (feat1 < num_feat)) {
-          XTHX_mat(feat1, feat2) += config_->linear_lambda;
+          XTHX_mat(feat1, feat2) += this->config_->linear_lambda;
         }
         ++j;
       }
@@ -366,7 +376,7 @@ void LinearTreeLearner::CalculateLinear(Tree* tree, bool is_refit, const score_t
     tree->SetLeafFeaturesInner(leaf_num, features_new);
     std::vector<int> features_raw(features_new.size());
     for (size_t i = 0; i < features_new.size(); ++i) {
-      features_raw[i] = train_data_->RealFeatureIndex(features_new[i]);
+      features_raw[i] = this->train_data_->RealFeatureIndex(features_new[i]);
     }
     tree->SetLeafFeatures(leaf_num, features_raw);
     tree->SetLeafCoeffs(leaf_num, coeffs_vec);
@@ -378,4 +388,19 @@ void LinearTreeLearner::CalculateLinear(Tree* tree, bool is_refit, const score_t
     }
   }
 }
+
+template void LinearTreeLearner<SerialTreeLearner>::Init(const Dataset* train_data, bool is_constant_hessian);
+template void LinearTreeLearner<SerialTreeLearner>::InitLinear(const Dataset* train_data, const int max_leaves);
+template Tree* LinearTreeLearner<SerialTreeLearner>::Train(const score_t* gradients, const score_t *hessians, bool is_first_tree);
+template Tree* LinearTreeLearner<SerialTreeLearner>::FitByExistingTree(const Tree* old_tree, const score_t* gradients, const score_t *hessians) const;
+template Tree* LinearTreeLearner<SerialTreeLearner>::FitByExistingTree(const Tree* old_tree, const std::vector<int>& leaf_pred,
+                                           const score_t* gradients, const score_t *hessians) const;
+
+template void LinearTreeLearner<GPUTreeLearner>::Init(const Dataset* train_data, bool is_constant_hessian);
+template void LinearTreeLearner<GPUTreeLearner>::InitLinear(const Dataset* train_data, const int max_leaves);
+template Tree* LinearTreeLearner<GPUTreeLearner>::Train(const score_t* gradients, const score_t *hessians, bool is_first_tree);
+template Tree* LinearTreeLearner<GPUTreeLearner>::FitByExistingTree(const Tree* old_tree, const score_t* gradients, const score_t *hessians) const;
+template Tree* LinearTreeLearner<GPUTreeLearner>::FitByExistingTree(const Tree* old_tree, const std::vector<int>& leaf_pred,
+                                           const score_t* gradients, const score_t *hessians) const;
+
 }  // namespace LightGBM

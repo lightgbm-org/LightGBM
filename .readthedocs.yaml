@@ -1,8 +1,12 @@
 version: 2
 build:
-  os: "ubuntu-20.04"
+  os: "ubuntu-24.04"
   tools:
-    python: "miniconda3-4.7"
+    python: "miniforge3-latest"
+  jobs:
+    post_checkout:
+      - cp CONTRIBUTING.md docs/CONTRIBUTING.md
+
 conda:
   environment: docs/env.yml
 formats:

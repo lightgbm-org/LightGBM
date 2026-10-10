@@ -1,5 +1,6 @@
 /*!
- * Copyright (c) 2016 Microsoft Corporation. All rights reserved.
+ * Copyright (c) 2016-2026 Microsoft Corporation. All rights reserved.
+ * Copyright (c) 2016-2026 The LightGBM developers. All rights reserved.
  * Licensed under the MIT License. See LICENSE file in the project root for license information.
  */
 #include <LightGBM/dataset_loader.h>
@@ -10,12 +11,19 @@
 #include <LightGBM/utils/log.h>
 #include <LightGBM/utils/openmp_wrapper.h>
 
+#include <algorithm>
 #include <chrono>
 #include <fstream>
+#include <memory>
+#include <string>
+#include <unordered_map>
+#include <unordered_set>
+#include <utility>
+#include <vector>
 
 namespace LightGBM {
 
-using json11::Json;
+using json11_internal_lightgbm::Json;
 
 DatasetLoader::DatasetLoader(const Config& io_config, const PredictFunction& predict_fun, int num_class, const char* filename)
   :config_(io_config), random_(config_.data_random_seed), predict_fun_(predict_fun), num_class_(num_class) {
@@ -274,7 +282,7 @@ Dataset* DatasetLoader::LoadFromFile(const char* filename, int rank, int num_mac
     dataset.reset(LoadFromBinFile(filename, bin_filename.c_str(), rank, num_machines, &num_global_data, &used_data_indices));
 
     // checks whether there's a initial score file when loaded from binary data files
-    // the intial score file should with suffix ".bin.init"
+    // the initial score file should with suffix ".bin.init"
     dataset->metadata_.LoadInitialScore(bin_filename);
 
     dataset->device_type_ = config_.device_type;
@@ -344,7 +352,7 @@ Dataset* DatasetLoader::LoadFromFileAlignWithOtherDataset(const char* filename, 
     // load data from binary file
     dataset.reset(LoadFromBinFile(filename, bin_filename.c_str(), 0, 1, &num_global_data, &used_data_indices));
     // checks whether there's a initial score file when loaded from binary data files
-    // the intial score file should with suffix ".bin.init"
+    // the initial score file should with suffix ".bin.init"
     dataset->metadata_.LoadInitialScore(bin_filename);
   }
   // not need to check validation data
@@ -625,7 +633,7 @@ Dataset* DatasetLoader::ConstructFromSampleData(double** sample_values,
   if (Network::num_machines() == 1) {
     // if only one machine, find bin locally
     OMP_INIT_EX();
-    #pragma omp parallel for schedule(guided)
+    #pragma omp parallel for num_threads(OMP_NUM_THREADS()) schedule(guided)
     for (int i = 0; i < num_col; ++i) {
       OMP_LOOP_EX_BEGIN();
       if (ignore_features_.count(i) > 0) {
@@ -665,7 +673,9 @@ Dataset* DatasetLoader::ConstructFromSampleData(double** sample_values,
     std::vector<int> start(num_machines);
     std::vector<int> len(num_machines);
     int step = (num_total_features + num_machines - 1) / num_machines;
-    if (step < 1) { step = 1; }
+    if (step < 1) {
+      step = 1;
+    }
 
     start[0] = 0;
     for (int i = 0; i < num_machines - 1; ++i) {
@@ -674,7 +684,7 @@ Dataset* DatasetLoader::ConstructFromSampleData(double** sample_values,
     }
     len[num_machines - 1] = num_total_features - start[num_machines - 1];
     OMP_INIT_EX();
-    #pragma omp parallel for schedule(guided)
+    #pragma omp parallel for num_threads(OMP_NUM_THREADS()) schedule(guided)
     for (int i = 0; i < len[rank]; ++i) {
       OMP_LOOP_EX_BEGIN();
       if (ignore_features_.count(start[rank] + i) > 0) {
@@ -692,12 +702,12 @@ Dataset* DatasetLoader::ConstructFromSampleData(double** sample_values,
         bin_mappers[i]->FindBin(sample_values[start[rank] + i], num_per_col[start[rank] + i],
                                 total_sample_size, config_.max_bin, config_.min_data_in_bin,
                                 filter_cnt, config_.feature_pre_filter, bin_type, config_.use_missing, config_.zero_as_missing,
-                                forced_bin_bounds[i]);
+                                forced_bin_bounds[start[rank] + i]);
       } else {
         bin_mappers[i]->FindBin(sample_values[start[rank] + i], num_per_col[start[rank] + i],
                                 total_sample_size, config_.max_bin_by_feature[start[rank] + i],
                                 config_.min_data_in_bin, filter_cnt, config_.feature_pre_filter, bin_type, config_.use_missing,
-                                config_.zero_as_missing, forced_bin_bounds[i]);
+                                config_.zero_as_missing, forced_bin_bounds[start[rank] + i]);
       }
       OMP_LOOP_EX_END();
     }
@@ -1136,7 +1146,7 @@ void DatasetLoader::ConstructBinMappersFromTextData(int rank, int num_machines,
   if (num_machines == 1) {
     // if only one machine, find bin locally
     OMP_INIT_EX();
-    #pragma omp parallel for schedule(guided)
+    #pragma omp parallel for num_threads(OMP_NUM_THREADS()) schedule(guided)
     for (int i = 0; i < static_cast<int>(sample_values.size()); ++i) {
       OMP_LOOP_EX_BEGIN();
       if (ignore_features_.count(i) > 0) {
@@ -1168,7 +1178,9 @@ void DatasetLoader::ConstructBinMappersFromTextData(int rank, int num_machines,
     std::vector<int> start(num_machines);
     std::vector<int> len(num_machines);
     int step = (dataset->num_total_features_ + num_machines - 1) / num_machines;
-    if (step < 1) { step = 1; }
+    if (step < 1) {
+      step = 1;
+    }
 
     start[0] = 0;
     for (int i = 0; i < num_machines - 1; ++i) {
@@ -1177,7 +1189,7 @@ void DatasetLoader::ConstructBinMappersFromTextData(int rank, int num_machines,
     }
     len[num_machines - 1] = dataset->num_total_features_ - start[num_machines - 1];
     OMP_INIT_EX();
-    #pragma omp parallel for schedule(guided)
+    #pragma omp parallel for num_threads(OMP_NUM_THREADS()) schedule(guided)
     for (int i = 0; i < len[rank]; ++i) {
       OMP_LOOP_EX_BEGIN();
       if (ignore_features_.count(start[rank] + i) > 0) {
@@ -1196,13 +1208,13 @@ void DatasetLoader::ConstructBinMappersFromTextData(int rank, int num_machines,
                                 static_cast<int>(sample_values[start[rank] + i].size()),
                                 sample_data.size(), config_.max_bin, config_.min_data_in_bin,
                                 filter_cnt, config_.feature_pre_filter, bin_type, config_.use_missing, config_.zero_as_missing,
-                                forced_bin_bounds[i]);
+                                forced_bin_bounds[start[rank] + i]);
       } else {
         bin_mappers[i]->FindBin(sample_values[start[rank] + i].data(),
                                 static_cast<int>(sample_values[start[rank] + i].size()),
-                                sample_data.size(), config_.max_bin_by_feature[i],
+                                sample_data.size(), config_.max_bin_by_feature[start[rank] + i],
                                 config_.min_data_in_bin, filter_cnt, config_.feature_pre_filter, bin_type,
-                                config_.use_missing, config_.zero_as_missing, forced_bin_bounds[i]);
+                                config_.use_missing, config_.zero_as_missing, forced_bin_bounds[start[rank] + i]);
       }
       OMP_LOOP_EX_END();
     }
@@ -1268,7 +1280,7 @@ void DatasetLoader::ExtractFeaturesFromMemory(std::vector<std::string>* text_dat
   if (!predict_fun_) {
     OMP_INIT_EX();
     // if doesn't need to prediction with initial model
-    #pragma omp parallel for schedule(static) private(oneline_features) firstprivate(tmp_label, feature_row)
+    #pragma omp parallel for num_threads(OMP_NUM_THREADS()) schedule(static) private(oneline_features) firstprivate(tmp_label, feature_row)
     for (data_size_t i = 0; i < dataset->num_data_; ++i) {
       OMP_LOOP_EX_BEGIN();
       const int tid = omp_get_thread_num();
@@ -1284,7 +1296,9 @@ void DatasetLoader::ExtractFeaturesFromMemory(std::vector<std::string>* text_dat
       std::vector<bool> is_feature_added(dataset->num_features_, false);
       // push data
       for (auto& inner_data : oneline_features) {
-        if (inner_data.first >= dataset->num_total_features_) { continue; }
+        if (inner_data.first >= dataset->num_total_features_) {
+          continue;
+        }
         int feature_idx = dataset->used_feature_map_[inner_data.first];
         if (feature_idx >= 0) {
           is_feature_added[feature_idx] = true;
@@ -1319,7 +1333,7 @@ void DatasetLoader::ExtractFeaturesFromMemory(std::vector<std::string>* text_dat
     OMP_INIT_EX();
     // if need to prediction with initial model
     std::vector<double> init_score(static_cast<size_t>(dataset->num_data_) * num_class_);
-    #pragma omp parallel for schedule(static) private(oneline_features) firstprivate(tmp_label, feature_row)
+    #pragma omp parallel for num_threads(OMP_NUM_THREADS()) schedule(static) private(oneline_features) firstprivate(tmp_label, feature_row)
     for (data_size_t i = 0; i < dataset->num_data_; ++i) {
       OMP_LOOP_EX_BEGIN();
       const int tid = omp_get_thread_num();
@@ -1341,7 +1355,9 @@ void DatasetLoader::ExtractFeaturesFromMemory(std::vector<std::string>* text_dat
       // push data
       std::vector<bool> is_feature_added(dataset->num_features_, false);
       for (auto& inner_data : oneline_features) {
-        if (inner_data.first >= dataset->num_total_features_) { continue; }
+        if (inner_data.first >= dataset->num_total_features_) {
+          continue;
+        }
         int feature_idx = dataset->used_feature_map_[inner_data.first];
         if (feature_idx >= 0) {
           is_feature_added[feature_idx] = true;
@@ -1394,7 +1410,7 @@ void DatasetLoader::ExtractFeaturesFromFile(const char* filename, const Parser* 
     double tmp_label = 0.0f;
     std::vector<float> feature_row(dataset->num_features_);
     OMP_INIT_EX();
-    #pragma omp parallel for schedule(static) private(oneline_features) firstprivate(tmp_label, feature_row)
+    #pragma omp parallel for num_threads(OMP_NUM_THREADS()) schedule(static) private(oneline_features) firstprivate(tmp_label, feature_row)
     for (data_size_t i = 0; i < static_cast<data_size_t>(lines.size()); ++i) {
       OMP_LOOP_EX_BEGIN();
       const int tid = omp_get_thread_num();
@@ -1414,7 +1430,9 @@ void DatasetLoader::ExtractFeaturesFromFile(const char* filename, const Parser* 
       std::vector<bool> is_feature_added(dataset->num_features_, false);
       // push data
       for (auto& inner_data : oneline_features) {
-        if (inner_data.first >= dataset->num_total_features_) { continue; }
+        if (inner_data.first >= dataset->num_total_features_) {
+          continue;
+        }
         int feature_idx = dataset->used_feature_map_[inner_data.first];
         if (feature_idx >= 0) {
           is_feature_added[feature_idx] = true;

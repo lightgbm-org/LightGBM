@@ -1,0 +1,10 @@
+# default config: https://yamllint.readthedocs.io/en/stable/configuration.html#default-configuration
+extends: default
+
+rules:
+  document-start: disable
+  line-length:
+    max: 120
+  truthy:
+    # prevent treating GitHub Workflow "on" key as boolean value
+    check-keys: false

@@ -1,10 +1,11 @@
 /*!
- * Copyright (c) 2020 Microsoft Corporation. All rights reserved.
+ * Copyright (c) 2020-2026 Microsoft Corporation. All rights reserved.
+ * Copyright (c) 2020-2026 The LightGBM developers. All rights reserved.
  * Licensed under the MIT License. See LICENSE file in the project root for
  * license information.
  */
-#ifndef LIGHTGBM_TREELEARNER_COL_SAMPLER_HPP_
-#define LIGHTGBM_TREELEARNER_COL_SAMPLER_HPP_
+#ifndef LIGHTGBM_SRC_TREELEARNER_COL_SAMPLER_HPP_
+#define LIGHTGBM_SRC_TREELEARNER_COL_SAMPLER_HPP_
 
 #include <LightGBM/dataset.h>
 #include <LightGBM/meta.h>
@@ -79,7 +80,7 @@ class ColSampler {
           static_cast<int>(valid_feature_indices_.size()), used_cnt_bytree_);
       int omp_loop_size = static_cast<int>(used_feature_indices_.size());
 
-#pragma omp parallel for schedule(static, 512) if (omp_loop_size >= 1024)
+#pragma omp parallel for num_threads(OMP_NUM_THREADS()) schedule(static, 512) if (omp_loop_size >= 1024)
       for (int i = 0; i < omp_loop_size; ++i) {
         int used_feature = valid_feature_indices_[used_feature_indices_[i]];
         int inner_feature_index = train_data_->InnerFeatureIndex(used_feature);
@@ -100,7 +101,9 @@ class ColSampler {
           allowed_features.insert(constraint.begin(), constraint.end());
         }
         for (int feat : branch_features) {
-          if (constraint.count(feat) == 0) { break; }
+          if (constraint.count(feat) == 0) {
+            break;
+          }
           ++num_feat_found;
           if (num_feat_found == static_cast<int>(branch_features.size())) {
             allowed_features.insert(constraint.begin(), constraint.end());
@@ -142,7 +145,7 @@ class ColSampler {
       auto sampled_indices = random_.Sample(
           static_cast<int>((*allowed_used_feature_indices).size()), used_feature_cnt);
       int omp_loop_size = static_cast<int>(sampled_indices.size());
-#pragma omp parallel for schedule(static, 512) if (omp_loop_size >= 1024)
+#pragma omp parallel for num_threads(OMP_NUM_THREADS()) schedule(static, 512) if (omp_loop_size >= 1024)
       for (int i = 0; i < omp_loop_size; ++i) {
         int used_feature =
             valid_feature_indices_[(*allowed_used_feature_indices)[sampled_indices[i]]];
@@ -168,7 +171,7 @@ class ColSampler {
       auto sampled_indices = random_.Sample(
           static_cast<int>((*allowed_valid_feature_indices).size()), used_feature_cnt);
       int omp_loop_size = static_cast<int>(sampled_indices.size());
-#pragma omp parallel for schedule(static, 512) if (omp_loop_size >= 1024)
+#pragma omp parallel for num_threads(OMP_NUM_THREADS()) schedule(static, 512) if (omp_loop_size >= 1024)
       for (int i = 0; i < omp_loop_size; ++i) {
         int used_feature = (*allowed_valid_feature_indices)[sampled_indices[i]];
         int inner_feature_index = train_data_->InnerFeatureIndex(used_feature);
@@ -202,4 +205,4 @@ class ColSampler {
 };
 
 }  // namespace LightGBM
-#endif  // LIGHTGBM_TREELEARNER_COL_SAMPLER_HPP_
+#endif  // LIGHTGBM_SRC_TREELEARNER_COL_SAMPLER_HPP_

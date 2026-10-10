@@ -1,0 +1,22 @@
+default.extend-ignore-re = [
+  "/Ot",
+  "mis-alignment",
+  "mis-spelled",
+  "posix-seh-rt",
+]
+
+[default.extend-words]
+MAPE = "MAPE"
+datas = "datas"
+indx = "indx"
+interprete = "interprete"
+mape = "mape"
+splitted = "splitted"
+
+[default.extend-identifiers]
+ERRORs = "ERRORs"
+GAM = "GAM"
+ND24s = "ND24s"
+WARNINGs = "WARNINGs"
+fullset = "fullset"
+thess = "thess"

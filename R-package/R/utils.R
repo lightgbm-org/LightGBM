@@ -1,16 +1,16 @@
-lgb.is.Booster <- function(x) {
-  return(all(c("R6", "lgb.Booster") %in% class(x)))  # nolint: class_equals
+.is_Booster <- function(x) {
+  return(all(c("R6", "lgb.Booster") %in% class(x)))  # nolint: class_equals.
 }
 
-lgb.is.Dataset <- function(x) {
-  return(all(c("R6", "lgb.Dataset") %in% class(x)))  # nolint: class_equals
+.is_Dataset <- function(x) {
+  return(all(c("R6", "lgb.Dataset") %in% class(x)))  # nolint: class_equals.
 }
 
-lgb.is.Predictor <- function(x) {
-  return(all(c("R6", "lgb.Predictor") %in% class(x)))  # nolint: class_equals
+.is_Predictor <- function(x) {
+  return(all(c("R6", "lgb.Predictor") %in% class(x)))  # nolint: class_equals.
 }
 
-lgb.is.null.handle <- function(x) {
+.is_null_handle <- function(x) {
   if (is.null(x)) {
     return(TRUE)
   }
@@ -19,7 +19,7 @@ lgb.is.null.handle <- function(x) {
   )
 }
 
-lgb.params2str <- function(params) {
+.params2str <- function(params) {
 
   if (!identical(class(params), "list")) {
     stop("params must be a list")
@@ -34,7 +34,7 @@ lgb.params2str <- function(params) {
 
     # If a parameter has multiple values, join those values together with commas.
     # trimws() is necessary because format() will pad to make strings the same width
-    val <- paste0(
+    val <- paste(
       trimws(
         format(
           x = unname(params[[i]])
@@ -46,7 +46,7 @@ lgb.params2str <- function(params) {
     if (nchar(val) <= 0L) next # Skip join
 
     # Join key value
-    pair <- paste0(c(param_names[[i]], val), collapse = "=")
+    pair <- paste(c(param_names[[i]], val), collapse = "=")
     ret <- c(ret, pair)
 
   }
@@ -55,72 +55,70 @@ lgb.params2str <- function(params) {
     return("")
   }
 
-  return(paste0(ret, collapse = " "))
+  return(paste(ret, collapse = " "))
 
 }
 
-lgb.check_interaction_constraints <- function(interaction_constraints, column_names) {
-
-  # Convert interaction constraints to feature numbers
-  string_constraints <- list()
-
-  if (!is.null(interaction_constraints)) {
-
-    if (!methods::is(interaction_constraints, "list")) {
-        stop("interaction_constraints must be a list")
-    }
-    constraint_is_character_or_numeric <- sapply(
-        X = interaction_constraints
-        , FUN = function(x) {
-            return(is.character(x) || is.numeric(x))
-        }
-    )
-    if (!all(constraint_is_character_or_numeric)) {
-        stop("every element in interaction_constraints must be a character vector or numeric vector")
-    }
-
-    for (constraint in interaction_constraints) {
-
-      # Check for character name
-      if (is.character(constraint)) {
-
-          constraint_indices <- as.integer(match(constraint, column_names) - 1L)
-
-          # Provided indices, but some indices are not existing?
-          if (sum(is.na(constraint_indices)) > 0L) {
-            stop(
-              "supplied an unknown feature in interaction_constraints "
-              , sQuote(constraint[is.na(constraint_indices)])
-            )
-          }
-
-        } else {
-
-          # Check that constraint indices are at most number of features
-          if (max(constraint) > length(column_names)) {
-            stop(
-              "supplied a too large value in interaction_constraints: "
-              , max(constraint)
-              , " but only "
-              , length(column_names)
-              , " features"
-            )
-          }
-
-          # Store indices as [0, n-1] indexed instead of [1, n] indexed
-          constraint_indices <- as.integer(constraint - 1L)
-
-        }
-
-        # Convert constraint to string
-        constraint_string <- paste0("[", paste0(constraint_indices, collapse = ","), "]")
-        string_constraints <- append(string_constraints, constraint_string)
-    }
-
+# [description]
+#
+#     Besides applying checks, this function
+#
+#         1. turns feature *names* into 1-based integer positions, then
+#         2. adds an extra list element with skipped features, then
+#         3. turns 1-based integer positions into 0-based positions, and finally
+#         4. collapses the values of each list element into a string like "[0, 1]".
+#
+.check_interaction_constraints <- function(interaction_constraints, column_names) {
+  if (is.null(interaction_constraints)) {
+    return(list())
+  }
+  if (!identical(class(interaction_constraints), "list")) {
+    stop("interaction_constraints must be a list")
   }
 
-  return(string_constraints)
+  column_indices <- seq_along(column_names)
 
+  # Convert feature names to 1-based integer positions and apply checks
+  for (j in seq_along(interaction_constraints)) {
+    constraint <- interaction_constraints[[j]]
+
+    if (is.character(constraint)) {
+      constraint_indices <- match(constraint, column_names)
+    } else if (is.numeric(constraint)) {
+      constraint_indices <- as.integer(constraint)
+    } else {
+      stop("every element in interaction_constraints must be a character vector or numeric vector")
+    }
+
+    # Features outside range?
+    bad <- !(constraint_indices %in% column_indices)
+    if (any(bad)) {
+      stop(
+        "unknown feature(s) in interaction_constraints: "
+        , toString(sQuote(constraint[bad], q = FALSE))
+      )
+    }
+
+    interaction_constraints[[j]] <- constraint_indices
+  }
+
+  # Add missing features as new interaction set
+  remaining_indices <- setdiff(
+    column_indices, sort(unique(unlist(interaction_constraints)))
+  )
+  if (length(remaining_indices) > 0L) {
+    interaction_constraints <- c(
+      interaction_constraints, list(remaining_indices)
+    )
+  }
+
+  # Turn indices 0-based and convert to string
+  for (j in seq_along(interaction_constraints)) {
+    interaction_constraints[[j]] <- paste0(
+      "[", paste(interaction_constraints[[j]] - 1L, collapse = ","), "]"
+    )
+  }
+  return(interaction_constraints)
 }
 
 
@@ -129,7 +127,7 @@ lgb.check_interaction_constraints <- function(interaction_constraints, column_na
 #     This has to account for the fact that `eval` could be a character vector,
 #     a function, a list of functions, or a list with a mix of strings and
 #     functions
-lgb.check.eval <- function(params, eval) {
+.check_eval <- function(params, eval) {
 
   if (is.null(params$metric)) {
     params$metric <- list()
@@ -194,7 +192,7 @@ lgb.check.eval <- function(params, eval) {
 # [return]
 #     params with num_iterations set to the chosen value, and other aliases
 #     of num_iterations removed
-lgb.check.wrapper_param <- function(main_param_name, params, alternative_kwarg_value) {
+.check_wrapper_param <- function(main_param_name, params, alternative_kwarg_value) {
 
   aliases <- .PARAMETER_ALIASES()[[main_param_name]]
   aliases_provided <- aliases[aliases %in% names(params)]
@@ -225,8 +223,8 @@ lgb.check.wrapper_param <- function(main_param_name, params, alternative_kwarg_v
 }
 
 #' @importFrom parallel detectCores
-lgb.get.default.num.threads <- function() {
-  if (requireNamespace("RhpcBLASctl", quietly = TRUE)) {  # nolint: undesirable_function
+.get_default_num_threads <- function() {
+  if (requireNamespace("RhpcBLASctl", quietly = TRUE)) {  # nolint: undesirable_function.
     return(RhpcBLASctl::get_num_cores())
   } else {
     msg <- "Optional package 'RhpcBLASctl' not found."
@@ -247,7 +245,7 @@ lgb.get.default.num.threads <- function() {
   }
 }
 
-lgb.equal.or.both.null <- function(a, b) {
+.equal_or_both_null <- function(a, b) {
   if (is.null(a)) {
     if (!is.null(b)) {
       return(FALSE)

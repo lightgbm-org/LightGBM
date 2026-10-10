@@ -1,20 +1,22 @@
 /*!
- * Copyright (c) 2018 Microsoft Corporation. All rights reserved.
+ * Copyright (c) 2018-2026 Microsoft Corporation. All rights reserved.
+ * Copyright (c) 2018-2026 The LightGBM developers. All rights reserved.
  * Licensed under the MIT License. See LICENSE file in the project root for license information.
  */
 /*!
  * This SWIG interface extension provides support to
  * the pointer manipulation methods present in the standard
  * SWIG wrappers, but with support for larger arrays.
- * 
+ *
  * SWIG provides this in https://github.com/swig/swig/blob/master/Lib/carrays.i
  * but the standard methods only provide arrays with up to
  * max(int32_t) elements.
- * 
+ *
  * The `long_array_functions` wrappers extend this
  * to arrays of size max(int64_t) instead of max(int32_t).
  */
 
+%pointer_functions(uint8_t, bytep)
 %pointer_functions(int, intp)
 %pointer_functions(long, longp)
 %pointer_functions(double, doublep)
@@ -33,6 +35,7 @@
 %pointer_cast(double *, void *, double_to_voidp_ptr)
 %pointer_cast(float *, void *, float_to_voidp_ptr)
 %pointer_cast(int *, void *, int_to_voidp_ptr)
+%pointer_cast(uint8_t *, void *, byte_to_voidp_ptr)
 %pointer_cast(int32_t *, void *, int32_t_to_voidp_ptr)
 %pointer_cast(int64_t *, void *, int64_t_to_voidp_ptr)
 
@@ -101,7 +104,7 @@ void delete_##NAME(TYPE *ary);
 TYPE NAME##_getitem(TYPE *ary, int64_t index);
 void NAME##_setitem(TYPE *ary, int64_t index, TYPE value);
 
-%enddef 
+%enddef
 
 /* Custom template for arrays of pointers */
 %define %ptr_array_functions(TYPE,NAME)

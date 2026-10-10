@@ -1,0 +1,40 @@
+name: No Response Bot
+
+on:
+  issue_comment:
+    types: [created]
+  schedule:
+    # "every day at 04:00 UTC"
+    - cron: '0 4 * * *'
+
+# only 1 job running in the repo at any time
+concurrency:
+  group: lock
+
+# default to 0 permissions
+# (job-level overrides add the minimal permissions needed)
+permissions:
+  contents: none
+
+jobs:
+  no-response:
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+      pull-requests: write
+    steps:
+      - uses: lee-dohm/no-response@9bb0a4b5e6a45046f00353d5de7d90fb8bd773bb  # v0.5.0
+        with:
+          closeComment: >
+              This issue has been automatically closed
+              because it has been awaiting a response for too long.
+
+              When you have time to to work with the maintainers to resolve this issue,
+              please post a new comment and it will be re-opened.
+              If the issue has been locked for editing by the time you return to it,
+              please open a new issue and reference this one.
+
+              Thank you for taking the time to improve LightGBM!
+          daysUntilClose: 30
+          responseRequiredLabel: awaiting response
+          token: ${{ github.token }}

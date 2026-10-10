@@ -14,7 +14,7 @@ lgb.configure_fast_predict(
 )
 }
 \arguments{
-\item{model}{LighGBM model object (class \code{lgb.Booster}).
+\item{model}{LightGBM model object (class \code{lgb.Booster}).
 
              \bold{The object will be modified in-place}.}
 
@@ -56,7 +56,9 @@ If <= 0, all iterations from start_iteration are used (no limits).}
             If the model was fit through function \link{lightgbm} and it was passed a factor as labels,
             passing the prediction type through \code{params} instead of through this argument might
             result in factor levels for classification objectives not being applied correctly to the
-            resulting output.}
+            resulting output.
+
+            \emph{New in version 4.0.0}}
 
 \item{params}{a list of additional named parameters. See
 \href{https://lightgbm.readthedocs.io/en/latest/Parameters.html#predict-parameters}{
@@ -96,7 +98,7 @@ Calling this function multiple times with different parameters might not overrid
 
          Requesting a different prediction type or passing parameters to \link{predict.lgb.Booster}
          will cause it to ignore the fast-predict configuration and take the slow route instead
-         (but be aware that an existing configuration might not always be overriden by supplying
+         (but be aware that an existing configuration might not always be overridden by supplying
          different parameters or prediction type, so make sure to check that the output is what
          was expected when a prediction is to be made on a single row for something different than
          what is configured).
@@ -112,12 +114,17 @@ Calling this function multiple times with different parameters might not overrid
 }
 \examples{
 \donttest{
+\dontshow{setLGBMthreads(2L)}
+\dontshow{data.table::setDTthreads(1L)}
 library(lightgbm)
 data(mtcars)
 X <- as.matrix(mtcars[, -1L])
 y <- mtcars[, 1L]
 dtrain <- lgb.Dataset(X, label = y, params = list(max_bin = 5L))
-params <- list(min_data_in_leaf = 2L)
+params <- list(
+  min_data_in_leaf = 2L
+  , num_threads = 2L
+)
 model <- lgb.train(
   params = params
  , data = dtrain

@@ -18,7 +18,7 @@ macro(enable_sanitizer sanitizer)
     set(SAN_COMPILE_FLAGS "${SAN_COMPILE_FLAGS} -fsanitize=undefined -fno-sanitize-recover=undefined")
 
   else()
-    message(FATAL_ERROR "Santizer ${sanitizer} not supported.")
+    message(FATAL_ERROR "Sanitizer ${sanitizer} not supported.")
   endif()
 endmacro()
 

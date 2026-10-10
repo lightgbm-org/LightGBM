@@ -1,5 +1,6 @@
 /*!
- * Copyright (c) 2017 Microsoft Corporation. All rights reserved.
+ * Copyright (c) 2017-2026 Microsoft Corporation. All rights reserved.
+ * Copyright (c) 2017-2026 The LightGBM developers. All rights reserved.
  * Licensed under the MIT License. See LICENSE file in the project root for license information.
  *
  * \brief This file can either be read and passed to an OpenCL compiler directly,
@@ -65,12 +66,12 @@ typedef uint acc_int_type;
 // local memory size in bytes
 #define LOCAL_MEM_SIZE (4 * (sizeof(uint) + 2 * sizeof(acc_type)) * NUM_BINS * NUM_BANKS)
 
-// unroll the atomic operation for a few times. Takes more code space, 
+// unroll the atomic operation for a few times. Takes more code space,
 // but compiler can generate better code for faster atomics.
 #define UNROLL_ATOMIC 1
 
 // Options passed by compiler at run time:
-// IGNORE_INDICES will be set when the kernel does not 
+// IGNORE_INDICES will be set when the kernel does not
 // #define IGNORE_INDICES
 // #define POWER_FEATURE_WORKGROUPS 10
 
@@ -155,7 +156,7 @@ R""()
 // this function will be called by histogram64
 // we have one sub-histogram of one feature in registers, and need to read others
 void within_kernel_reduction64x4(uchar4 feature_mask,
-                           __global const acc_type* restrict feature4_sub_hist, 
+                           __global const acc_type* restrict feature4_sub_hist,
                            const uint skip_id,
                            acc_type g_val, acc_type h_val,
                            const ushort num_sub_hist,
@@ -166,7 +167,7 @@ void within_kernel_reduction64x4(uchar4 feature_mask,
     ushort feature_id = ltid & 3; // range 0 - 4
     const ushort bin_id = ltid >> 2; // range 0 - 63W
     ushort i;
-    #if POWER_FEATURE_WORKGROUPS != 0 
+    #if POWER_FEATURE_WORKGROUPS != 0
     // if there is only 1 work group, no need to do the reduction
     // add all sub-histograms for 4 features
     __global const acc_type* restrict p = feature4_sub_hist + ltid;
@@ -212,12 +213,12 @@ R""()
 */
 __attribute__((reqd_work_group_size(LOCAL_SIZE_0, 1, 1)))
 #if USE_CONSTANT_BUF == 1
-__kernel void histogram64(__global const uchar4* restrict feature_data_base, 
+__kernel void histogram64(__global const uchar4* restrict feature_data_base,
                       __constant const uchar4* restrict feature_masks __attribute__((max_constant_size(65536))),
                       const data_size_t feature_size,
-                      __constant const data_size_t* restrict data_indices __attribute__((max_constant_size(65536))), 
-                      const data_size_t num_data, 
-                      __constant const score_t* restrict ordered_gradients __attribute__((max_constant_size(65536))), 
+                      __constant const data_size_t* restrict data_indices __attribute__((max_constant_size(65536))),
+                      const data_size_t num_data,
+                      __constant const score_t* restrict ordered_gradients __attribute__((max_constant_size(65536))),
 #if CONST_HESSIAN == 0
                       __constant const score_t* restrict ordered_hessians __attribute__((max_constant_size(65536))),
 #else
@@ -227,18 +228,18 @@ __kernel void histogram64(__global const uchar4* restrict feature_data_base,
                       __global volatile int * sync_counters,
                       __global acc_type* restrict hist_buf_base) {
 #else
-__kernel void histogram64(__global const uchar4* feature_data_base, 
+__kernel void histogram64(__global const uchar4* feature_data_base,
                       __constant const uchar4* restrict feature_masks __attribute__((max_constant_size(65536))),
                       const data_size_t feature_size,
-                      __global const data_size_t* data_indices, 
-                      const data_size_t num_data, 
-                      __global const score_t*  ordered_gradients, 
+                      __global const data_size_t* data_indices,
+                      const data_size_t num_data,
+                      __global const score_t*  ordered_gradients,
 #if CONST_HESSIAN == 0
                       __global const score_t*  ordered_hessians,
 #else
                       const score_t const_hessian,
 #endif
-                      __global char* restrict output_buf, 
+                      __global char* restrict output_buf,
                       __global volatile int * sync_counters,
                       __global acc_type* restrict hist_buf_base) {
 #endif
@@ -313,7 +314,7 @@ __kernel void histogram64(__global const uchar4* feature_data_base,
     uchar is_hessian_first = (ltid >> 2) & 1;
     // thread 0-7 write result to bank0, 8-15 to bank1, 16-23 to bank2, 24-31 to bank3
     ushort bank = (ltid >> 3) & BANK_MASK;
-    
+
     ushort group_feature = group_id >> POWER_FEATURE_WORKGROUPS;
     // each 2^POWER_FEATURE_WORKGROUPS workgroups process on one feature (compile-time constant)
     // feature_size is the number of examples per feature
@@ -454,7 +455,7 @@ R""()
 
 
         // prefetch the next iteration variables
-        // we don't need bondary check because if it is out of boundary, ind_next = 0
+        // we don't need boundary check because if it is out of boundary, ind_next = 0
         #ifndef IGNORE_INDICES
         feature4_next = feature_data[ind_next];
         #endif
@@ -582,7 +583,7 @@ R""()
     atomic_local_add_f(gh_hist + addr2, s0_stat2);
     #endif
     barrier(CLK_LOCAL_MEM_FENCE);
-    
+
 /* Makes MSVC happy with long string literal
 )""
 R""()
@@ -591,7 +592,7 @@ R""()
     // restore feature_mask
     feature_mask = feature_masks[group_feature];
     #endif
-    
+
     // now reduce the 4 banks of subhistograms into 1
     /* memory layout of gh_hist:
        -----------------------------------------------------------------------------------------------
@@ -680,7 +681,7 @@ R""()
     output[1 * 4 * NUM_BINS + ltid] = h_val;
     barrier(CLK_LOCAL_MEM_FENCE | CLK_GLOBAL_MEM_FENCE);
     mem_fence(CLK_GLOBAL_MEM_FENCE);
-    // To avoid the cost of an extra reducing kernel, we have to deal with some 
+    // To avoid the cost of an extra reducing kernel, we have to deal with some
     // gray area in OpenCL. We want the last work group that process this feature to
     // make the final reduction, and other threads will just quit.
     // This requires that the results written by other workgroups available to the
@@ -726,13 +727,13 @@ R""()
     #endif
         // locate our feature4's block in output memory
         uint output_offset = (feature4_id << POWER_FEATURE_WORKGROUPS);
-        __global acc_type const * restrict feature4_subhists = 
+        __global acc_type const * restrict feature4_subhists =
                  (__global acc_type *)output_buf + output_offset * 4 * 2 * NUM_BINS;
         // skip reading the data already in local memory
         uint skip_id = group_id ^ output_offset;
         // locate output histogram location for this feature4
         __global acc_type* restrict hist_buf = hist_buf_base + feature4_id * 4 * 2 * NUM_BINS;
-        within_kernel_reduction64x4(feature_mask, feature4_subhists, skip_id, g_val, h_val, 
+        within_kernel_reduction64x4(feature_mask, feature4_subhists, skip_id, g_val, h_val,
                                     1 << POWER_FEATURE_WORKGROUPS, hist_buf, (__local acc_type *)shared_array);
     }
 }

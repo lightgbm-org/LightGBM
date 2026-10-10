@@ -1,9 +1,10 @@
 /*!
- * Copyright (c) 2016 Microsoft Corporation. All rights reserved.
+ * Copyright (c) 2016-2026 Microsoft Corporation. All rights reserved.
+ * Copyright (c) 2016-2026 The LightGBM developers. All rights reserved.
  * Licensed under the MIT License. See LICENSE file in the project root for license information.
  */
-#ifndef LIGHTGBM_METRIC_BINARY_METRIC_HPP_
-#define LIGHTGBM_METRIC_BINARY_METRIC_HPP_
+#ifndef LIGHTGBM_SRC_METRIC_BINARY_METRIC_HPP_
+#define LIGHTGBM_SRC_METRIC_BINARY_METRIC_HPP_
 
 #include <LightGBM/metric.h>
 #include <LightGBM/utils/common.h>
@@ -61,13 +62,13 @@ class BinaryMetric: public Metric {
     double sum_loss = 0.0f;
     if (objective == nullptr) {
       if (weights_ == nullptr) {
-        #pragma omp parallel for schedule(static) reduction(+:sum_loss)
+        #pragma omp parallel for num_threads(OMP_NUM_THREADS()) schedule(static) reduction(+:sum_loss)
         for (data_size_t i = 0; i < num_data_; ++i) {
           // add loss
           sum_loss += PointWiseLossCalculator::LossOnPoint(label_[i], score[i]);
         }
       } else {
-        #pragma omp parallel for schedule(static) reduction(+:sum_loss)
+        #pragma omp parallel for num_threads(OMP_NUM_THREADS()) schedule(static) reduction(+:sum_loss)
         for (data_size_t i = 0; i < num_data_; ++i) {
           // add loss
           sum_loss += PointWiseLossCalculator::LossOnPoint(label_[i], score[i]) * weights_[i];
@@ -75,7 +76,7 @@ class BinaryMetric: public Metric {
       }
     } else {
       if (weights_ == nullptr) {
-        #pragma omp parallel for schedule(static) reduction(+:sum_loss)
+        #pragma omp parallel for num_threads(OMP_NUM_THREADS()) schedule(static) reduction(+:sum_loss)
         for (data_size_t i = 0; i < num_data_; ++i) {
           double prob = 0;
           objective->ConvertOutput(&score[i], &prob);
@@ -83,7 +84,7 @@ class BinaryMetric: public Metric {
           sum_loss += PointWiseLossCalculator::LossOnPoint(label_[i], prob);
         }
       } else {
-        #pragma omp parallel for schedule(static) reduction(+:sum_loss)
+        #pragma omp parallel for num_threads(OMP_NUM_THREADS()) schedule(static) reduction(+:sum_loss)
         for (data_size_t i = 0; i < num_data_; ++i) {
           double prob = 0;
           objective->ConvertOutput(&score[i], &prob);
@@ -385,4 +386,4 @@ class AveragePrecisionMetric: public Metric {
 };
 
 }  // namespace LightGBM
-#endif   // LightGBM_METRIC_BINARY_METRIC_HPP_
+#endif   // LIGHTGBM_SRC_METRIC_BINARY_METRIC_HPP_

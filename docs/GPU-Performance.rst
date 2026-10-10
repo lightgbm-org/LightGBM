@@ -194,18 +194,18 @@ following article:
 
 Huan Zhang, Si Si and Cho-Jui Hsieh. `GPU Acceleration for Large-scale Tree Boosting`_. SysML Conference, 2018.
 
-.. _link1: https://archive.ics.uci.edu/ml/datasets/HIGGS
+.. _link1: https://archive.ics.uci.edu/dataset/280/higgs
 
-.. _link2: http://www.csie.ntu.edu.tw/~cjlin/libsvmtools/datasets/binary.html
+.. _link2: https://www.csie.ntu.edu.tw/~cjlin/libsvmtools/datasets/binary.html
 
 .. _link3: https://www.kaggle.com/c/bosch-production-line-performance/data
 
-.. _link4: https://webscope.sandbox.yahoo.com/catalog.php?datatype=c
+.. _link4: https://proceedings.mlr.press/v14/chapelle11a.html
 
-.. _link5: http://research.microsoft.com/en-us/projects/mslr/
+.. _link5: https://www.microsoft.com/en-us/research/project/mslr/
 
-.. _link6: http://stat-computing.org/dataexpo/2009/
+.. _link6: https://community.amstat.org/jointscsg-section/dataexpo/dataexpo2009
 
-.. _0bb4a82: https://github.com/microsoft/LightGBM/commit/0bb4a82
+.. _0bb4a82: https://github.com/lightgbm-org/LightGBM/commit/0bb4a82
 
 .. _GPU Acceleration for Large-scale Tree Boosting: https://arxiv.org/abs/1706.08359

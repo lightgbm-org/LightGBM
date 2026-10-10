@@ -5,7 +5,7 @@ This document gives a basic walk-through of LightGBM Python-package.
 
 **List of other helpful links**
 
--  `Python Examples <https://github.com/microsoft/LightGBM/tree/master/examples/python-guide>`__
+-  `Python Examples <https://github.com/lightgbm-org/LightGBM/tree/main/examples/python-guide>`__
 
 -  `Python API <./Python-API.rst>`__
 
@@ -35,7 +35,9 @@ The LightGBM Python module can load data from:
 
 -  LibSVM (zero-based) / TSV / CSV format text file
 
--  NumPy 2D array(s), pandas DataFrame, H2O DataTable's Frame, SciPy sparse matrix
+-  NumPy 2D array(s), SciPy sparse matrix
+
+-  pandas DataFrame, polars DataFrame, pyarrow Table
 
 -  LightGBM binary file
 
@@ -59,8 +61,9 @@ Many of the examples in this page use functionality from ``numpy``. To run the e
 
 .. code:: python
 
-    data = np.random.rand(500, 10)  # 500 entities, each contains 10 features
-    label = np.random.randint(2, size=500)  # binary target
+    rng = np.random.default_rng()
+    data = rng.uniform(size=(500, 10))  # 500 entities, each contains 10 features
+    label = rng.integers(low=0, high=2, size=(500, ))  # binary target
     train_data = lgb.Dataset(data, label=label)
 
 **To load a scipy.sparse.csr\_matrix array into Dataset:**
@@ -101,7 +104,7 @@ Features of using ``Sequence`` interface:
 
 Please refer to ``Sequence`` `API doc <./Python-API.rst#data-structure-api>`__.
 
-`dataset_from_multi_hdf5.py <https://github.com/microsoft/LightGBM/blob/master/examples/python-guide/dataset_from_multi_hdf5.py>`__ is a detailed example.
+`dataset_from_multi_hdf5.py <https://github.com/lightgbm-org/LightGBM/blob/main/examples/python-guide/dataset_from_multi_hdf5.py>`__ is a detailed example.
 
 **Saving Dataset into a LightGBM binary file will make loading faster:**
 
@@ -133,13 +136,19 @@ In LightGBM, the validation data should be aligned with training data.
 LightGBM can use categorical features as input directly.
 It doesn't need to convert to one-hot encoding, and is much faster than one-hot encoding (about 8x speed-up).
 
-**Note**: You should convert your categorical features to ``int`` type before you construct ``Dataset``.
+**Note**: For array-like inputs (e.g. ``numpy``), convert categorical features to non-negative
+``int`` values before constructing the ``Dataset``. For dataframe inputs (e.g. ``pandas``) with
+a categorical dtype, integer codes are extracted automatically. With the default
+``categorical_feature="auto"``, only **unordered** categoricals are auto-detected. Ordered
+categoricals are treated as ordinal numeric features.
+See `Categorical Feature Support <./Advanced-Topics.rst#categorical-feature-support>`__ for details.
 
 **Weights can be set when needed:**
 
 .. code:: python
 
-    w = np.random.rand(500, )
+    rng = np.random.default_rng()
+    w = rng.uniform(size=(500, ))
     train_data = lgb.Dataset(data, label=label, weight=w)
 
 or
@@ -147,7 +156,8 @@ or
 .. code:: python
 
     train_data = lgb.Dataset(data, label=label)
-    w = np.random.rand(500, )
+    rng = np.random.default_rng()
+    w = rng.uniform(size=(500, ))
     train_data.set_weight(w)
 
 And you can use ``Dataset.set_init_score()`` to set initial score, and ``Dataset.set_group()`` to set group/query data for ranking tasks.
@@ -249,7 +259,8 @@ A model that has been trained or loaded can perform predictions on datasets:
 .. code:: python
 
     # 7 entities, each contains 10 features
-    data = np.random.rand(7, 10)
+    rng = np.random.default_rng()
+    data = rng.uniform(size=(7, 10))
     ypred = bst.predict(data)
 
 If early stopping is enabled during training, you can get predictions from the best iteration with ``bst.best_iteration``:
@@ -258,4 +269,4 @@ If early stopping is enabled during training, you can get predictions from the b
 
     ypred = bst.predict(data, num_iteration=bst.best_iteration)
 
-.. _Python-package: https://github.com/microsoft/LightGBM/tree/master/python-package
+.. _Python-package: https://github.com/lightgbm-org/LightGBM/tree/main/python-package

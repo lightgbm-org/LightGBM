@@ -1,3 +1,5 @@
+#! /bin/sh
+
 # Script used to generate `Makevars.win` from `Makevars.win.in`
 # on Windows
 
@@ -7,31 +9,11 @@
 
 R_EXE="${R_HOME}/bin${R_ARCH_BIN}/R"
 
-# As described in "Using C++ code" in "Writing R Extensions",
-# Rtools35 shipped with g++ 4.9, which didn't support C++17.
-#
-# Testing here for C++17 support, to account for that possibility
-# and to continue supporting R 3.6.
-#
-CXX17=`"${R_EXE}" CMD config CXX17`
-CXX17STD=`"${R_EXE}" CMD config CXX17STD`
+CXX17=$("${R_EXE}" CMD config CXX17)
+CXX17STD=$("${R_EXE}" CMD config CXX17STD)
 CXX="${CXX17} ${CXX17STD}"
-CXXFLAGS=`"${R_EXE}" CMD config CXX17FLAGS`
-CXX_STD="CXX17"
-
-cpp17_supported="yes"
-if test "${CXX17}" = "";
-then
-    cpp17_supported="no"
-    CXX11=`"${R_EXE}" CMD config CXX11`
-    CXX11STD=`"${R_EXE}" CMD config CXX11STD`
-    CXX="${CXX11} ${CXX11STD}"
-    CXXFLAGS=`"${R_EXE}" CMD config CXX11FLAGS`
-    CXX_STD="CXX11"
-fi
-echo "checking whether C++17 is supported...${cpp17_supported}"
-
-CPPFLAGS=`"${R_EXE}" CMD config CPPFLAGS`
+CXXFLAGS=$("${R_EXE}" CMD config CXX17FLAGS)
+CPPFLAGS=$("${R_EXE}" CMD config CPPFLAGS)
 
 # LightGBM-specific flags
 LGB_CPPFLAGS=""
@@ -57,6 +39,7 @@ int main() {
 }
 EOL
 
+# shellcheck disable=SC2086
 ${CXX} ${CXXFLAGS} ${CPPFLAGS} -o conftest conftest.cpp 2>/dev/null && ./conftest && ac_mm_prefetch="yes"
 rm -f ./conftest
 rm -f ./conftest.cpp
@@ -81,6 +64,7 @@ int main() {
 }
 EOL
 
+# shellcheck disable=SC2086
 ${CXX} ${CXXFLAGS} ${CPPFLAGS} -o conftest conftest.cpp 2>/dev/null && ./conftest && ac_mm_malloc="yes"
 rm -f ./conftest
 rm -f ./conftest.cpp
@@ -106,6 +90,7 @@ int main() {
 }
 EOL
 
+# shellcheck disable=SC2086
 ${CXX} ${CXXFLAGS} ${CPPFLAGS} -o conftest conftest.cpp 2>/dev/null && ./conftest && ac_inet_pton="yes"
 rm -f ./conftest
 rm -f ./conftest.cpp
@@ -117,9 +102,6 @@ then
 fi
 
 # Generate Makevars.win from Makevars.win.in
-sed -e \
-    "s/@CXX_STD@/$CXX_STD/" \
-    < src/Makevars.win.in > src/Makevars.win
 sed -e \
     "s/@LGB_CPPFLAGS@/$LGB_CPPFLAGS/" \
     < src/Makevars.win.in > src/Makevars.win

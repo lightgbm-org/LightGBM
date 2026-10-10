@@ -11,8 +11,11 @@
 #  LIBR_EXECUTABLE
 #  LIBR_MSVC_CORE_LIBRARY
 #  LIBR_INCLUDE_DIRS
+#  LIBR_LIBS_DIR
 #  LIBR_CORE_LIBRARY
 # and a CMake function to create R.lib for MSVC
+
+# lint_cmake: -convention/filename
 
 if(NOT R_ARCH)
   if("${CMAKE_SIZEOF_VOID_P}" STREQUAL "4")
@@ -23,7 +26,7 @@ if(NOT R_ARCH)
 endif()
 
 if(NOT ("${R_ARCH}" STREQUAL "x64"))
-  message(FATAL_ERROR "LightGBM's R package currently only supports 64-bit operating systems")
+  message(FATAL_ERROR "LightGBM's R-package currently only supports 64-bit operating systems")
 endif()
 
 # Creates R.lib and R.def in the build directory for linking with MSVC
@@ -186,9 +189,16 @@ execute_process(
   OUTPUT_VARIABLE LIBR_INCLUDE_DIRS
 )
 
+# ask R for the lib dir
+execute_process(
+  COMMAND ${LIBR_EXECUTABLE} "--slave" "--vanilla" "-e" "cat(normalizePath(R.home('lib'), winslash='/'))"
+  OUTPUT_VARIABLE LIBR_LIBS_DIR
+)
+
 set(LIBR_HOME ${LIBR_HOME} CACHE PATH "R home directory")
 set(LIBR_EXECUTABLE ${LIBR_EXECUTABLE} CACHE PATH "R executable")
 set(LIBR_INCLUDE_DIRS ${LIBR_INCLUDE_DIRS} CACHE PATH "R include directory")
+set(LIBR_LIBS_DIR ${LIBR_LIBS_DIR} CACHE PATH "Where R stores vendored third-party libraries")
 
 # where is R.so / R.dll / libR.so likely to be found?
 set(
@@ -232,20 +242,26 @@ endif()
 include(FindPackageHandleStandardArgs)
 
 if(WIN32 AND MSVC)
+# lint_cmake: -package/stdargs
   find_package_handle_standard_args(
+# lint_cmake: +package/stdargs
     LibR DEFAULT_MSG
     LIBR_HOME
     LIBR_EXECUTABLE
     LIBR_INCLUDE_DIRS
+    LIBR_LIBS_DIR
     LIBR_CORE_LIBRARY
     LIBR_MSVC_CORE_LIBRARY
   )
 else()
+# lint_cmake: -package/stdargs
   find_package_handle_standard_args(
+# lint_cmake: +package/stdargs
     LibR DEFAULT_MSG
     LIBR_HOME
     LIBR_EXECUTABLE
     LIBR_INCLUDE_DIRS
+    LIBR_LIBS_DIR
     LIBR_CORE_LIBRARY
   )
 endif()

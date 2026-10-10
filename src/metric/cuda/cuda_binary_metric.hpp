@@ -1,16 +1,17 @@
 /*!
- * Copyright (c) 2022 Microsoft Corporation. All rights reserved.
+ * Copyright (c) 2022-2026 Microsoft Corporation. All rights reserved.
+ * Copyright (c) 2022-2026 The LightGBM developers. All rights reserved.
  * Licensed under the MIT License. See LICENSE file in the project root for
  * license information.
  */
 
-#ifndef LIGHTGBM_METRIC_CUDA_CUDA_BINARY_METRIC_HPP_
-#define LIGHTGBM_METRIC_CUDA_CUDA_BINARY_METRIC_HPP_
+#ifndef LIGHTGBM_SRC_METRIC_CUDA_CUDA_BINARY_METRIC_HPP_
+#define LIGHTGBM_SRC_METRIC_CUDA_CUDA_BINARY_METRIC_HPP_
 
 #ifdef USE_CUDA
 
 #include <LightGBM/cuda/cuda_metric.hpp>
-#include <LightGBM/cuda/cuda_utils.h>
+#include <LightGBM/cuda/cuda_utils.hu>
 
 #include <vector>
 
@@ -35,7 +36,7 @@ class CUDABinaryLoglossMetric: public CUDABinaryMetricInterface<BinaryLoglossMet
 
   virtual ~CUDABinaryLoglossMetric() {}
 
-  __device__ static double MetricOnPointCUDA(label_t label, double score) {
+  __device__ static double MetricOnPointCUDA(label_t label, double score, const double /*param*/) {
     // score should have been converted to probability
     if (label <= 0) {
       if (1.0f - score > kEpsilon) {
@@ -50,8 +51,23 @@ class CUDABinaryLoglossMetric: public CUDABinaryMetricInterface<BinaryLoglossMet
   }
 };
 
+class CUDABinaryErrorMetric: public CUDABinaryMetricInterface<BinaryErrorMetric, CUDABinaryErrorMetric> {
+ public:
+  explicit CUDABinaryErrorMetric(const Config& config);
+
+  virtual ~CUDABinaryErrorMetric() {}
+
+  __device__ inline static double MetricOnPointCUDA(label_t label, double score, const double /*param*/) {
+    if (score <= 0.5f) {
+      return label > 0;
+    } else {
+      return label <= 0;
+    }
+  }
+};
+
 }  // namespace LightGBM
 
 #endif  // USE_CUDA
 
-#endif  // LIGHTGBM_METRIC_CUDA_CUDA_BINARY_METRIC_HPP_
+#endif  // LIGHTGBM_SRC_METRIC_CUDA_CUDA_BINARY_METRIC_HPP_

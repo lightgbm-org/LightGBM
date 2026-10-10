@@ -50,7 +50,7 @@ The parameters format is ``key1=value1 key2=value2 ...``.
 Parameters can be set both in config file and command line.
 If one parameter appears in both command line and config file, LightGBM will use the parameter from the command line.
 
-The most important parameters which new users should take a look to are located into `Core Parameters <./Parameters.rst#core-parameters>`__
+The most important parameters which new users should take a look at are located into `Core Parameters <./Parameters.rst#core-parameters>`__
 and the top of `Learning Control Parameters <./Parameters.rst#learning-control-parameters>`__
 sections of the full detailed list of `LightGBM's parameters <./Parameters.rst>`__.
 
@@ -59,25 +59,25 @@ Run LightGBM
 
 ::
 
-    "./lightgbm" config=your_config_file other_args ...
+    lightgbm config=your_config_file other_args ...
 
 Parameters can be set both in the config file and command line, and the parameters in command line have higher priority than in the config file.
 For example, the following command line will keep ``num_trees=10`` and ignore the same parameter in the config file.
 
 ::
 
-    "./lightgbm" config=train.conf num_trees=10
+    lightgbm config=train.conf num_trees=10
 
 Examples
 --------
 
--  `Binary Classification <https://github.com/microsoft/LightGBM/tree/master/examples/binary_classification>`__
+-  `Binary Classification <https://github.com/lightgbm-org/LightGBM/tree/main/examples/binary_classification>`__
 
--  `Regression <https://github.com/microsoft/LightGBM/tree/master/examples/regression>`__
+-  `Regression <https://github.com/lightgbm-org/LightGBM/tree/main/examples/regression>`__
 
--  `Lambdarank <https://github.com/microsoft/LightGBM/tree/master/examples/lambdarank>`__
+-  `Lambdarank <https://github.com/lightgbm-org/LightGBM/tree/main/examples/lambdarank>`__
 
--  `Distributed Learning <https://github.com/microsoft/LightGBM/tree/master/examples/parallel_learning>`__
+-  `Distributed Learning <https://github.com/lightgbm-org/LightGBM/tree/main/examples/parallel_learning>`__
 
 .. _CSV: https://en.wikipedia.org/wiki/Comma-separated_values
 
@@ -85,4 +85,4 @@ Examples
 
 .. _LibSVM: https://www.csie.ntu.edu.tw/~cjlin/libsvm/
 
-.. _Expo data: http://stat-computing.org/dataexpo/2009/
+.. _Expo data: https://community.amstat.org/jointscsg-section/dataexpo/dataexpo2009

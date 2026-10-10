@@ -60,11 +60,17 @@ second group, etc.}
 constructed dataset
 }
 \description{
-Construct \code{lgb.Dataset} object from dense matrix, sparse matrix
-             or local file (that was created previously by saving an \code{lgb.Dataset}).
+LightGBM does not train on raw data.
+             It discretizes continuous features into histogram bins, tries to
+             combine categorical features, and automatically handles missing and
+
+             The \code{Dataset} class handles that preprocessing, and holds that
+             alternative representation of the input data.
 }
 \examples{
 \donttest{
+\dontshow{setLGBMthreads(2L)}
+\dontshow{data.table::setDTthreads(1L)}
 data(agaricus.train, package = "lightgbm")
 train <- agaricus.train
 dtrain <- lgb.Dataset(train$data, label = train$label)

@@ -39,7 +39,7 @@ DataProcessor <- R6::R6Class(
             )
           }
           data_num_class <- length(self$factor_levels)
-          params <- lgb.check.wrapper_param(
+          params <- .check_wrapper_param(
               main_param_name = "num_class"
               , params = params
               , alternative_kwarg_value = data_num_class

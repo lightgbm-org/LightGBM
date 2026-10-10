@@ -1,24 +1,26 @@
 /*!
- * Copyright (c) 2020 Microsoft Corporation. All rights reserved.
+ * Copyright (c) 2020-2026 Microsoft Corporation. All rights reserved.
+ * Copyright (c) 2020-2026 The LightGBM developers. All rights reserved.
  * Licensed under the MIT License. See LICENSE file in the project root for license information.
  */
-#ifndef LIGHTGBM_TREELEARNER_LINEAR_TREE_LEARNER_H_
-#define LIGHTGBM_TREELEARNER_LINEAR_TREE_LEARNER_H_
+#ifndef LIGHTGBM_SRC_TREELEARNER_LINEAR_TREE_LEARNER_H_
+#define LIGHTGBM_SRC_TREELEARNER_LINEAR_TREE_LEARNER_H_
 
-#include <string>
 #include <cmath>
 #include <cstdio>
 #include <memory>
 #include <random>
 #include <vector>
 
+#include "gpu_tree_learner.h"
 #include "serial_tree_learner.h"
 
 namespace LightGBM {
 
-class LinearTreeLearner: public SerialTreeLearner {
+template <typename TREE_LEARNER_TYPE>
+class LinearTreeLearner: public TREE_LEARNER_TYPE {
  public:
-  explicit LinearTreeLearner(const Config* config) : SerialTreeLearner(config) {}
+  explicit LinearTreeLearner(const Config* config) : TREE_LEARNER_TYPE(config) {}
 
   void Init(const Dataset* train_data, bool is_constant_hessian) override;
 
@@ -39,12 +41,12 @@ class LinearTreeLearner: public SerialTreeLearner {
 
   void AddPredictionToScore(const Tree* tree,
                             double* out_score) const override {
-    CHECK_LE(tree->num_leaves(), data_partition_->num_leaves());
+    CHECK_LE(tree->num_leaves(), this->data_partition_->num_leaves());
     bool has_nan = false;
     if (any_nan_) {
       for (int i = 0; i < tree->num_leaves() - 1 ; ++i) {
         // use split_feature because split_feature_inner doesn't work when refitting existing tree
-        if (contains_nan_[train_data_->InnerFeatureIndex(tree->split_feature(i))]) {
+        if (contains_nan_[this->train_data_->InnerFeatureIndex(tree->split_feature(i))]) {
           has_nan = true;
           break;
         }
@@ -70,13 +72,13 @@ class LinearTreeLearner: public SerialTreeLearner {
       leaf_coeff[leaf_num] = tree->LeafCoeffs(leaf_num);
       leaf_output[leaf_num] = tree->LeafOutput(leaf_num);
       for (int feat : tree->LeafFeaturesInner(leaf_num)) {
-        feat_ptr[leaf_num].push_back(train_data_->raw_index(feat));
+        feat_ptr[leaf_num].push_back(this->train_data_->raw_index(feat));
       }
       leaf_num_features[leaf_num] = static_cast<int>(feat_ptr[leaf_num].size());
     }
     OMP_INIT_EX();
-#pragma omp parallel for schedule(static) if (num_data_ > 1024)
-    for (int i = 0; i < num_data_; ++i) {
+#pragma omp parallel for num_threads(OMP_NUM_THREADS()) schedule(static) if (this->num_data_ > 1024)
+    for (int i = 0; i < this->num_data_; ++i) {
       OMP_LOOP_EX_BEGIN();
       int leaf_num = leaf_map_[i];
       if (leaf_num < 0) {
@@ -125,4 +127,4 @@ class LinearTreeLearner: public SerialTreeLearner {
 };
 
 }  // namespace LightGBM
-#endif   // LightGBM_TREELEARNER_LINEAR_TREE_LEARNER_H_
+#endif   // LIGHTGBM_SRC_TREELEARNER_LINEAR_TREE_LEARNER_H_

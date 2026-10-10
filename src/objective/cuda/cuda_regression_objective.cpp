@@ -1,5 +1,6 @@
 /*!
- * Copyright (c) 2021 Microsoft Corporation. All rights reserved.
+ * Copyright (c) 2021-2026 Microsoft Corporation. All rights reserved.
+ * Copyright (c) 2021-2026 The LightGBM developers. All rights reserved.
  * Licensed under the MIT License. See LICENSE file in the project root for
  * license information.
  */
@@ -82,6 +83,27 @@ double CUDARegressionPoissonLoss::LaunchCalcInitScoreKernel(const int class_id) 
   return Common::SafeLog(CUDARegressionObjectiveInterface<RegressionPoissonLoss>::LaunchCalcInitScoreKernel(class_id));
 }
 
+
+CUDARegressionQuantileloss::CUDARegressionQuantileloss(const Config& config):
+CUDARegressionObjectiveInterface<RegressionQuantileloss>(config) {}
+
+CUDARegressionQuantileloss::CUDARegressionQuantileloss(const std::vector<std::string>& strs):
+CUDARegressionObjectiveInterface<RegressionQuantileloss>(strs) {}
+
+CUDARegressionQuantileloss::~CUDARegressionQuantileloss() {}
+
+void CUDARegressionQuantileloss::Init(const Metadata& metadata, data_size_t num_data) {
+  CUDARegressionObjectiveInterface<RegressionQuantileloss>::Init(metadata, num_data);
+  cuda_data_indices_buffer_.Resize(static_cast<size_t>(num_data));
+  cuda_percentile_result_.Resize(1);
+  if (cuda_weights_ != nullptr) {
+    const int num_blocks = (num_data + GET_GRADIENTS_BLOCK_SIZE_REGRESSION - 1) / GET_GRADIENTS_BLOCK_SIZE_REGRESSION + 1;
+    cuda_weights_prefix_sum_.Resize(static_cast<size_t>(num_data));
+    cuda_weights_prefix_sum_buffer_.Resize(static_cast<size_t>(num_blocks));
+    cuda_weight_by_leaf_buffer_.Resize(static_cast<size_t>(num_data));
+  }
+  cuda_residual_buffer_.Resize(static_cast<size_t>(num_data));
+}
 
 }  // namespace LightGBM
 

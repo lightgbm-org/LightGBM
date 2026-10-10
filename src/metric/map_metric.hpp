@@ -1,9 +1,10 @@
 /*!
- * Copyright (c) 2017 Microsoft Corporation. All rights reserved.
+ * Copyright (c) 2017-2026 Microsoft Corporation. All rights reserved.
+ * Copyright (c) 2017-2026 The LightGBM developers. All rights reserved.
  * Licensed under the MIT License. See LICENSE file in the project root for license information.
  */
-#ifndef LIGHTGBM_METRIC_MAP_METRIC_HPP_
-#define LIGHTGBM_METRIC_MAP_METRIC_HPP_
+#ifndef LIGHTGBM_SRC_METRIC_MAP_METRIC_HPP_
+#define LIGHTGBM_SRC_METRIC_MAP_METRIC_HPP_
 
 #include <LightGBM/metric.h>
 #include <LightGBM/utils/common.h>
@@ -86,7 +87,9 @@ class MapMetric:public Metric {
     data_size_t cur_left = 0;
     for (size_t i = 0; i < ks.size(); ++i) {
       data_size_t cur_k = static_cast<data_size_t>(ks[i]);
-      if (cur_k > num_data) { cur_k = num_data; }
+      if (cur_k > num_data) {
+        cur_k = num_data;
+      }
       for (data_size_t j = cur_left; j < cur_k; ++j) {
         data_size_t idx = sorted_idx[j];
         if (label[idx] > 0.5f) {
@@ -111,7 +114,7 @@ class MapMetric:public Metric {
     }
     std::vector<double> tmp_map(eval_at_.size(), 0.0f);
     if (query_weights_ == nullptr) {
-      #pragma omp parallel for schedule(guided) firstprivate(tmp_map)
+      #pragma omp parallel for num_threads(OMP_NUM_THREADS()) schedule(guided) firstprivate(tmp_map)
       for (data_size_t i = 0; i < num_queries_; ++i) {
         const int tid = omp_get_thread_num();
         CalMapAtK(eval_at_, npos_per_query_[i], label_ + query_boundaries_[i],
@@ -121,7 +124,7 @@ class MapMetric:public Metric {
         }
       }
     } else {
-      #pragma omp parallel for schedule(guided) firstprivate(tmp_map)
+      #pragma omp parallel for num_threads(OMP_NUM_THREADS()) schedule(guided) firstprivate(tmp_map)
       for (data_size_t i = 0; i < num_queries_; ++i) {
         const int tid = omp_get_thread_num();
         CalMapAtK(eval_at_, npos_per_query_[i], label_ + query_boundaries_[i],
@@ -163,4 +166,4 @@ class MapMetric:public Metric {
 
 }  // namespace LightGBM
 
-#endif   // LIGHTGBM_METRIC_MAP_METRIC_HPP_
+#endif   // LIGHTGBM_SRC_METRIC_MAP_METRIC_HPP_

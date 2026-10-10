@@ -1,9 +1,10 @@
 /*!
- * Copyright (c) 2016 Microsoft Corporation. All rights reserved.
+ * Copyright (c) 2016-2026 Microsoft Corporation. All rights reserved.
+ * Copyright (c) 2016-2026 The LightGBM developers. All rights reserved.
  * Licensed under the MIT License. See LICENSE file in the project root for license information.
  */
-#ifndef LIGHTGBM_PREDICTOR_HPP_
-#define LIGHTGBM_PREDICTOR_HPP_
+#ifndef LIGHTGBM_SRC_APPLICATION_PREDICTOR_HPP_
+#define LIGHTGBM_SRC_APPLICATION_PREDICTOR_HPP_
 
 #include <LightGBM/boosting.h>
 #include <LightGBM/dataset.h>
@@ -233,7 +234,7 @@ class Predictor {
       std::vector<std::pair<int, double>> oneline_features;
       std::vector<std::string> result_to_write(lines.size());
       OMP_INIT_EX();
-      #pragma omp parallel for schedule(static) firstprivate(oneline_features)
+      #pragma omp parallel for num_threads(OMP_NUM_THREADS()) schedule(static) firstprivate(oneline_features)
       for (data_size_t i = 0; i < static_cast<data_size_t>(lines.size()); ++i) {
         OMP_LOOP_EX_BEGIN();
         oneline_features.clear();
@@ -299,4 +300,4 @@ class Predictor {
 
 }  // namespace LightGBM
 
-#endif   // LightGBM_PREDICTOR_HPP_
+#endif  // LIGHTGBM_SRC_APPLICATION_PREDICTOR_HPP_

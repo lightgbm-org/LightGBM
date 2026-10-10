@@ -1,9 +1,10 @@
 /*!
- * Copyright (c) 2020 Microsoft Corporation. All rights reserved.
+ * Copyright (c) 2020-2026 Microsoft Corporation. All rights reserved.
+ * Copyright (c) 2020-2026 The LightGBM developers. All rights reserved.
  * Licensed under the MIT License. See LICENSE file in the project root for license information.
  */
-#ifndef LIGHTGBM_IO_MULTI_VAL_SPARSE_BIN_HPP_
-#define LIGHTGBM_IO_MULTI_VAL_SPARSE_BIN_HPP_
+#ifndef LIGHTGBM_SRC_IO_MULTI_VAL_SPARSE_BIN_HPP_
+#define LIGHTGBM_SRC_IO_MULTI_VAL_SPARSE_BIN_HPP_
 
 #include <LightGBM/bin.h>
 #include <LightGBM/utils/openmp_wrapper.h>
@@ -85,7 +86,7 @@ class MultiValSparseBin : public MultiValBin {
         offsets[tid + 1] = offsets[tid] + sizes[tid + 1];
       }
       data_.resize(row_ptr_[num_data_]);
-#pragma omp parallel for schedule(static, 1)
+#pragma omp parallel for num_threads(OMP_NUM_THREADS()) schedule(static, 1)
       for (int tid = 0; tid < static_cast<int>(t_data_.size()); ++tid) {
         std::copy_n(t_data_[tid].data(), sizes[tid + 1],
                     data_.data() + offsets[tid]);
@@ -180,6 +181,124 @@ class MultiValSparseBin : public MultiValBin {
                                               gradients, hessians, out);
   }
 
+  template <bool USE_INDICES, bool USE_PREFETCH, bool ORDERED, typename PACKED_HIST_T, int HIST_BITS>
+  void ConstructHistogramIntInner(const data_size_t* data_indices,
+                               data_size_t start, data_size_t end,
+                               const score_t* gradients_and_hessians, hist_t* out) const {
+    data_size_t i = start;
+    PACKED_HIST_T* out_ptr = reinterpret_cast<PACKED_HIST_T*>(out);
+    const int16_t* gradients_and_hessians_ptr = reinterpret_cast<const int16_t*>(gradients_and_hessians);
+    const VAL_T* data_ptr = data_.data();
+    const INDEX_T* row_ptr_base = row_ptr_.data();
+    if (USE_PREFETCH) {
+      const data_size_t pf_offset = 32 / sizeof(VAL_T);
+      const data_size_t pf_end = end - pf_offset;
+
+      for (; i < pf_end; ++i) {
+        const auto idx = USE_INDICES ? data_indices[i] : i;
+        const auto pf_idx =
+            USE_INDICES ? data_indices[i + pf_offset] : i + pf_offset;
+        if (!ORDERED) {
+          PREFETCH_T0(gradients_and_hessians_ptr + pf_idx);
+        }
+        PREFETCH_T0(row_ptr_base + pf_idx);
+        PREFETCH_T0(data_ptr + row_ptr_[pf_idx]);
+        const auto j_start = RowPtr(idx);
+        const auto j_end = RowPtr(idx + 1);
+        const int16_t gradient_16 = ORDERED ? gradients_and_hessians_ptr[i] : gradients_and_hessians_ptr[idx];
+        const PACKED_HIST_T gradient_packed = (HIST_BITS == 8) ? gradient_16 :
+          ((static_cast<PACKED_HIST_T>(static_cast<int8_t>(gradient_16 >> 8)) << HIST_BITS) |
+          static_cast<PACKED_HIST_T>(gradient_16 & 0xff));
+        for (auto j = j_start; j < j_end; ++j) {
+          const auto ti = static_cast<uint32_t>(data_ptr[j]);
+          out_ptr[ti] += gradient_packed;
+        }
+      }
+    }
+    for (; i < end; ++i) {
+      const auto idx = USE_INDICES ? data_indices[i] : i;
+      const auto j_start = RowPtr(idx);
+      const auto j_end = RowPtr(idx + 1);
+      const int16_t gradient_16 = ORDERED ? gradients_and_hessians_ptr[i] : gradients_and_hessians_ptr[idx];
+      const PACKED_HIST_T gradient_packed = (HIST_BITS == 8) ? gradient_16 :
+          ((static_cast<PACKED_HIST_T>(static_cast<int8_t>(gradient_16 >> 8)) << HIST_BITS) |
+          static_cast<PACKED_HIST_T>(gradient_16 & 0xff));
+      for (auto j = j_start; j < j_end; ++j) {
+        const auto ti = static_cast<uint32_t>(data_ptr[j]);
+        out_ptr[ti] += gradient_packed;
+      }
+    }
+  }
+
+  void ConstructHistogramInt32(const data_size_t* data_indices, data_size_t start,
+                          data_size_t end, const score_t* gradients,
+                          const score_t* /*hessians*/, hist_t* out) const override {
+    ConstructHistogramIntInner<true, true, false, int64_t, 32>(data_indices, start, end,
+                                                               gradients, out);
+  }
+
+  void ConstructHistogramInt32(data_size_t start, data_size_t end,
+                          const score_t* gradients, const score_t* /*hessians*/,
+                          hist_t* out) const override {
+    ConstructHistogramIntInner<false, false, false, int64_t, 32>(
+        nullptr, start, end, gradients, out);
+  }
+
+  void ConstructHistogramOrderedInt32(const data_size_t* data_indices,
+                                 data_size_t start, data_size_t end,
+                                 const score_t* gradients,
+                                 const score_t* /*hessians*/,
+                                 hist_t* out) const override {
+    ConstructHistogramIntInner<true, true, true, int64_t, 32>(data_indices, start, end,
+                                                              gradients, out);
+  }
+
+  void ConstructHistogramInt16(const data_size_t* data_indices, data_size_t start,
+                          data_size_t end, const score_t* gradients,
+                          const score_t* /*hessians*/, hist_t* out) const override {
+    ConstructHistogramIntInner<true, true, false, int32_t, 16>(data_indices, start, end,
+                                                               gradients, out);
+  }
+
+  void ConstructHistogramInt16(data_size_t start, data_size_t end,
+                          const score_t* gradients, const score_t* /*hessians*/,
+                          hist_t* out) const override {
+    ConstructHistogramIntInner<false, false, false, int32_t, 16>(
+        nullptr, start, end, gradients, out);
+  }
+
+  void ConstructHistogramOrderedInt16(const data_size_t* data_indices,
+                                 data_size_t start, data_size_t end,
+                                 const score_t* gradients,
+                                 const score_t* /*hessians*/,
+                                 hist_t* out) const override {
+    ConstructHistogramIntInner<true, true, true, int32_t, 16>(data_indices, start, end,
+                                                              gradients, out);
+  }
+
+  void ConstructHistogramInt8(const data_size_t* data_indices, data_size_t start,
+                          data_size_t end, const score_t* gradients,
+                          const score_t* /*hessians*/, hist_t* out) const override {
+    ConstructHistogramIntInner<true, true, false, int16_t, 8>(data_indices, start, end,
+                                                               gradients, out);
+  }
+
+  void ConstructHistogramInt8(data_size_t start, data_size_t end,
+                          const score_t* gradients, const score_t* /*hessians*/,
+                          hist_t* out) const override {
+    ConstructHistogramIntInner<false, false, false, int16_t, 8>(
+        nullptr, start, end, gradients, out);
+  }
+
+  void ConstructHistogramOrderedInt8(const data_size_t* data_indices,
+                                 data_size_t start, data_size_t end,
+                                 const score_t* gradients,
+                                 const score_t* /*hessians*/,
+                                 hist_t* out) const override {
+    ConstructHistogramIntInner<true, true, true, int16_t, 8>(data_indices, start, end,
+                                                              gradients, out);
+  }
+
   MultiValBin* CreateLike(data_size_t num_data, int num_bin, int,
                           double estimate_element_per_row,
                           const std::vector<uint32_t>& /*offsets*/) const override {
@@ -226,7 +345,7 @@ class MultiValSparseBin : public MultiValBin {
                                       num_data_, 1024, &n_block, &block_size);
     std::vector<INDEX_T> sizes(t_data_.size() + 1, 0);
     const int pre_alloc_size = 50;
-#pragma omp parallel for schedule(static, 1)
+#pragma omp parallel for num_threads(OMP_NUM_THREADS()) schedule(static, 1)
     for (int tid = 0; tid < n_block; ++tid) {
       data_size_t start = tid * block_size;
       data_size_t end = std::min(num_data_, start + block_size);
@@ -312,8 +431,7 @@ class MultiValSparseBin : public MultiValBin {
   std::vector<INDEX_T> t_size_;
   std::vector<uint32_t> offsets_;
 
-  MultiValSparseBin<INDEX_T, VAL_T>(
-      const MultiValSparseBin<INDEX_T, VAL_T>& other)
+  MultiValSparseBin(const MultiValSparseBin<INDEX_T, VAL_T>& other)
       : num_data_(other.num_data_),
         num_bin_(other.num_bin_),
         estimate_element_per_row_(other.estimate_element_per_row_),
@@ -328,4 +446,4 @@ MultiValSparseBin<INDEX_T, VAL_T>* MultiValSparseBin<INDEX_T, VAL_T>::Clone() {
 
 }  // namespace LightGBM
 
-#endif  // LIGHTGBM_IO_MULTI_VAL_SPARSE_BIN_HPP_
+#endif  // LIGHTGBM_SRC_IO_MULTI_VAL_SPARSE_BIN_HPP_

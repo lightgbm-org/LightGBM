@@ -60,7 +60,7 @@
 #include <utility>
 #include <vector>
 
-namespace json11 {
+namespace json11_internal_lightgbm {
 
 enum JsonParse { STANDARD, COMMENTS };
 
@@ -223,4 +223,4 @@ class JsonValue {
   virtual ~JsonValue() {}
 };
 
-}  // namespace json11
+}  // namespace json11_internal_lightgbm

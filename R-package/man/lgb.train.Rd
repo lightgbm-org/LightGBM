@@ -15,8 +15,6 @@ lgb.train(
   record = TRUE,
   eval_freq = 1L,
   init_model = NULL,
-  colnames = NULL,
-  categorical_feature = NULL,
   early_stopping_rounds = NULL,
   callbacks = list(),
   reset_data = FALSE,
@@ -82,12 +80,6 @@ printing of evaluation during training}
 
 \item{init_model}{path of model file or \code{lgb.Booster} object, will continue training from this model}
 
-\item{colnames}{feature names, if not null, will use this to overwrite the names in dataset}
-
-\item{categorical_feature}{categorical features. This can either be a character vector of feature
-names or an integer vector with the indices of the features (e.g.
-\code{c(1L, 10L)} to say "the first and tenth columns").}
-
 \item{early_stopping_rounds}{int. Activates early stopping. When this parameter is non-null,
 training will stop if the evaluation of any metric on any validation set
 fails to improve for \code{early_stopping_rounds} consecutive boosting rounds.
@@ -126,10 +118,15 @@ Low-level R interface to train a LightGBM model. Unlike \code{\link{lightgbm}},
          in \code{params}, that metric will be considered the "first" one. If you omit \code{metric},
          a default metric will be used based on your choice for the parameter \code{obj} (keyword argument)
          or \code{objective} (passed into \code{params}).
+
+         \bold{NOTE:} if using \code{boosting_type="dart"}, any early stopping configuration will be ignored
+         and early stopping will not be performed.
 }
 
 \examples{
 \donttest{
+\dontshow{setLGBMthreads(2L)}
+\dontshow{data.table::setDTthreads(1L)}
 data(agaricus.train, package = "lightgbm")
 train <- agaricus.train
 dtrain <- lgb.Dataset(train$data, label = train$label)
@@ -141,6 +138,7 @@ params <- list(
   , metric = "l2"
   , min_data = 1L
   , learning_rate = 1.0
+  , num_threads = 2L
 )
 valids <- list(test = dtest)
 model <- lgb.train(
@@ -151,4 +149,5 @@ model <- lgb.train(
   , early_stopping_rounds = 3L
 )
 }
+
 }

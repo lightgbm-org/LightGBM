@@ -1,11 +1,12 @@
 /*!
- * Copyright (c) 2021 Microsoft Corporation. All rights reserved.
+ * Copyright (c) 2021-2026 Microsoft Corporation. All rights reserved.
+ * Copyright (c) 2021-2026 The LightGBM developers. All rights reserved.
  * Licensed under the MIT License. See LICENSE file in the project root for
  * license information.
  */
 
-#ifndef LIGHTGBM_OBJECTIVE_CUDA_CUDA_REGRESSION_OBJECTIVE_HPP_
-#define LIGHTGBM_OBJECTIVE_CUDA_CUDA_REGRESSION_OBJECTIVE_HPP_
+#ifndef LIGHTGBM_SRC_OBJECTIVE_CUDA_CUDA_REGRESSION_OBJECTIVE_HPP_
+#define LIGHTGBM_SRC_OBJECTIVE_CUDA_CUDA_REGRESSION_OBJECTIVE_HPP_
 
 #ifdef USE_CUDA
 
@@ -120,7 +121,7 @@ class CUDARegressionPoissonLoss : public CUDARegressionObjectiveInterface<Regres
 
   void Init(const Metadata& metadata, data_size_t num_data) override;
 
- protected:
+ private:
   void LaunchGetGradientsKernel(const double* score, score_t* gradients, score_t* hessians) const override;
 
   const double* LaunchConvertOutputCUDAKernel(const data_size_t num_data, const double* input, double* output) const override;
@@ -133,7 +134,35 @@ class CUDARegressionPoissonLoss : public CUDARegressionObjectiveInterface<Regres
 };
 
 
+class CUDARegressionQuantileloss : public CUDARegressionObjectiveInterface<RegressionQuantileloss> {
+ public:
+  explicit CUDARegressionQuantileloss(const Config& config);
+
+  explicit CUDARegressionQuantileloss(const std::vector<std::string>& strs);
+
+  ~CUDARegressionQuantileloss();
+
+  void Init(const Metadata& metadata, data_size_t num_data) override;
+
+ protected:
+  void LaunchGetGradientsKernel(const double* score, score_t* gradients, score_t* hessians) const override;
+
+  double LaunchCalcInitScoreKernel(const int class_id) const override;
+
+  void LaunchRenewTreeOutputCUDAKernel(
+    const double* score, const data_size_t* data_indices_in_leaf, const data_size_t* num_data_in_leaf,
+    const data_size_t* data_start_in_leaf, const int num_leaves, double* leaf_value) const override;
+
+  CUDAVector<data_size_t> cuda_data_indices_buffer_;
+  CUDAVector<double> cuda_weights_prefix_sum_;
+  CUDAVector<double> cuda_weights_prefix_sum_buffer_;
+  CUDAVector<double> cuda_residual_buffer_;
+  CUDAVector<label_t> cuda_weight_by_leaf_buffer_;
+  CUDAVector<label_t> cuda_percentile_result_;
+};
+
+
 }  // namespace LightGBM
 
 #endif  // USE_CUDA
-#endif  // LIGHTGBM_OBJECTIVE_CUDA_CUDA_REGRESSION_OBJECTIVE_HPP_
+#endif  // LIGHTGBM_SRC_OBJECTIVE_CUDA_CUDA_REGRESSION_OBJECTIVE_HPP_

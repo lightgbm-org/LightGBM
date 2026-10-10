@@ -1,9 +1,10 @@
 /*!
- * Copyright (c) 2017 Microsoft Corporation. All rights reserved.
+ * Copyright (c) 2017-2026 Microsoft Corporation. All rights reserved.
+ * Copyright (c) 2017-2026 The LightGBM developers. All rights reserved.
  * Licensed under the MIT License. See LICENSE file in the project root for license information.
  */
-#ifndef LIGHTGBM_BOOSTING_RF_H_
-#define LIGHTGBM_BOOSTING_RF_H_
+#ifndef LIGHTGBM_SRC_BOOSTING_RF_HPP_
+#define LIGHTGBM_SRC_BOOSTING_RF_HPP_
 
 #include <LightGBM/boosting.h>
 #include <LightGBM/metric.h>
@@ -97,7 +98,7 @@ class RF : public GBDT {
     }
     size_t total_size = static_cast<size_t>(num_data_) * num_tree_per_iteration_;
     std::vector<double> tmp_scores(total_size, 0.0f);
-    #pragma omp parallel for schedule(static)
+    #pragma omp parallel for num_threads(OMP_NUM_THREADS()) schedule(static)
     for (int j = 0; j < num_tree_per_iteration_; ++j) {
       size_t offset = static_cast<size_t>(j)* num_data_;
       for (data_size_t i = 0; i < num_data_; ++i) {
@@ -114,6 +115,12 @@ class RF : public GBDT {
     const bool is_use_subset = data_sample_strategy_->is_use_subset();
     const data_size_t bag_data_cnt = data_sample_strategy_->bag_data_cnt();
     const std::vector<data_size_t, Common::AlignmentAllocator<data_size_t, kAlignedSize>>& bag_data_indices = data_sample_strategy_->bag_data_indices();
+
+    // GOSSStrategy->Bagging may modify value of bag_data_cnt_
+    if (is_use_subset && bag_data_cnt < num_data_) {
+      tmp_grad_.resize(num_data_);
+      tmp_hess_.resize(num_data_);
+    }
 
     CHECK_EQ(gradients, nullptr);
     CHECK_EQ(hessians, nullptr);
@@ -162,7 +169,7 @@ class RF : public GBDT {
               output = init_scores_[cur_tree_id];
             }
           }
-          new_tree->AsConstantTree(output);
+          new_tree->AsConstantTree(output, num_data_);
           MultiplyScore(cur_tree_id, (iter_ + num_init_iteration_));
           UpdateScore(new_tree.get(), cur_tree_id);
           MultiplyScore(cur_tree_id, 1.0 / (iter_ + num_init_iteration_ + 1));
@@ -176,7 +183,9 @@ class RF : public GBDT {
   }
 
   void RollbackOneIter() override {
-    if (iter_ <= 0) { return; }
+    if (iter_ <= 0) {
+      return;
+    }
     int cur_iter = iter_ + num_init_iteration_ - 1;
     // reset score
     for (int cur_tree_id = 0; cur_tree_id < num_tree_per_iteration_; ++cur_tree_id) {
@@ -225,4 +234,4 @@ class RF : public GBDT {
 };
 
 }  // namespace LightGBM
-#endif  // LIGHTGBM_BOOSTING_RF_H_
+#endif  // LIGHTGBM_SRC_BOOSTING_RF_HPP_

@@ -1,4 +1,5 @@
 template:
+  bootstrap: 5
   params:
     bootswatch: cerulean
 
@@ -8,9 +9,9 @@ site:
 
 repo:
   url:
-    home: https://github.com/microsoft/LightGBM/
-    source: https://github.com/microsoft/LightGBM/tree/master/R-package/
-    issue: https://github.com/microsoft/LightGBM/issues/
+    home: https://github.com/lightgbm-org/LightGBM/
+    source: https://github.com/lightgbm-org/LightGBM/tree/main/R-package/
+    issue: https://github.com/lightgbm-org/LightGBM/issues/
     user: https://github.com/
 
 development:
@@ -37,61 +38,74 @@ navbar:
   title: LightGBM
   type: default
   left:
-  - icon: fa-reply fa-lg
-    href: ../
-  - icon: fa-home fa-lg
-    href: index.html
-  - text: Articles
-    href: articles/index.html
-  - text: Reference
-    href: reference/index.html
+    - icon: fa-reply fa-lg
+      href: ../
+    - icon: fa-home fa-lg
+      href: index.html
+    - text: Articles
+      href: articles/index.html
+    - text: Reference
+      href: reference/index.html
   right:
-  - icon: fa-github fa-lg
-    href: https://github.com/microsoft/LightGBM/tree/master/R-package
+    - icon: fa-github fa-lg
+      href: https://github.com/lightgbm-org/LightGBM/tree/main/R-package
 
 reference:
   - title: Datasets
     desc: Datasets included with the R-package
     contents:
-    - '`agaricus.train`'
-    - '`agaricus.test`'
-    - '`bank`'
+      - '`agaricus.train`'
+      - '`agaricus.test`'
+      - '`bank`'
   - title: Data Input / Output
     desc: Data I/O required for LightGBM
     contents:
-    - '`dim.lgb.Dataset`'
-    - '`dimnames.lgb.Dataset`'
-    - '`get_field`'
-    - '`set_field`'
-    - '`slice`'
-    - '`lgb.Dataset`'
-    - '`lgb.Dataset.construct`'
-    - '`lgb.Dataset.create.valid`'
-    - '`lgb.Dataset.save`'
-    - '`lgb.Dataset.set.categorical`'
-    - '`lgb.Dataset.set.reference`'
-    - '`lgb.convert_with_rules`'
+      - '`dim.lgb.Dataset`'
+      - '`dimnames.lgb.Dataset`'
+      - '`get_field`'
+      - '`set_field`'
+      - '`lgb.Dataset`'
+      - '`lgb.Dataset.construct`'
+      - '`lgb.Dataset.create.valid`'
+      - '`lgb.Dataset.save`'
+      - '`lgb.Dataset.set.categorical`'
+      - '`lgb.Dataset.set.reference`'
+      - '`lgb.convert_with_rules`'
+      - '`lgb.slice.Dataset`'
   - title: Machine Learning
     desc: Train models with LightGBM and then use them to make predictions on new data
     contents:
-    - '`lightgbm`'
-    - '`lgb.train`'
-    - '`predict.lgb.Booster`'
-    - '`lgb.cv`'
+      - '`lightgbm`'
+      - '`lgb.train`'
+      - '`predict.lgb.Booster`'
+      - '`lgb.cv`'
+      - '`lgb.configure_fast_predict`'
   - title: Saving / Loading Models
     desc: Save and load LightGBM models
     contents:
-    - '`lgb.dump`'
-    - '`lgb.save`'
-    - '`lgb.load`'
-    - '`lgb.model.dt.tree`'
-    - '`saveRDS.lgb.Booster`'
-    - '`readRDS.lgb.Booster`'
+      - '`lgb.dump`'
+      - '`lgb.save`'
+      - '`lgb.load`'
+      - '`lgb.model.dt.tree`'
+      - '`lgb.drop_serialized`'
+      - '`lgb.make_serializable`'
+      - '`lgb.restore_handle`'
   - title: Model Interpretation
     desc: Analyze your models
     contents:
-    - '`lgb.get.eval.result`'
-    - '`lgb.importance`'
-    - '`lgb.interprete`'
-    - '`lgb.plot.importance`'
-    - '`lgb.plot.interpretation`'
+      - '`lgb.get.eval.result`'
+      - '`lgb.importance`'
+      - '`lgb.interpret`'
+      - '`lgb.plot.importance`'
+      - '`lgb.plot.interpretation`'
+      - '`print.lgb.Booster`'
+      - '`summary.lgb.Booster`'
+  - title: Multithreading Control
+    desc: Manage degree of parallelism used by LightGBM
+    contents:
+      - '`getLGBMThreads`'
+      - '`setLGBMThreads`'
+  - title: Deprecated
+    desc: Functionality that will be removed in the future
+    contents:
+      - '`lgb.interprete`'

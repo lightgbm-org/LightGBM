@@ -1,5 +1,4 @@
 library(lightgbm)
-library(methods)
 
 # We load in the agaricus dataset
 # In this example, we are aiming to predict whether a mushroom is edible

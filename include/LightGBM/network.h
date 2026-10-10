@@ -1,9 +1,10 @@
 /*!
- * Copyright (c) 2016 Microsoft Corporation. All rights reserved.
+ * Copyright (c) 2016-2026 Microsoft Corporation. All rights reserved.
+ * Copyright (c) 2016-2026 The LightGBM developers. All rights reserved.
  * Licensed under the MIT License. See LICENSE file in the project root for license information.
  */
-#ifndef LIGHTGBM_NETWORK_H_
-#define LIGHTGBM_NETWORK_H_
+#ifndef LIGHTGBM_INCLUDE_LIGHTGBM_NETWORK_H_
+#define LIGHTGBM_INCLUDE_LIGHTGBM_NETWORK_H_
 
 #include <LightGBM/config.h>
 #include <LightGBM/meta.h>
@@ -128,7 +129,7 @@ class Network {
                                    const ReduceFunction& reducer);
 
   /*!
-  * \brief Performing all_gather by using Bruck algorithm. 
+  * \brief Performing all_gather by using Bruck algorithm.
            Communication times is O(log(n)), and communication cost is O(send_size * number_machine)
   *        It can be used when all nodes have same input size.
   * \param input Input data
@@ -138,7 +139,7 @@ class Network {
   static void Allgather(char* input, comm_size_t send_size, char* output);
 
   /*!
-  * \brief Performing all_gather by using Bruck algorithm. 
+  * \brief Performing all_gather by using Bruck algorithm.
            Communication times is O(log(n)), and communication cost is O(all_size)
   *        It can be used when nodes have different input size.
   * \param input Input data
@@ -150,7 +151,7 @@ class Network {
   static void Allgather(char* input, const comm_size_t* block_start, const comm_size_t* block_len, char* output, comm_size_t all_size);
 
   /*!
-  * \brief Perform reduce scatter by using recursive halving algorithm. 
+  * \brief Perform reduce scatter by using recursive halving algorithm.
            Communication times is O(log(n)), and communication cost is O(input_size)
   * \param input Input data
   * \param input_size The size of input data
@@ -314,4 +315,4 @@ class Network {
 
 }  // namespace LightGBM
 
-#endif   // LightGBM_NETWORK_H_
+#endif   // LIGHTGBM_INCLUDE_LIGHTGBM_NETWORK_H_

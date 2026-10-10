@@ -1,5 +1,6 @@
 /*!
- * Copyright (c) 2017 Microsoft Corporation. All rights reserved.
+ * Copyright (c) 2017-2026 Microsoft Corporation. All rights reserved.
+ * Copyright (c) 2017-2026 The LightGBM developers. All rights reserved.
  * Licensed under the MIT License. See LICENSE file in the project root for license information.
  */
 #include <LightGBM/config.h>
@@ -8,8 +9,11 @@
 #include <LightGBM/utils/array_args.h>
 #include <LightGBM/utils/common.h>
 
+#include <algorithm>
 #include <string>
 #include <sstream>
+#include <unordered_map>
+#include <utility>
 #include <vector>
 
 #include "gbdt.h"
@@ -354,7 +358,7 @@ std::string GBDT::SaveModelToString(int start_iteration, int num_iteration, int 
   std::vector<std::string> tree_strs(num_used_model - start_model);
   std::vector<size_t> tree_sizes(num_used_model - start_model);
   // output tree models
-  #pragma omp parallel for schedule(static)
+  #pragma omp parallel for num_threads(OMP_NUM_THREADS()) schedule(static)
   for (int i = start_model; i < num_used_model; ++i) {
     const int idx = i - start_model;
     tree_strs[idx] = "Tree=" + std::to_string(idx) + '\n';
@@ -545,17 +549,17 @@ bool GBDT::LoadModelFromString(const char* buffer, size_t len) {
     }
   } else {
     std::vector<size_t> tree_sizes = CommonC::StringToArray<size_t>(key_vals["tree_sizes"].c_str(), ' ');
-    std::vector<size_t> tree_boundries(tree_sizes.size() + 1, 0);
+    std::vector<size_t> tree_boundaries(tree_sizes.size() + 1, 0);
     int num_trees = static_cast<int>(tree_sizes.size());
     for (int i = 0; i < num_trees; ++i) {
-      tree_boundries[i + 1] = tree_boundries[i] + tree_sizes[i];
+      tree_boundaries[i + 1] = tree_boundaries[i] + tree_sizes[i];
       models_.emplace_back(nullptr);
     }
     OMP_INIT_EX();
-    #pragma omp parallel for schedule(static)
+    #pragma omp parallel for num_threads(OMP_NUM_THREADS()) schedule(static)
     for (int i = 0; i < num_trees; ++i) {
       OMP_LOOP_EX_BEGIN();
-      auto cur_p = p + tree_boundries[i];
+      auto cur_p = p + tree_boundaries[i];
       auto line_len = Common::GetLine(cur_p);
       std::string cur_line(cur_p, line_len);
       if (Common::StartsWith(cur_line, "Tree=")) {

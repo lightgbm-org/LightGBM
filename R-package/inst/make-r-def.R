@@ -24,7 +24,7 @@ message(sprintf("Creating '%s' from '%s'", OUT_DEF_FILE, IN_DLL_FILE))
 .pipe_shell_command_to_stdout <- function(command, args, out_file) {
     has_processx <- suppressMessages({
       suppressWarnings({
-        require("processx")  # nolint: undesirable_function
+        require("processx")  # nolint: undesirable_function.
       })
     })
     if (has_processx) {
@@ -71,7 +71,7 @@ invisible(file.remove(OBJDUMP_FILE))
 # see https://www.cs.colorado.edu/~main/cs1300/doc/mingwfaq.html
 start_index <- which(
     grepl(
-        pattern = "[Ordinal/Name Pointer] Table"  # nolint: non_portable_path
+        pattern = "[Ordinal/Name Pointer] Table"  # nolint: non_portable_path.
         , x = objdump_results
         , fixed = TRUE
     )

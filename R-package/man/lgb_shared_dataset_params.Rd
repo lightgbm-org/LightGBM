@@ -20,4 +20,7 @@ second group, etc.}
 \description{
 Parameter docs for fields used in \code{lgb.Dataset} construction
 }
+\details{
+This page contains shared documentation for dataset-related parameters used throughout the package.
+}
 \keyword{internal}

@@ -34,13 +34,13 @@ def create_dataset_from_multiple_hdf(input_flist, batch_size):
     data = []
     ylist = []
     for f in input_flist:
-        f = h5py.File(f, 'r')
-        data.append(HDFSequence(f['X'], batch_size))
-        ylist.append(f['Y'][:])
+        f = h5py.File(f, "r")
+        data.append(HDFSequence(f["X"], batch_size))
+        ylist.append(f["Y"][:])
 
     params = {
-        'bin_construct_sample_cnt': 200000,
-        'max_bin': 255,
+        "bin_construct_sample_cnt": 200000,
+        "max_bin": 255,
     }
     y = np.concatenate(ylist)
     dataset = lgb.Dataset(data, label=y, params=params)
@@ -51,7 +51,7 @@ def create_dataset_from_multiple_hdf(input_flist, batch_size):
     # The reason is that DataFrame column names will be used in Dataset. For a DataFrame with Int64Index
     # as columns, Dataset will use column names like ["0", "1", "2", ...]. While for numpy array, column names
     # are using the default one assigned in C++ code (dataset_loader.cpp), like ["Column_0", "Column_1", ...].
-    dataset.save_binary('regression.train.from_hdf.bin')
+    dataset.save_binary("regression.train.from_hdf.bin")
 
 
 def save2hdf(input_data, fname, batch_size):
@@ -59,7 +59,7 @@ def save2hdf(input_data, fname, batch_size):
 
     Please note chunk size settings in the implementation for I/O performance optimization.
     """
-    with h5py.File(fname, 'w') as f:
+    with h5py.File(fname, "w") as f:
         for name, data in input_data.items():
             nrow, ncol = data.shape
             if ncol == 1:
@@ -75,12 +75,12 @@ def save2hdf(input_data, fname, batch_size):
                 # Also note that the data is stored in row major order to avoid extra copy when passing to
                 # lightgbm Dataset.
                 chunk = (batch_size, ncol)
-            f.create_dataset(name, data=data, chunks=chunk, compression='lzf')
+            f.create_dataset(name, data=data, chunks=chunk, compression="lzf")
 
 
 def generate_hdf(input_fname, output_basename, batch_size):
     # Save to 2 HDF5 files for demonstration.
-    df = pd.read_csv(input_fname, header=None, sep='\t')
+    df = pd.read_csv(input_fname, header=None, sep="\t")
 
     mid = len(df) // 2
     df1 = df.iloc[:mid]
@@ -88,25 +88,23 @@ def generate_hdf(input_fname, output_basename, batch_size):
 
     # We can store multiple datasets inside a single HDF5 file.
     # Separating X and Y for choosing best chunk size for data loading.
-    fname1 = f'{output_basename}1.h5'
-    fname2 = f'{output_basename}2.h5'
-    save2hdf({'Y': df1.iloc[:, :1], 'X': df1.iloc[:, 1:]}, fname1, batch_size)
-    save2hdf({'Y': df2.iloc[:, :1], 'X': df2.iloc[:, 1:]}, fname2, batch_size)
+    fname1 = f"{output_basename}1.h5"
+    fname2 = f"{output_basename}2.h5"
+    save2hdf({"Y": df1.iloc[:, :1], "X": df1.iloc[:, 1:]}, fname1, batch_size)
+    save2hdf({"Y": df2.iloc[:, :1], "X": df2.iloc[:, 1:]}, fname2, batch_size)
 
     return [fname1, fname2]
 
 
 def main():
     batch_size = 64
-    output_basename = 'regression'
+    output_basename = "regression"
     hdf_files = generate_hdf(
-        str(Path(__file__).absolute().parents[1] / 'regression' / 'regression.train'),
-        output_basename,
-        batch_size
+        str(Path(__file__).absolute().parents[1] / "regression" / "regression.train"), output_basename, batch_size
     )
 
     create_dataset_from_multiple_hdf(hdf_files, batch_size=batch_size)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

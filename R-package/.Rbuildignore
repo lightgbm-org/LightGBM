@@ -4,10 +4,12 @@ AUTOCONF_UBUNTU_VERSION
 ^.*\.bin
 ^build_r.R$
 \.clang-format
+^.*\.clusterfuzzlite$
 ^cran-comments\.md$
 ^docs$
 ^.*\.dll
 \.drone\.yml
+^.*\.dylib
 \.git
 \.gitkeep$
 ^.*\.history

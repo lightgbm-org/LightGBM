@@ -5,10 +5,10 @@ Documentation for LightGBM is generated using `Sphinx <https://www.sphinx-doc.or
 and `Breathe <https://breathe.readthedocs.io/>`__, which works on top of `Doxygen <https://www.doxygen.nl/index.html>`__ output.
 
 List of parameters and their descriptions in `Parameters.rst <./Parameters.rst>`__
-is generated automatically from comments in `config file <https://github.com/microsoft/LightGBM/blob/master/include/LightGBM/config.h>`__
-by `this script <https://github.com/microsoft/LightGBM/blob/master/helpers/parameter_generator.py>`__.
+is generated automatically from comments in `config file <https://github.com/lightgbm-org/LightGBM/blob/main/include/LightGBM/config.h>`__
+by `this script <https://github.com/lightgbm-org/LightGBM/blob/main/.ci/parameter-generator.py>`__.
 
-After each commit on ``master``, documentation is updated and published to `Read the Docs <https://lightgbm.readthedocs.io/>`__.
+After each commit on ``main``, documentation is updated and published to `Read the Docs <https://lightgbm.readthedocs.io/>`__.
 
 Build
 -----
@@ -35,7 +35,7 @@ Run the following from the root of this repository to pull the relevant image an
         --env READTHEDOCS=true \
         --workdir=/opt/LightGBM/docs \
         --entrypoint="" \
-        readthedocs/build:ubuntu-20.04-2021.09.23 \
+        readthedocs/build:ubuntu-24.04-2024.06.17 \
         /bin/bash build-docs.sh
 
 When that code completes, open ``docs/_build/html/index.html`` in your browser.

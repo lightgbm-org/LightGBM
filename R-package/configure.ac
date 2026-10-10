@@ -4,7 +4,7 @@
 #   * https://cran.r-project.org/doc/manuals/r-release/R-exts.html#Configure-and-cleanup
 
 AC_PREREQ(2.69)
-AC_INIT([lightgbm], [~~VERSION~~], [], [lightgbm], [])
+AC_INIT([lightgbm], [4.7.0.99], [], [lightgbm], [])
 
 ###########################
 # find compiler and flags #
@@ -60,7 +60,7 @@ AC_LANG_CONFTEST(
 ${CXX} ${CPPFLAGS} ${CXXFLAGS} -o conftest conftest.cpp 2>/dev/null && ./conftest && ac_mmprefetch=yes
 AC_MSG_RESULT([${ac_mmprefetch}])
 if test "${ac_mmprefetch}" = yes; then
-    LGB_CPPFLAGS+=" -DMM_PREFETCH=1"
+    LGB_CPPFLAGS="${LGB_CPPFLAGS} -DMM_PREFETCH=1"
 fi
 
 ############
@@ -86,7 +86,7 @@ AC_LANG_CONFTEST(
 ${CXX} ${CPPFLAGS} ${CXXFLAGS} -o conftest conftest.cpp 2>/dev/null && ./conftest && ac_mm_malloc=yes
 AC_MSG_RESULT([${ac_mm_malloc}])
 if test "${ac_mm_malloc}" = yes; then
-    LGB_CPPFLAGS+=" -DMM_MALLOC=1"
+    LGB_CPPFLAGS="${LGB_CPPFLAGS} -DMM_MALLOC=1"
 fi
 
 ##########
@@ -112,10 +112,10 @@ then
     # If Homebrew is found and libomp was installed with it, this code adds the necessary
     # flags for the compiler to find libomp headers and for the linker to find libomp.dylib.
     HOMEBREW_LIBOMP_PREFIX=""
-    if command -v brew &> /dev/null; then
+    if command -v brew >/dev/null 2>&1; then
         ac_brew_openmp=no
         AC_MSG_CHECKING([whether OpenMP was installed via Homebrew])
-        brew --prefix libomp &>/dev/null && ac_brew_openmp=yes
+        brew --prefix libomp >/dev/null 2>&1 && ac_brew_openmp=yes
         AC_MSG_RESULT([${ac_brew_openmp}])
         if test "${ac_brew_openmp}" = yes; then
             HOMEBREW_LIBOMP_PREFIX=`brew --prefix libomp`

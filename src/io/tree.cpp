@@ -1,5 +1,6 @@
 /*!
- * Copyright (c) 2016 Microsoft Corporation. All rights reserved.
+ * Copyright (c) 2016-2026 Microsoft Corporation. All rights reserved.
+ * Copyright (c) 2016-2026 The LightGBM developers. All rights reserved.
  * Licensed under the MIT License. See LICENSE file in the project root for license information.
  */
 #include <LightGBM/tree.h>
@@ -8,9 +9,13 @@
 #include <LightGBM/utils/common.h>
 #include <LightGBM/utils/threading.h>
 
+#include <algorithm>
 #include <functional>
 #include <iomanip>
 #include <sstream>
+#include <string>
+#include <unordered_map>
+#include <vector>
 
 namespace LightGBM {
 
@@ -153,7 +158,7 @@ int Tree::SplitCategorical(int leaf, int feature, int real_feature, const uint32
 void Tree::AddPredictionToScore(const Dataset* data, data_size_t num_data, double* score) const {
   if (!is_linear_ && num_leaves_ <= 1) {
     if (leaf_value_[0] != 0.0f) {
-#pragma omp parallel for schedule(static, 512) if (num_data >= 1024)
+#pragma omp parallel for num_threads(OMP_NUM_THREADS()) schedule(static, 512) if (num_data >= 1024)
       for (data_size_t i = 0; i < num_data; ++i) {
         score[i] += leaf_value_[0];
       }
@@ -234,7 +239,7 @@ void Tree::AddPredictionToScore(const Dataset* data,
   data_size_t num_data, double* score) const {
   if (!is_linear_ && num_leaves_ <= 1) {
     if (leaf_value_[0] != 0.0f) {
-#pragma omp parallel for schedule(static, 512) if (num_data >= 1024)
+#pragma omp parallel for num_threads(OMP_NUM_THREADS()) schedule(static, 512) if (num_data >= 1024)
       for (data_size_t i = 0; i < num_data; ++i) {
         score[used_data_indices[i]] += leaf_value_[0];
       }
@@ -416,12 +421,15 @@ std::string Tree::ToJSON() const {
   str_buf << "\"num_cat\":" << num_cat_ << "," << '\n';
   str_buf << "\"shrinkage\":" << shrinkage_ << "," << '\n';
   if (num_leaves_ == 1) {
+    str_buf << "\"tree_structure\":{";
+    str_buf << "\"leaf_value\":" << leaf_value_[0] << ", " << '\n';
     if (is_linear_) {
-      str_buf << "\"tree_structure\":{" << "\"leaf_value\":" << leaf_value_[0] << ", " << "\n";
-      str_buf << LinearModelToJSON(0) << "}" << "\n";
+      str_buf << "\"leaf_count\":" << leaf_count_[0] << ", " << '\n';
+      str_buf << LinearModelToJSON(0);
     } else {
-      str_buf << "\"tree_structure\":{" << "\"leaf_value\":" << leaf_value_[0] << "}" << '\n';
+      str_buf << "\"leaf_count\":" << leaf_count_[0];
     }
+    str_buf << "}" << '\n';
   } else {
     str_buf << "\"tree_structure\":" << NodeToJSON(0) << '\n';
   }
@@ -731,6 +739,12 @@ Tree::Tree(const char* str, size_t* used_len) {
     is_linear_ = false;
   }
 
+  if (key_vals.count("leaf_count")) {
+    leaf_count_ = CommonC::StringToArrayFast<int>(key_vals["leaf_count"], num_leaves_);
+  } else {
+    leaf_count_.resize(num_leaves_);
+  }
+
   #ifdef USE_CUDA
   is_cuda_tree_ = false;
   #endif  // USE_CUDA
@@ -791,12 +805,6 @@ Tree::Tree(const char* str, size_t* used_len) {
     leaf_weight_ = CommonC::StringToArray<double>(key_vals["leaf_weight"], num_leaves_);
   } else {
     leaf_weight_.resize(num_leaves_);
-  }
-
-  if (key_vals.count("leaf_count")) {
-    leaf_count_ = CommonC::StringToArrayFast<int>(key_vals["leaf_count"], num_leaves_);
-  } else {
-    leaf_count_.resize(num_leaves_);
   }
 
   if (key_vals.count("decision_type")) {
@@ -991,7 +999,10 @@ void Tree::TreeSHAPByMap(const std::unordered_map<int, double>& feature_values, 
     for (int i = 1; i <= unique_depth; ++i) {
       const double w = UnwoundPathSum(unique_path, unique_depth, i);
       const PathElement &el = unique_path[i];
-      (*phi)[el.feature_index] += w*(el.one_fraction - el.zero_fraction)*leaf_value_[~node];
+      // Complete the hash-table lookup before arithmetic to let the compiler
+      // fuse the final multiplication with the accumulation.
+      double& contribution = (*phi)[el.feature_index];
+      contribution += w*(el.one_fraction - el.zero_fraction)*leaf_value_[~node];
     }
 
   // internal node

@@ -1,10 +1,11 @@
 /*!
- * Copyright (c) 2016 Microsoft Corporation. All rights reserved.
+ * Copyright (c) 2016-2026 Microsoft Corporation. All rights reserved.
+ * Copyright (c) 2016-2026 The LightGBM developers. All rights reserved.
  * Licensed under the MIT License. See LICENSE file in the project root for
  * license information.
  */
-#ifndef LIGHTGBM_TREELEARNER_FEATURE_HISTOGRAM_HPP_
-#define LIGHTGBM_TREELEARNER_FEATURE_HISTOGRAM_HPP_
+#ifndef LIGHTGBM_SRC_TREELEARNER_FEATURE_HISTOGRAM_HPP_
+#define LIGHTGBM_SRC_TREELEARNER_FEATURE_HISTOGRAM_HPP_
 
 #include <LightGBM/bin.h>
 #include <LightGBM/dataset.h>
@@ -53,12 +54,26 @@ class FeatureHistogram {
 
   /*!
    * \brief Init the feature histogram
-   * \param feature the feature data for this histogram
-   * \param min_num_data_one_leaf minimal number of data in one leaf
+   * \param data the histogram data for this feature
+   * \param data_int16 the 16-bit histogram data for this feature (used for quantized training via 'use_quantized_grad')
+   * \param meta pointer to a FeatureMetaInfo object for this feature, with details like how missing values are handled and a pointer to the Config object with parameters
+   */
+  void Init(hist_t* data, int16_t* data_int16, const FeatureMetainfo* meta) {
+    meta_ = meta;
+    data_ = data;
+    data_int16_ = data_int16;
+    ResetFunc();
+  }
+
+  /*!
+   * \brief Init the feature histogram
+   * \param data the histogram data for this feature
+   * \param meta pointer to a FeatureMetaInfo object for this feature, with details like how missing values are handled and a pointer to the Config object with parameters
    */
   void Init(hist_t* data, const FeatureMetainfo* meta) {
     meta_ = meta;
     data_ = data;
+    data_int16_ = nullptr;
     ResetFunc();
   }
 
@@ -72,13 +87,80 @@ class FeatureHistogram {
 
   hist_t* RawData() { return data_; }
 
+  int32_t* RawDataInt32() { return reinterpret_cast<int32_t*>(data_); }
+
+  int16_t* RawDataInt16() { return data_int16_; }
+
   /*!
    * \brief Subtract current histograms with other
    * \param other The histogram that want to subtract
    */
-  void Subtract(const FeatureHistogram& other) {
-    for (int i = 0; i < (meta_->num_bin - meta_->offset) * 2; ++i) {
-      data_[i] -= other.data_[i];
+  template <bool USE_DIST_GRAD = false,
+    typename THIS_HIST_T = hist_t, typename OTHER_HIST_T = hist_t, typename RESULT_HIST_T = hist_t,
+    int THIS_HIST_BITS = 0, int OTHER_HIST_BITS = 0, int RESULT_HIST_BITS = 0>
+  void Subtract(const FeatureHistogram& other, const int32_t* buffer = nullptr) {
+    if (USE_DIST_GRAD) {
+      const THIS_HIST_T* this_int_data = THIS_HIST_BITS == 16 ?
+        reinterpret_cast<const THIS_HIST_T*>(data_int16_) :
+        (RESULT_HIST_BITS == 16 ?
+          reinterpret_cast<const THIS_HIST_T*>(buffer) :
+          reinterpret_cast<const THIS_HIST_T*>(data_));
+      const OTHER_HIST_T* other_int_data = OTHER_HIST_BITS == 16 ?
+        reinterpret_cast<OTHER_HIST_T*>(other.data_int16_) :
+        reinterpret_cast<OTHER_HIST_T*>(other.data_);
+      RESULT_HIST_T* result_int_data = RESULT_HIST_BITS == 16 ?
+        reinterpret_cast<RESULT_HIST_T*>(data_int16_) :
+        reinterpret_cast<RESULT_HIST_T*>(data_);
+      if (THIS_HIST_BITS == 32 && OTHER_HIST_BITS == 16 && RESULT_HIST_BITS == 32) {
+        for (int i = 0; i < meta_->num_bin - meta_->offset; ++i) {
+          const int32_t other_grad_hess = static_cast<int32_t>(other_int_data[i]);
+          const int64_t this_grad_hess = this_int_data[i];
+          const int64_t other_grad_hess_int64 =
+            (static_cast<int64_t>(static_cast<int16_t>(other_grad_hess >> 16)) << 32) |
+            (static_cast<int64_t>(other_grad_hess & 0x0000ffff));
+          const int64_t result_grad_hess = this_grad_hess - other_grad_hess_int64;
+          result_int_data[i] = static_cast<RESULT_HIST_T>(result_grad_hess);
+        }
+      } else if (THIS_HIST_BITS == 32 && OTHER_HIST_BITS == 16 && RESULT_HIST_BITS == 16) {
+        for (int i = 0; i < meta_->num_bin - meta_->offset; ++i) {
+          const int32_t other_grad_hess = static_cast<int32_t>(other_int_data[i]);
+          const int64_t this_grad_hess = this_int_data[i];
+          const int64_t other_grad_hess_int64 =
+            (static_cast<int64_t>(static_cast<int16_t>(other_grad_hess >> 16)) << 32) |
+            (static_cast<int64_t>(other_grad_hess & 0x0000ffff));
+          const int64_t result_grad_hess = this_grad_hess - other_grad_hess_int64;
+          const int32_t result_grad_hess_int32 =
+            (static_cast<int32_t>(result_grad_hess >> 32) << 16) |
+            static_cast<int32_t>(result_grad_hess & 0x00000000ffffffff);
+          result_int_data[i] = result_grad_hess_int32;
+        }
+      } else {
+        for (int i = 0; i < meta_->num_bin - meta_->offset; ++i) {
+          result_int_data[i] = this_int_data[i] - other_int_data[i];
+        }
+      }
+    } else {
+      for (int i = 0; i < (meta_->num_bin - meta_->offset) * 2; ++i) {
+        data_[i] -= other.data_[i];
+      }
+    }
+  }
+
+  void CopyToBuffer(int32_t* buffer) {
+    const int64_t* data_ptr = reinterpret_cast<const int64_t*>(data_);
+    int64_t* buffer_ptr = reinterpret_cast<int64_t*>(buffer);
+    for (int i = 0; i < meta_->num_bin - meta_->offset; ++i) {
+      buffer_ptr[i] = data_ptr[i];
+    }
+  }
+
+  void CopyFromInt16ToInt32(char* buffer) {
+    const int32_t* int16_data = reinterpret_cast<const int32_t*>(RawDataInt16());
+    int64_t* int32_data = reinterpret_cast<int64_t*>(buffer);
+    for (int i = 0; i < meta_->num_bin - meta_->offset; ++i) {
+      const int32_t int16_val = int16_data[i];
+      int32_data[i] = (static_cast<int64_t>(static_cast<int16_t>(int16_val >> 16)) << 32) |
+        static_cast<int64_t>(int16_val & 0x0000ffff);
     }
   }
 
@@ -94,12 +176,48 @@ class FeatureHistogram {
     output->gain *= meta_->penalty;
   }
 
+  void FindBestThresholdInt(int64_t sum_gradient_and_hessian,
+                            double grad_scale, double hess_scale,
+                            const uint8_t num_bits_bin,
+                            const uint8_t num_bits_acc,
+                            data_size_t num_data,
+                            const FeatureConstraint* constraints,
+                            double parent_output,
+                            SplitInfo* output) {
+    output->default_left = true;
+    output->gain = kMinScore;
+    int_find_best_threshold_fun_(sum_gradient_and_hessian, grad_scale, hess_scale, num_bits_bin, num_bits_acc, num_data,
+                             constraints, parent_output, output);
+    output->gain *= meta_->penalty;
+  }
+
   template <bool USE_RAND, bool USE_L1, bool USE_MAX_OUTPUT, bool USE_SMOOTHING>
-  double BeforeNumercal(double sum_gradient, double sum_hessian, double parent_output, data_size_t num_data,
+  double BeforeNumerical(double sum_gradient, double sum_hessian, double parent_output, data_size_t num_data,
                         SplitInfo* output, int* rand_threshold) {
     is_splittable_ = false;
     output->monotone_type = meta_->monotone_type;
 
+    double gain_shift = GetLeafGain<USE_L1, USE_MAX_OUTPUT, USE_SMOOTHING>(
+        sum_gradient, sum_hessian, meta_->config->lambda_l1, meta_->config->lambda_l2,
+        meta_->config->max_delta_step, meta_->config->path_smooth, num_data, parent_output);
+    *rand_threshold = 0;
+    if (USE_RAND) {
+      if (meta_->num_bin - 2 > 0) {
+        *rand_threshold = meta_->rand.NextInt(0, meta_->num_bin - 2);
+      }
+    }
+    return gain_shift + meta_->config->min_gain_to_split;
+  }
+
+  template <bool USE_RAND, bool USE_L1, bool USE_MAX_OUTPUT, bool USE_SMOOTHING>
+  double BeforeNumericalInt(int64_t sum_gradient_and_hessian, double grad_scale, double hess_scale, double parent_output, data_size_t num_data,
+                        SplitInfo* output, int* rand_threshold) {
+    is_splittable_ = false;
+    output->monotone_type = meta_->monotone_type;
+    const int32_t int_sum_gradient = static_cast<int32_t>(sum_gradient_and_hessian >> 32);
+    const uint32_t int_sum_hessian = static_cast<uint32_t>(sum_gradient_and_hessian & 0x00000000ffffffff);
+    const double sum_gradient = static_cast<double>(int_sum_gradient) * grad_scale;
+    const double sum_hessian = static_cast<double>(int_sum_hessian) * hess_scale;
     double gain_shift = GetLeafGain<USE_L1, USE_MAX_OUTPUT, USE_SMOOTHING>(
         sum_gradient, sum_hessian, meta_->config->lambda_l1, meta_->config->lambda_l2,
         meta_->config->max_delta_step, meta_->config->path_smooth, num_data, parent_output);
@@ -155,6 +273,119 @@ class FeatureHistogram {
 
   template <bool USE_RAND, bool USE_MC, bool USE_L1, bool USE_MAX_OUTPUT, bool USE_SMOOTHING>
   void FuncForNumricalL3() {
+  if (meta_->config->use_quantized_grad) {
+#define TEMPLATE_PREFIX_INT USE_RAND, USE_MC, USE_L1, USE_MAX_OUTPUT, USE_SMOOTHING
+#define LAMBDA_ARGUMENTS_INT                                         \
+  int64_t sum_gradient_and_hessian, double grad_scale, double hess_scale, const uint8_t hist_bits_bin, const uint8_t hist_bits_acc, data_size_t num_data, \
+      const FeatureConstraint* constraints, double parent_output, SplitInfo *output
+#define BEFORE_ARGUMENTS_INT sum_gradient_and_hessian, grad_scale, hess_scale, parent_output, num_data, output, &rand_threshold
+#define FUNC_ARGUMENTS_INT                                                      \
+  sum_gradient_and_hessian, grad_scale, hess_scale, num_data, constraints, min_gain_shift, \
+      output, rand_threshold, parent_output
+
+      if (meta_->num_bin > 2 && meta_->missing_type != MissingType::None) {
+        if (meta_->missing_type == MissingType::Zero) {
+          int_find_best_threshold_fun_ = [=](LAMBDA_ARGUMENTS_INT) {
+            int rand_threshold = 0;
+            double min_gain_shift =
+                BeforeNumericalInt<USE_RAND, USE_L1, USE_MAX_OUTPUT, USE_SMOOTHING>(
+                    BEFORE_ARGUMENTS_INT);
+            if (hist_bits_acc <= 16) {
+              CHECK_LE(hist_bits_bin, 16);
+              FindBestThresholdSequentiallyInt<TEMPLATE_PREFIX_INT, true, true, false, int32_t, int32_t, int16_t, int16_t, 16, 16>(
+                  FUNC_ARGUMENTS_INT);
+              FindBestThresholdSequentiallyInt<TEMPLATE_PREFIX_INT, false, true, false, int32_t, int32_t, int16_t, int16_t, 16, 16>(
+                  FUNC_ARGUMENTS_INT);
+            } else {
+              if (hist_bits_bin == 32) {
+                FindBestThresholdSequentiallyInt<TEMPLATE_PREFIX_INT, true, true, false, int64_t, int64_t, int32_t, int32_t, 32, 32>(
+                    FUNC_ARGUMENTS_INT);
+                FindBestThresholdSequentiallyInt<TEMPLATE_PREFIX_INT, false, true, false, int64_t, int64_t, int32_t, int32_t, 32, 32>(
+                    FUNC_ARGUMENTS_INT);
+              } else {
+                FindBestThresholdSequentiallyInt<TEMPLATE_PREFIX_INT, true, true, false, int32_t, int64_t, int16_t, int32_t, 16, 32>(
+                    FUNC_ARGUMENTS_INT);
+                FindBestThresholdSequentiallyInt<TEMPLATE_PREFIX_INT, false, true, false, int32_t, int64_t, int16_t, int32_t, 16, 32>(
+                    FUNC_ARGUMENTS_INT);
+              }
+            }
+          };
+        } else {
+          int_find_best_threshold_fun_ = [=](LAMBDA_ARGUMENTS_INT) {
+            int rand_threshold = 0;
+            double min_gain_shift =
+                BeforeNumericalInt<USE_RAND, USE_L1, USE_MAX_OUTPUT, USE_SMOOTHING>(
+                    BEFORE_ARGUMENTS_INT);
+            if (hist_bits_acc <= 16) {
+              CHECK_LE(hist_bits_bin, 16);
+              FindBestThresholdSequentiallyInt<TEMPLATE_PREFIX_INT, true, false, true, int32_t, int32_t, int16_t, int16_t, 16, 16>(
+                  FUNC_ARGUMENTS_INT);
+              FindBestThresholdSequentiallyInt<TEMPLATE_PREFIX_INT, false, false, true, int32_t, int32_t, int16_t, int16_t, 16, 16>(
+                  FUNC_ARGUMENTS_INT);
+            } else {
+              if (hist_bits_bin == 32) {
+                FindBestThresholdSequentiallyInt<TEMPLATE_PREFIX_INT, true, false, true, int64_t, int64_t, int32_t, int32_t, 32, 32>(
+                    FUNC_ARGUMENTS_INT);
+                FindBestThresholdSequentiallyInt<TEMPLATE_PREFIX_INT, false, false, true, int64_t, int64_t, int32_t, int32_t, 32, 32>(
+                    FUNC_ARGUMENTS_INT);
+              } else {
+                FindBestThresholdSequentiallyInt<TEMPLATE_PREFIX_INT, true, false, true, int32_t, int64_t, int16_t, int32_t, 16, 32>(
+                    FUNC_ARGUMENTS_INT);
+                FindBestThresholdSequentiallyInt<TEMPLATE_PREFIX_INT, false, false, true, int32_t, int64_t, int16_t, int32_t, 16, 32>(
+                    FUNC_ARGUMENTS_INT);
+              }
+            }
+          };
+        }
+      } else {
+        if (meta_->missing_type != MissingType::NaN) {
+          int_find_best_threshold_fun_ = [=](LAMBDA_ARGUMENTS_INT) {
+            int rand_threshold = 0;
+            double min_gain_shift =
+                BeforeNumericalInt<USE_RAND, USE_L1, USE_MAX_OUTPUT, USE_SMOOTHING>(
+                    BEFORE_ARGUMENTS_INT);
+            if (hist_bits_acc <= 16) {
+              CHECK_LE(hist_bits_bin, 16);
+              FindBestThresholdSequentiallyInt<TEMPLATE_PREFIX_INT, true, false, false, int32_t, int32_t, int16_t, int16_t, 16, 16>(
+                  FUNC_ARGUMENTS_INT);
+            } else {
+              if (hist_bits_bin == 32) {
+                FindBestThresholdSequentiallyInt<TEMPLATE_PREFIX_INT, true, false, false, int64_t, int64_t, int32_t, int32_t, 32, 32>(
+                    FUNC_ARGUMENTS_INT);
+              } else {
+                FindBestThresholdSequentiallyInt<TEMPLATE_PREFIX_INT, true, false, false, int32_t, int64_t, int16_t, int32_t, 16, 32>(
+                    FUNC_ARGUMENTS_INT);
+              }
+            }
+          };
+        } else {
+          int_find_best_threshold_fun_ = [=](LAMBDA_ARGUMENTS_INT) {
+            int rand_threshold = 0;
+            double min_gain_shift =
+                BeforeNumericalInt<USE_RAND, USE_L1, USE_MAX_OUTPUT, USE_SMOOTHING>(
+                    BEFORE_ARGUMENTS_INT);
+            if (hist_bits_acc <= 16) {
+              CHECK_LE(hist_bits_bin, 16);
+              FindBestThresholdSequentiallyInt<TEMPLATE_PREFIX_INT, true, false, false, int32_t, int32_t, int16_t, int16_t, 16, 16>(
+                  FUNC_ARGUMENTS_INT);
+            } else {
+              if (hist_bits_bin == 32) {
+                FindBestThresholdSequentiallyInt<TEMPLATE_PREFIX_INT, true, false, false, int64_t, int64_t, int32_t, int32_t, 32, 32>(
+                    FUNC_ARGUMENTS_INT);
+              } else {
+                FindBestThresholdSequentiallyInt<TEMPLATE_PREFIX_INT, true, false, false, int32_t, int64_t, int16_t, int32_t, 16, 32>(
+                    FUNC_ARGUMENTS_INT);
+              }
+            }
+            output->default_left = false;
+          };
+        }
+      }
+#undef TEMPLATE_PREFIX_INT
+#undef LAMBDA_ARGUMENTS_INT
+#undef BEFORE_ARGUMENTS_INT
+#undef FUNC_ARGURMENTS_INT
+  } else {
 #define TEMPLATE_PREFIX USE_RAND, USE_MC, USE_L1, USE_MAX_OUTPUT, USE_SMOOTHING
 #define LAMBDA_ARGUMENTS                                         \
   double sum_gradient, double sum_hessian, data_size_t num_data, \
@@ -164,115 +395,66 @@ class FeatureHistogram {
   sum_gradient, sum_hessian, num_data, constraints, min_gain_shift, \
       output, rand_threshold, parent_output
 
-    if (meta_->num_bin > 2 && meta_->missing_type != MissingType::None) {
-      if (meta_->missing_type == MissingType::Zero) {
-        find_best_threshold_fun_ = [=](LAMBDA_ARGUMENTS) {
-          int rand_threshold = 0;
-          double min_gain_shift =
-              BeforeNumercal<USE_RAND, USE_L1, USE_MAX_OUTPUT, USE_SMOOTHING>(
-                  BEFORE_ARGUMENTS);
-          FindBestThresholdSequentially<TEMPLATE_PREFIX, true, true, false>(
-              FUNC_ARGUMENTS);
-          FindBestThresholdSequentially<TEMPLATE_PREFIX, false, true, false>(
-              FUNC_ARGUMENTS);
-        };
+      if (meta_->num_bin > 2 && meta_->missing_type != MissingType::None) {
+        if (meta_->missing_type == MissingType::Zero) {
+          find_best_threshold_fun_ = [=](LAMBDA_ARGUMENTS) {
+            int rand_threshold = 0;
+            double min_gain_shift =
+                BeforeNumerical<USE_RAND, USE_L1, USE_MAX_OUTPUT, USE_SMOOTHING>(
+                    BEFORE_ARGUMENTS);
+            FindBestThresholdSequentially<TEMPLATE_PREFIX, true, true, false>(
+                FUNC_ARGUMENTS);
+            FindBestThresholdSequentially<TEMPLATE_PREFIX, false, true, false>(
+                FUNC_ARGUMENTS);
+          };
+        } else {
+          find_best_threshold_fun_ = [=](LAMBDA_ARGUMENTS) {
+            int rand_threshold = 0;
+            double min_gain_shift =
+                BeforeNumerical<USE_RAND, USE_L1, USE_MAX_OUTPUT, USE_SMOOTHING>(
+                    BEFORE_ARGUMENTS);
+            FindBestThresholdSequentially<TEMPLATE_PREFIX, true, false, true>(
+                FUNC_ARGUMENTS);
+            FindBestThresholdSequentially<TEMPLATE_PREFIX, false, false, true>(
+                FUNC_ARGUMENTS);
+          };
+        }
       } else {
-        find_best_threshold_fun_ = [=](LAMBDA_ARGUMENTS) {
-          int rand_threshold = 0;
-          double min_gain_shift =
-              BeforeNumercal<USE_RAND, USE_L1, USE_MAX_OUTPUT, USE_SMOOTHING>(
-                  BEFORE_ARGUMENTS);
-          FindBestThresholdSequentially<TEMPLATE_PREFIX, true, false, true>(
-              FUNC_ARGUMENTS);
-          FindBestThresholdSequentially<TEMPLATE_PREFIX, false, false, true>(
-              FUNC_ARGUMENTS);
-        };
+        if (meta_->missing_type != MissingType::NaN) {
+          find_best_threshold_fun_ = [=](LAMBDA_ARGUMENTS) {
+            int rand_threshold = 0;
+            double min_gain_shift =
+                BeforeNumerical<USE_RAND, USE_L1, USE_MAX_OUTPUT, USE_SMOOTHING>(
+                    BEFORE_ARGUMENTS);
+            FindBestThresholdSequentially<TEMPLATE_PREFIX, true, false, false>(
+                FUNC_ARGUMENTS);
+          };
+        } else {
+          find_best_threshold_fun_ = [=](LAMBDA_ARGUMENTS) {
+            int rand_threshold = 0;
+            double min_gain_shift =
+                BeforeNumerical<USE_RAND, USE_L1, USE_MAX_OUTPUT, USE_SMOOTHING>(
+                    BEFORE_ARGUMENTS);
+            FindBestThresholdSequentially<TEMPLATE_PREFIX, true, false, false>(
+                FUNC_ARGUMENTS);
+            output->default_left = false;
+          };
+        }
       }
-    } else {
-      if (meta_->missing_type != MissingType::NaN) {
-        find_best_threshold_fun_ = [=](LAMBDA_ARGUMENTS) {
-          int rand_threshold = 0;
-          double min_gain_shift =
-              BeforeNumercal<USE_RAND, USE_L1, USE_MAX_OUTPUT, USE_SMOOTHING>(
-                  BEFORE_ARGUMENTS);
-          FindBestThresholdSequentially<TEMPLATE_PREFIX, true, false, false>(
-              FUNC_ARGUMENTS);
-        };
-      } else {
-        find_best_threshold_fun_ = [=](LAMBDA_ARGUMENTS) {
-          int rand_threshold = 0;
-          double min_gain_shift =
-              BeforeNumercal<USE_RAND, USE_L1, USE_MAX_OUTPUT, USE_SMOOTHING>(
-                  BEFORE_ARGUMENTS);
-          FindBestThresholdSequentially<TEMPLATE_PREFIX, true, false, false>(
-              FUNC_ARGUMENTS);
-          output->default_left = false;
-        };
-      }
-    }
 #undef TEMPLATE_PREFIX
 #undef LAMBDA_ARGUMENTS
 #undef BEFORE_ARGUMENTS
 #undef FUNC_ARGURMENTS
-  }
-
-  void FuncForCategorical() {
-    if (meta_->config->extra_trees) {
-      if (meta_->config->monotone_constraints.empty()) {
-        FuncForCategoricalL1<true, false>();
-      } else {
-        FuncForCategoricalL1<true, true>();
-      }
-    } else {
-      if (meta_->config->monotone_constraints.empty()) {
-        FuncForCategoricalL1<false, false>();
-      } else {
-        FuncForCategoricalL1<false, true>();
-      }
     }
   }
+
+  void FuncForCategorical();
 
   template <bool USE_RAND, bool USE_MC>
-  void FuncForCategoricalL1() {
-    if (meta_->config->path_smooth > kEpsilon) {
-      FuncForCategoricalL2<USE_RAND, USE_MC, true>();
-    } else {
-      FuncForCategoricalL2<USE_RAND, USE_MC, false>();
-    }
-  }
+  void FuncForCategoricalL1();
 
   template <bool USE_RAND, bool USE_MC, bool USE_SMOOTHING>
-  void FuncForCategoricalL2() {
-#define ARGUMENTS                                                      \
-  std::placeholders::_1, std::placeholders::_2, std::placeholders::_3, \
-      std::placeholders::_4, std::placeholders::_5, std::placeholders::_6
-    if (meta_->config->lambda_l1 > 0) {
-      if (meta_->config->max_delta_step > 0) {
-        find_best_threshold_fun_ =
-            std::bind(&FeatureHistogram::FindBestThresholdCategoricalInner<
-                          USE_RAND, USE_MC, true, true, USE_SMOOTHING>,
-                      this, ARGUMENTS);
-      } else {
-        find_best_threshold_fun_ =
-            std::bind(&FeatureHistogram::FindBestThresholdCategoricalInner<
-                          USE_RAND, USE_MC, true, false, USE_SMOOTHING>,
-                      this, ARGUMENTS);
-      }
-    } else {
-      if (meta_->config->max_delta_step > 0) {
-        find_best_threshold_fun_ =
-            std::bind(&FeatureHistogram::FindBestThresholdCategoricalInner<
-                          USE_RAND, USE_MC, false, true, USE_SMOOTHING>,
-                      this, ARGUMENTS);
-      } else {
-        find_best_threshold_fun_ =
-            std::bind(&FeatureHistogram::FindBestThresholdCategoricalInner<
-                          USE_RAND, USE_MC, false, false, USE_SMOOTHING>,
-                      this, ARGUMENTS);
-      }
-    }
-#undef ARGUMENTS
-  }
+  void FuncForCategoricalL2();
 
   template <bool USE_RAND, bool USE_MC, bool USE_L1, bool USE_MAX_OUTPUT, bool USE_SMOOTHING>
   void FindBestThresholdCategoricalInner(double sum_gradient,
@@ -280,240 +462,16 @@ class FeatureHistogram {
                                          data_size_t num_data,
                                          const FeatureConstraint* constraints,
                                          double parent_output,
-                                         SplitInfo* output) {
-    is_splittable_ = false;
-    output->default_left = false;
-    double best_gain = kMinScore;
-    data_size_t best_left_count = 0;
-    double best_sum_left_gradient = 0;
-    double best_sum_left_hessian = 0;
-    double gain_shift;
-    if (USE_MC) {
-      constraints->InitCumulativeConstraints(true);
-    }
-    if (USE_SMOOTHING) {
-      gain_shift = GetLeafGainGivenOutput<USE_L1>(
-          sum_gradient, sum_hessian, meta_->config->lambda_l1, meta_->config->lambda_l2, parent_output);
-    } else {
-      // Need special case for no smoothing to preserve existing behaviour. If no smoothing, the parent output is calculated
-      // with the larger categorical l2, whereas min_split_gain uses the original l2.
-      gain_shift = GetLeafGain<USE_L1, USE_MAX_OUTPUT, false>(sum_gradient, sum_hessian,
-          meta_->config->lambda_l1, meta_->config->lambda_l2, meta_->config->max_delta_step, 0,
-          num_data, 0);
-    }
+                                         SplitInfo* output);
 
-    double min_gain_shift = gain_shift + meta_->config->min_gain_to_split;
-    const int8_t offset = meta_->offset;
-    const int bin_start = 1 - offset;
-    const int bin_end = meta_->num_bin - offset;
-    int used_bin = -1;
-
-    std::vector<int> sorted_idx;
-    double l2 = meta_->config->lambda_l2;
-    bool use_onehot = meta_->num_bin <= meta_->config->max_cat_to_onehot;
-    int best_threshold = -1;
-    int best_dir = 1;
-    const double cnt_factor = num_data / sum_hessian;
-    int rand_threshold = 0;
-    if (use_onehot) {
-      if (USE_RAND) {
-        if (bin_end - bin_start > 0) {
-          rand_threshold = meta_->rand.NextInt(bin_start, bin_end);
-        }
-      }
-      for (int t = bin_start; t < bin_end; ++t) {
-        const auto grad = GET_GRAD(data_, t);
-        const auto hess = GET_HESS(data_, t);
-        data_size_t cnt =
-            static_cast<data_size_t>(Common::RoundInt(hess * cnt_factor));
-        // if data not enough, or sum hessian too small
-        if (cnt < meta_->config->min_data_in_leaf ||
-            hess < meta_->config->min_sum_hessian_in_leaf) {
-          continue;
-        }
-        data_size_t other_count = num_data - cnt;
-        // if data not enough
-        if (other_count < meta_->config->min_data_in_leaf) {
-          continue;
-        }
-
-        double sum_other_hessian = sum_hessian - hess - kEpsilon;
-        // if sum hessian too small
-        if (sum_other_hessian < meta_->config->min_sum_hessian_in_leaf) {
-          continue;
-        }
-
-        double sum_other_gradient = sum_gradient - grad;
-        if (USE_RAND) {
-          if (t != rand_threshold) {
-            continue;
-          }
-        }
-        // current split gain
-        double current_gain = GetSplitGains<USE_MC, USE_L1, USE_MAX_OUTPUT, USE_SMOOTHING>(
-            sum_other_gradient, sum_other_hessian, grad, hess + kEpsilon,
-            meta_->config->lambda_l1, l2, meta_->config->max_delta_step,
-            constraints, 0, meta_->config->path_smooth, other_count, cnt, parent_output);
-        // gain with split is worse than without split
-        if (current_gain <= min_gain_shift) {
-          continue;
-        }
-
-        // mark as able to be split
-        is_splittable_ = true;
-        // better split point
-        if (current_gain > best_gain) {
-          best_threshold = t;
-          best_sum_left_gradient = grad;
-          best_sum_left_hessian = hess + kEpsilon;
-          best_left_count = cnt;
-          best_gain = current_gain;
-        }
-      }
-    } else {
-      for (int i = bin_start; i < bin_end; ++i) {
-        if (Common::RoundInt(GET_HESS(data_, i) * cnt_factor) >=
-            meta_->config->cat_smooth) {
-          sorted_idx.push_back(i);
-        }
-      }
-      used_bin = static_cast<int>(sorted_idx.size());
-
-      l2 += meta_->config->cat_l2;
-
-      auto ctr_fun = [this](double sum_grad, double sum_hess) {
-        return (sum_grad) / (sum_hess + meta_->config->cat_smooth);
-      };
-      std::stable_sort(
-          sorted_idx.begin(), sorted_idx.end(), [this, &ctr_fun](int i, int j) {
-            return ctr_fun(GET_GRAD(data_, i), GET_HESS(data_, i)) <
-                   ctr_fun(GET_GRAD(data_, j), GET_HESS(data_, j));
-          });
-
-      std::vector<int> find_direction(1, 1);
-      std::vector<int> start_position(1, 0);
-      find_direction.push_back(-1);
-      start_position.push_back(used_bin - 1);
-      const int max_num_cat =
-          std::min(meta_->config->max_cat_threshold, (used_bin + 1) / 2);
-      int max_threshold = std::max(std::min(max_num_cat, used_bin) - 1, 0);
-      if (USE_RAND) {
-        if (max_threshold > 0) {
-          rand_threshold = meta_->rand.NextInt(0, max_threshold);
-        }
-      }
-
-      is_splittable_ = false;
-      for (size_t out_i = 0; out_i < find_direction.size(); ++out_i) {
-        auto dir = find_direction[out_i];
-        auto start_pos = start_position[out_i];
-        data_size_t min_data_per_group = meta_->config->min_data_per_group;
-        data_size_t cnt_cur_group = 0;
-        double sum_left_gradient = 0.0f;
-        double sum_left_hessian = kEpsilon;
-        data_size_t left_count = 0;
-        for (int i = 0; i < used_bin && i < max_num_cat; ++i) {
-          auto t = sorted_idx[start_pos];
-          start_pos += dir;
-          const auto grad = GET_GRAD(data_, t);
-          const auto hess = GET_HESS(data_, t);
-          data_size_t cnt =
-              static_cast<data_size_t>(Common::RoundInt(hess * cnt_factor));
-
-          sum_left_gradient += grad;
-          sum_left_hessian += hess;
-          left_count += cnt;
-          cnt_cur_group += cnt;
-
-          if (left_count < meta_->config->min_data_in_leaf ||
-              sum_left_hessian < meta_->config->min_sum_hessian_in_leaf) {
-            continue;
-          }
-          data_size_t right_count = num_data - left_count;
-          if (right_count < meta_->config->min_data_in_leaf ||
-              right_count < min_data_per_group) {
-            break;
-          }
-
-          double sum_right_hessian = sum_hessian - sum_left_hessian;
-          if (sum_right_hessian < meta_->config->min_sum_hessian_in_leaf) {
-            break;
-          }
-
-          if (cnt_cur_group < min_data_per_group) {
-            continue;
-          }
-
-          cnt_cur_group = 0;
-
-          double sum_right_gradient = sum_gradient - sum_left_gradient;
-          if (USE_RAND) {
-            if (i != rand_threshold) {
-              continue;
-            }
-          }
-          double current_gain = GetSplitGains<USE_MC, USE_L1, USE_MAX_OUTPUT, USE_SMOOTHING>(
-              sum_left_gradient, sum_left_hessian, sum_right_gradient,
-              sum_right_hessian, meta_->config->lambda_l1, l2,
-              meta_->config->max_delta_step, constraints, 0, meta_->config->path_smooth,
-              left_count, right_count, parent_output);
-          if (current_gain <= min_gain_shift) {
-            continue;
-          }
-          is_splittable_ = true;
-          if (current_gain > best_gain) {
-            best_left_count = left_count;
-            best_sum_left_gradient = sum_left_gradient;
-            best_sum_left_hessian = sum_left_hessian;
-            best_threshold = i;
-            best_gain = current_gain;
-            best_dir = dir;
-          }
-        }
-      }
-    }
-
-    if (is_splittable_) {
-      output->left_output = CalculateSplittedLeafOutput<USE_MC, USE_L1, USE_MAX_OUTPUT, USE_SMOOTHING>(
-          best_sum_left_gradient, best_sum_left_hessian,
-          meta_->config->lambda_l1, l2, meta_->config->max_delta_step,
-          constraints->LeftToBasicConstraint(), meta_->config->path_smooth, best_left_count, parent_output);
-      output->left_count = best_left_count;
-      output->left_sum_gradient = best_sum_left_gradient;
-      output->left_sum_hessian = best_sum_left_hessian - kEpsilon;
-      output->right_output = CalculateSplittedLeafOutput<USE_MC, USE_L1, USE_MAX_OUTPUT, USE_SMOOTHING>(
-          sum_gradient - best_sum_left_gradient,
-          sum_hessian - best_sum_left_hessian, meta_->config->lambda_l1, l2,
-          meta_->config->max_delta_step, constraints->RightToBasicConstraint(), meta_->config->path_smooth,
-          num_data - best_left_count, parent_output);
-      output->right_count = num_data - best_left_count;
-      output->right_sum_gradient = sum_gradient - best_sum_left_gradient;
-      output->right_sum_hessian =
-          sum_hessian - best_sum_left_hessian - kEpsilon;
-      output->gain = best_gain - min_gain_shift;
-      if (use_onehot) {
-        output->num_cat_threshold = 1;
-        output->cat_threshold =
-            std::vector<uint32_t>(1, static_cast<uint32_t>(best_threshold + offset));
-      } else {
-        output->num_cat_threshold = best_threshold + 1;
-        output->cat_threshold =
-            std::vector<uint32_t>(output->num_cat_threshold);
-        if (best_dir == 1) {
-          for (int i = 0; i < output->num_cat_threshold; ++i) {
-            auto t = sorted_idx[i] + offset;
-            output->cat_threshold[i] = t;
-          }
-        } else {
-          for (int i = 0; i < output->num_cat_threshold; ++i) {
-            auto t = sorted_idx[used_bin - 1 - i] + offset;
-            output->cat_threshold[i] = t;
-          }
-        }
-      }
-      output->monotone_type = 0;
-    }
-  }
+  template <bool USE_RAND, bool USE_MC, bool USE_L1, bool USE_MAX_OUTPUT, bool USE_SMOOTHING, typename PACKED_HIST_BIN_T, typename PACKED_HIST_ACC_T,
+          typename HIST_BIN_T, typename HIST_ACC_T, int HIST_BITS_BIN, int HIST_BITS_ACC>
+  void FindBestThresholdCategoricalIntInner(int64_t int_sum_gradient_and_hessian,
+                                            const double grad_scale, const double hess_scale,
+                                            data_size_t num_data,
+                                            const FeatureConstraint* constraints,
+                                            double parent_output,
+                                            SplitInfo* output);
 
   void GatherInfoForThreshold(double sum_gradient, double sum_hessian,
                               uint32_t threshold, data_size_t num_data,
@@ -712,8 +670,16 @@ class FeatureHistogram {
   /*!
    * \brief Binary size of this histogram
    */
-  int SizeOfHistgram() const {
+  int SizeOfHistogram() const {
     return (meta_->num_bin - meta_->offset) * kHistEntrySize;
+  }
+
+  int SizeOfInt32Histogram() const {
+    return (meta_->num_bin - meta_->offset) * kInt32HistEntrySize;
+  }
+
+  int SizeOfInt16Histogram() const {
+    return (meta_->num_bin - meta_->offset) * kInt16HistEntrySize;
   }
 
   /*!
@@ -724,10 +690,20 @@ class FeatureHistogram {
                 (meta_->num_bin - meta_->offset) * kHistEntrySize);
   }
 
+  void FromMemoryInt32(char* memory_data) {
+    std::memcpy(data_, memory_data,
+                (meta_->num_bin - meta_->offset) * kInt32HistEntrySize);
+  }
+
+  void FromMemoryInt16(char* memory_data) {
+    std::memcpy(data_int16_, memory_data,
+                (meta_->num_bin - meta_->offset) * kInt16HistEntrySize);
+  }
+
   /*!
    * \brief True if this histogram can be splitted
    */
-  bool is_splittable() { return is_splittable_; }
+  bool is_splittable() const { return is_splittable_; }
 
   /*!
    * \brief Set splittable to this histogram
@@ -1082,14 +1058,312 @@ class FeatureHistogram {
     }
   }
 
+  template <bool USE_RAND, bool USE_MC, bool USE_L1, bool USE_MAX_OUTPUT, bool USE_SMOOTHING,
+          bool REVERSE, bool SKIP_DEFAULT_BIN, bool NA_AS_MISSING, typename PACKED_HIST_BIN_T, typename PACKED_HIST_ACC_T,
+          typename HIST_BIN_T, typename HIST_ACC_T, int HIST_BITS_BIN, int HIST_BITS_ACC>
+  void FindBestThresholdSequentiallyInt(int64_t int_sum_gradient_and_hessian,
+                                        const double grad_scale, const double hess_scale,
+                                        data_size_t num_data,
+                                        const FeatureConstraint* constraints,
+                                        double min_gain_shift, SplitInfo* output,
+                                        int rand_threshold, double parent_output) {
+    const int8_t offset = meta_->offset;
+    PACKED_HIST_ACC_T best_sum_left_gradient_and_hessian = 0;
+    PACKED_HIST_ACC_T local_int_sum_gradient_and_hessian =
+      HIST_BITS_ACC == 16 ?
+      ((static_cast<int32_t>(int_sum_gradient_and_hessian >> 32) << 16) | static_cast<int32_t>(int_sum_gradient_and_hessian & 0x0000ffff)) :
+      static_cast<PACKED_HIST_ACC_T>(int_sum_gradient_and_hessian);
+    double best_gain = kMinScore;
+    uint32_t best_threshold = static_cast<uint32_t>(meta_->num_bin);
+    const double cnt_factor = static_cast<double>(num_data) /
+      static_cast<double>(static_cast<uint32_t>(int_sum_gradient_and_hessian & 0x00000000ffffffff));
+
+    BasicConstraint best_right_constraints;
+    BasicConstraint best_left_constraints;
+    bool constraint_update_necessary =
+        USE_MC && constraints->ConstraintDifferentDependingOnThreshold();
+
+    if (USE_MC) {
+      constraints->InitCumulativeConstraints(REVERSE);
+    }
+
+    const PACKED_HIST_BIN_T* data_ptr = nullptr;
+    if (HIST_BITS_BIN == 16) {
+      data_ptr = reinterpret_cast<const PACKED_HIST_BIN_T*>(data_int16_);
+    } else {
+      data_ptr = reinterpret_cast<const PACKED_HIST_BIN_T*>(data_);
+    }
+    if (REVERSE) {
+      PACKED_HIST_ACC_T sum_right_gradient_and_hessian = 0;
+
+      int t = meta_->num_bin - 1 - offset - NA_AS_MISSING;
+      const int t_end = 1 - offset;
+
+      // from right to left, and we don't need data in bin0
+      for (; t >= t_end; --t) {
+        // need to skip default bin
+        if (SKIP_DEFAULT_BIN) {
+          if ((t + offset) == static_cast<int>(meta_->default_bin)) {
+            continue;
+          }
+        }
+        const PACKED_HIST_BIN_T grad_and_hess = data_ptr[t];
+        if (HIST_BITS_ACC != HIST_BITS_BIN) {
+          const PACKED_HIST_ACC_T grad_and_hess_acc = HIST_BITS_BIN == 16 ?
+            ((static_cast<PACKED_HIST_ACC_T>(static_cast<HIST_BIN_T>(grad_and_hess >> HIST_BITS_BIN)) << HIST_BITS_ACC) |
+            (static_cast<PACKED_HIST_ACC_T>(grad_and_hess & 0x0000ffff))) :
+            ((static_cast<PACKED_HIST_ACC_T>(static_cast<HIST_BIN_T>(grad_and_hess >> HIST_BITS_BIN)) << HIST_BITS_ACC) |
+            (static_cast<PACKED_HIST_ACC_T>(grad_and_hess & 0x00000000ffffffff)));
+          sum_right_gradient_and_hessian += grad_and_hess_acc;
+        } else {
+          sum_right_gradient_and_hessian += grad_and_hess;
+        }
+        const uint32_t int_sum_right_hessian = HIST_BITS_ACC == 16 ?
+          static_cast<uint32_t>(sum_right_gradient_and_hessian & 0x0000ffff) :
+          static_cast<uint32_t>(sum_right_gradient_and_hessian & 0x00000000ffffffff);
+        data_size_t right_count = Common::RoundInt(int_sum_right_hessian * cnt_factor);
+        double sum_right_hessian = int_sum_right_hessian * hess_scale;
+        // if data not enough, or sum hessian too small
+        if (right_count < meta_->config->min_data_in_leaf ||
+            sum_right_hessian < meta_->config->min_sum_hessian_in_leaf) {
+          continue;
+        }
+        data_size_t left_count = num_data - right_count;
+        // if data not enough
+        if (left_count < meta_->config->min_data_in_leaf) {
+          break;
+        }
+
+        const PACKED_HIST_ACC_T sum_left_gradient_and_hessian = local_int_sum_gradient_and_hessian - sum_right_gradient_and_hessian;
+        const uint32_t int_sum_left_hessian = HIST_BITS_ACC == 16 ?
+          static_cast<uint32_t>(sum_left_gradient_and_hessian & 0x0000ffff) :
+          static_cast<uint32_t>(sum_left_gradient_and_hessian & 0x00000000ffffffff);
+        double sum_left_hessian = int_sum_left_hessian * hess_scale;
+        // if sum hessian too small
+        if (sum_left_hessian < meta_->config->min_sum_hessian_in_leaf) {
+          break;
+        }
+
+        double sum_right_gradient = HIST_BITS_ACC == 16 ?
+          static_cast<double>(static_cast<int16_t>(sum_right_gradient_and_hessian >> 16)) * grad_scale :
+          static_cast<double>(static_cast<int32_t>(static_cast<int64_t>(sum_right_gradient_and_hessian) >> 32)) * grad_scale;
+        double sum_left_gradient = HIST_BITS_ACC == 16 ?
+          static_cast<double>(static_cast<int16_t>(sum_left_gradient_and_hessian >> 16)) * grad_scale :
+          static_cast<double>(static_cast<int32_t>(static_cast<int64_t>(sum_left_gradient_and_hessian) >> 32)) * grad_scale;
+        if (USE_RAND) {
+          if (t - 1 + offset != rand_threshold) {
+            continue;
+          }
+        }
+
+        if (USE_MC && constraint_update_necessary) {
+          constraints->Update(t + offset);
+        }
+
+        // current split gain
+        double current_gain = GetSplitGains<USE_MC, USE_L1, USE_MAX_OUTPUT, USE_SMOOTHING>(
+            sum_left_gradient, sum_left_hessian + kEpsilon, sum_right_gradient,
+            sum_right_hessian + kEpsilon, meta_->config->lambda_l1,
+            meta_->config->lambda_l2, meta_->config->max_delta_step,
+            constraints, meta_->monotone_type, meta_->config->path_smooth,
+            left_count, right_count, parent_output);
+        // gain with split is worse than without split
+        if (current_gain <= min_gain_shift) {
+          continue;
+        }
+
+        // mark as able to be split
+        is_splittable_ = true;
+        // better split point
+        if (current_gain > best_gain) {
+          if (USE_MC) {
+            best_right_constraints = constraints->RightToBasicConstraint();
+            best_left_constraints = constraints->LeftToBasicConstraint();
+            if (best_right_constraints.min > best_right_constraints.max ||
+                best_left_constraints.min > best_left_constraints.max) {
+              continue;
+            }
+          }
+          best_sum_left_gradient_and_hessian = sum_left_gradient_and_hessian;
+          // left is <= threshold, right is > threshold.  so this is t-1
+          best_threshold = static_cast<uint32_t>(t - 1 + offset);
+          best_gain = current_gain;
+        }
+      }
+    } else {
+      PACKED_HIST_ACC_T sum_left_gradient_and_hessian = 0;
+
+      int t = 0;
+      const int t_end = meta_->num_bin - 2 - offset;
+
+      if (NA_AS_MISSING) {
+        if (offset == 1) {
+          sum_left_gradient_and_hessian = local_int_sum_gradient_and_hessian;
+          for (int i = 0; i < meta_->num_bin - offset; ++i) {
+            const PACKED_HIST_BIN_T grad_and_hess = data_ptr[i];
+            if (HIST_BITS_ACC != HIST_BITS_BIN) {
+              const PACKED_HIST_ACC_T grad_and_hess_acc = HIST_BITS_BIN == 16 ?
+                ((static_cast<PACKED_HIST_ACC_T>(static_cast<HIST_BIN_T>(grad_and_hess >> HIST_BITS_BIN)) << HIST_BITS_ACC) |
+                (static_cast<PACKED_HIST_ACC_T>(grad_and_hess & 0x0000ffff))) :
+                ((static_cast<PACKED_HIST_ACC_T>(static_cast<HIST_BIN_T>(grad_and_hess >> HIST_BITS_BIN)) << HIST_BITS_ACC) |
+                (static_cast<PACKED_HIST_ACC_T>(grad_and_hess & 0x00000000ffffffff)));
+              sum_left_gradient_and_hessian -= grad_and_hess_acc;
+            } else {
+              sum_left_gradient_and_hessian -= grad_and_hess;
+            }
+          }
+          t = -1;
+        }
+      }
+
+      for (; t <= t_end; ++t) {
+        if (SKIP_DEFAULT_BIN) {
+          if ((t + offset) == static_cast<int>(meta_->default_bin)) {
+            continue;
+          }
+        }
+        if (t >= 0) {
+          const PACKED_HIST_BIN_T grad_and_hess = data_ptr[t];
+          if (HIST_BITS_ACC != HIST_BITS_BIN) {
+            const PACKED_HIST_ACC_T grad_and_hess_acc = HIST_BITS_BIN == 16 ?
+              ((static_cast<PACKED_HIST_ACC_T>(static_cast<HIST_BIN_T>(grad_and_hess >> HIST_BITS_BIN)) << HIST_BITS_ACC) |
+              (static_cast<PACKED_HIST_ACC_T>(grad_and_hess & 0x0000ffff))) :
+              ((static_cast<PACKED_HIST_ACC_T>(static_cast<HIST_BIN_T>(grad_and_hess >> HIST_BITS_BIN)) << HIST_BITS_ACC) |
+              (static_cast<PACKED_HIST_ACC_T>(grad_and_hess & 0x00000000ffffffff)));
+            sum_left_gradient_and_hessian += grad_and_hess_acc;
+          } else {
+            sum_left_gradient_and_hessian += grad_and_hess;
+          }
+        }
+        // if data not enough, or sum hessian too small
+        const uint32_t int_sum_left_hessian = HIST_BITS_ACC == 16 ?
+          static_cast<uint32_t>(sum_left_gradient_and_hessian & 0x0000ffff) :
+          static_cast<uint32_t>(sum_left_gradient_and_hessian & 0x00000000ffffffff);
+        const data_size_t left_count = Common::RoundInt(static_cast<double>(int_sum_left_hessian) * cnt_factor);
+        const double sum_left_hessian = static_cast<double>(int_sum_left_hessian) * hess_scale;
+        if (left_count < meta_->config->min_data_in_leaf ||
+            sum_left_hessian < meta_->config->min_sum_hessian_in_leaf) {
+          continue;
+        }
+        data_size_t right_count = num_data - left_count;
+        // if data not enough
+        if (right_count < meta_->config->min_data_in_leaf) {
+          break;
+        }
+
+        const PACKED_HIST_ACC_T sum_right_gradient_and_hessian = local_int_sum_gradient_and_hessian - sum_left_gradient_and_hessian;
+        const uint32_t int_sum_right_hessian = HIST_BITS_ACC == 16 ?
+          static_cast<uint32_t>(sum_right_gradient_and_hessian & 0x0000ffff) :
+          static_cast<uint32_t>(sum_right_gradient_and_hessian & 0x00000000ffffffff);
+        const double sum_right_hessian = static_cast<double>(int_sum_right_hessian) * hess_scale;
+        // if sum Hessian too small
+        if (sum_right_hessian < meta_->config->min_sum_hessian_in_leaf) {
+          break;
+        }
+
+        double sum_right_gradient = HIST_BITS_ACC == 16 ?
+          static_cast<double>(static_cast<int16_t>(sum_right_gradient_and_hessian >> 16)) * grad_scale :
+          static_cast<double>(static_cast<int32_t>(static_cast<int64_t>(sum_right_gradient_and_hessian) >> 32)) * grad_scale;
+        double sum_left_gradient = HIST_BITS_ACC == 16 ?
+          static_cast<double>(static_cast<int16_t>(sum_left_gradient_and_hessian >> 16)) * grad_scale :
+          static_cast<double>(static_cast<int32_t>(static_cast<int64_t>(sum_left_gradient_and_hessian) >> 32)) * grad_scale;
+        if (USE_RAND) {
+          if (t + offset != rand_threshold) {
+            continue;
+          }
+        }
+        // current split gain
+        double current_gain = GetSplitGains<USE_MC, USE_L1, USE_MAX_OUTPUT, USE_SMOOTHING>(
+            sum_left_gradient, sum_left_hessian + kEpsilon, sum_right_gradient,
+            sum_right_hessian + kEpsilon, meta_->config->lambda_l1,
+            meta_->config->lambda_l2, meta_->config->max_delta_step,
+            constraints, meta_->monotone_type, meta_->config->path_smooth, left_count,
+            right_count, parent_output);
+        // gain with split is worse than without split
+        if (current_gain <= min_gain_shift) {
+          continue;
+        }
+
+        // mark as able to be split
+        is_splittable_ = true;
+        // better split point
+        if (current_gain > best_gain) {
+          if (USE_MC) {
+            best_right_constraints = constraints->RightToBasicConstraint();
+            best_left_constraints = constraints->LeftToBasicConstraint();
+            if (best_right_constraints.min > best_right_constraints.max ||
+                best_left_constraints.min > best_left_constraints.max) {
+              continue;
+            }
+          }
+          best_sum_left_gradient_and_hessian = sum_left_gradient_and_hessian;
+          best_threshold = static_cast<uint32_t>(t + offset);
+          best_gain = current_gain;
+        }
+      }
+    }
+
+    if (is_splittable_ && best_gain > output->gain + min_gain_shift) {
+      const int32_t int_best_sum_left_gradient = HIST_BITS_ACC == 16 ?
+        static_cast<int32_t>(static_cast<int16_t>(best_sum_left_gradient_and_hessian >> 16)) :
+        static_cast<int32_t>(static_cast<int64_t>(best_sum_left_gradient_and_hessian) >> 32);
+      const uint32_t int_best_sum_left_hessian = HIST_BITS_ACC == 16 ?
+        static_cast<uint32_t>(best_sum_left_gradient_and_hessian & 0x0000ffff) :
+        static_cast<uint32_t>(best_sum_left_gradient_and_hessian & 0x00000000ffffffff);
+      const double best_sum_left_gradient = static_cast<double>(int_best_sum_left_gradient) * grad_scale;
+      const double best_sum_left_hessian = static_cast<double>(int_best_sum_left_hessian) * hess_scale;
+      const int64_t best_sum_left_gradient_and_hessian_int64 = HIST_BITS_ACC == 16 ?
+          ((static_cast<int64_t>(static_cast<int16_t>(best_sum_left_gradient_and_hessian >> 16)) << 32) |
+          static_cast<int64_t>(best_sum_left_gradient_and_hessian & 0x0000ffff)) :
+          best_sum_left_gradient_and_hessian;
+      const int64_t best_sum_right_gradient_and_hessian = int_sum_gradient_and_hessian - best_sum_left_gradient_and_hessian_int64;
+      const int32_t int_best_sum_right_gradient = static_cast<int32_t>(best_sum_right_gradient_and_hessian >> 32);
+      const uint32_t int_best_sum_right_hessian = static_cast<uint32_t>(best_sum_right_gradient_and_hessian & 0x00000000ffffffff);
+      const double best_sum_right_gradient = static_cast<double>(int_best_sum_right_gradient) * grad_scale;
+      const double best_sum_right_hessian = static_cast<double>(int_best_sum_right_hessian) * hess_scale;
+      const data_size_t best_left_count = Common::RoundInt(static_cast<double>(int_best_sum_left_hessian) * cnt_factor);
+      const data_size_t best_right_count = Common::RoundInt(static_cast<double>(int_best_sum_right_hessian) * cnt_factor);
+      // update split information
+      output->threshold = best_threshold;
+      output->left_output =
+          CalculateSplittedLeafOutput<USE_MC, USE_L1, USE_MAX_OUTPUT, USE_SMOOTHING>(
+              best_sum_left_gradient, best_sum_left_hessian,
+              meta_->config->lambda_l1, meta_->config->lambda_l2,
+              meta_->config->max_delta_step, best_left_constraints, meta_->config->path_smooth,
+              best_left_count, parent_output);
+      output->left_count = best_left_count;
+      output->left_sum_gradient = best_sum_left_gradient;
+      output->left_sum_hessian = best_sum_left_hessian;
+      output->left_sum_gradient_and_hessian = best_sum_left_gradient_and_hessian_int64;
+      output->right_output =
+          CalculateSplittedLeafOutput<USE_MC, USE_L1, USE_MAX_OUTPUT, USE_SMOOTHING>(
+              best_sum_right_gradient,
+              best_sum_right_hessian, meta_->config->lambda_l1,
+              meta_->config->lambda_l2, meta_->config->max_delta_step,
+              best_right_constraints, meta_->config->path_smooth, best_right_count,
+              parent_output);
+      output->right_count = best_right_count;
+      output->right_sum_gradient = best_sum_right_gradient;
+      output->right_sum_hessian = best_sum_right_hessian;
+      output->right_sum_gradient_and_hessian = best_sum_right_gradient_and_hessian;
+      output->gain = best_gain - min_gain_shift;
+      output->default_left = REVERSE;
+    }
+  }
+
   const FeatureMetainfo* meta_;
   /*! \brief sum of gradient of each bin */
   hist_t* data_;
+  int16_t* data_int16_;
   bool is_splittable_ = true;
 
   std::function<void(double, double, data_size_t, const FeatureConstraint*,
                      double, SplitInfo*)>
       find_best_threshold_fun_;
+
+  std::function<void(int64_t, double, double, const uint8_t, const uint8_t, data_size_t, const FeatureConstraint*,
+                     double, SplitInfo*)>
+      int_find_best_threshold_fun_;
 };
 
 class HistogramPool {
@@ -1146,7 +1420,7 @@ class HistogramPool {
     auto& ref_feature_meta = *feature_meta;
     const int num_feature = train_data->num_features();
     ref_feature_meta.resize(num_feature);
-#pragma omp parallel for schedule(static, 512) if (num_feature >= 1024)
+#pragma omp parallel for num_threads(OMP_NUM_THREADS()) schedule(static, 512) if (num_feature >= 1024)
     for (int i = 0; i < num_feature; ++i) {
       if (USE_DATA) {
         ref_feature_meta[i].num_bin = train_data->FeatureNumBin(i);
@@ -1200,18 +1474,35 @@ class HistogramPool {
       pool_.resize(cache_size);
       data_.resize(cache_size);
     }
-    OMP_INIT_EX();
-#pragma omp parallel for schedule(static)
-    for (int i = old_cache_size; i < cache_size; ++i) {
-      OMP_LOOP_EX_BEGIN();
-      pool_[i].reset(new FeatureHistogram[train_data->num_features()]);
-      data_[i].resize(num_total_bin * 2);
-      for (int j = 0; j < train_data->num_features(); ++j) {
-        pool_[i][j].Init(data_[i].data() + offsets[j] * 2, &feature_metas_[j]);
+
+    if (config->use_quantized_grad) {
+      OMP_INIT_EX();
+      #pragma omp parallel for num_threads(OMP_NUM_THREADS()) schedule(static)
+      for (int i = old_cache_size; i < cache_size; ++i) {
+        OMP_LOOP_EX_BEGIN();
+        pool_[i].reset(new FeatureHistogram[train_data->num_features()]);
+        data_[i].resize(num_total_bin);
+        for (int j = 0; j < train_data->num_features(); ++j) {
+          int16_t* data_ptr = reinterpret_cast<int16_t*>(data_[i].data());
+          pool_[i][j].Init(data_[i].data() + offsets[j], data_ptr + 2 * offsets[j], &feature_metas_[j]);
+        }
+        OMP_LOOP_EX_END();
       }
-      OMP_LOOP_EX_END();
+      OMP_THROW_EX();
+    } else {
+      OMP_INIT_EX();
+      #pragma omp parallel for num_threads(OMP_NUM_THREADS()) schedule(static)
+      for (int i = old_cache_size; i < cache_size; ++i) {
+        OMP_LOOP_EX_BEGIN();
+        pool_[i].reset(new FeatureHistogram[train_data->num_features()]);
+        data_[i].resize(num_total_bin * 2);
+        for (int j = 0; j < train_data->num_features(); ++j) {
+          pool_[i][j].Init(data_[i].data() + offsets[j] * 2, &feature_metas_[j]);
+        }
+        OMP_LOOP_EX_END();
+      }
+      OMP_THROW_EX();
     }
-    OMP_THROW_EX();
   }
 
   void ResetConfig(const Dataset* train_data, const Config* config) {
@@ -1224,7 +1515,7 @@ class HistogramPool {
         old_config->extra_trees != config->extra_trees ||
         old_config->max_delta_step != config->max_delta_step ||
         old_config->path_smooth != config->path_smooth) {
-#pragma omp parallel for schedule(static)
+#pragma omp parallel for num_threads(OMP_NUM_THREADS()) schedule(static)
       for (int i = 0; i < cache_size_; ++i) {
         for (int j = 0; j < train_data->num_features(); ++j) {
           pool_[i][j].ResetFunc();
@@ -1305,4 +1596,4 @@ class HistogramPool {
 };
 
 }  // namespace LightGBM
-#endif  // LightGBM_TREELEARNER_FEATURE_HISTOGRAM_HPP_
+#endif  // LIGHTGBM_SRC_TREELEARNER_FEATURE_HISTOGRAM_HPP_

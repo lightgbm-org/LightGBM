@@ -1,9 +1,10 @@
 /*!
- * Copyright (c) 2016 Microsoft Corporation. All rights reserved.
+ * Copyright (c) 2016-2026 Microsoft Corporation. All rights reserved.
+ * Copyright (c) 2016-2026 The LightGBM developers. All rights reserved.
  * Licensed under the MIT License. See LICENSE file in the project root for license information.
  */
-#ifndef LIGHTGBM_UTILS_COMMON_H_
-#define LIGHTGBM_UTILS_COMMON_H_
+#ifndef LIGHTGBM_INCLUDE_LIGHTGBM_UTILS_COMMON_H_
+#define LIGHTGBM_INCLUDE_LIGHTGBM_UTILS_COMMON_H_
 
 #include <LightGBM/utils/json11.h>
 #include <LightGBM/utils/log.h>
@@ -12,6 +13,7 @@
 #include <limits>
 #include <string>
 #include <algorithm>
+#include <cctype>
 #include <chrono>
 #include <cmath>
 #include <cstdint>
@@ -30,8 +32,8 @@
 #include <vector>
 
 #define FMT_HEADER_ONLY
-#include "../../../external_libs/fast_double_parser/include/fast_double_parser.h"
-#include "../../../external_libs/fmt/include/fmt/format.h"
+#include "fast_double_parser.h"
+#include "fmt/format.h"
 
 #ifdef _MSC_VER
 #include <intrin.h>
@@ -58,19 +60,13 @@ namespace LightGBM {
 
 namespace Common {
 
-using json11::Json;
+using json11_internal_lightgbm::Json;
 
 /*!
 * Imbues the stream with the C locale.
 */
 static void C_stringstream(std::stringstream &ss) {
   ss.imbue(std::locale::classic());
-}
-
-inline static char tolower(char in) {
-  if (in <= 'Z' && in >= 'A')
-    return in - ('Z' - 'z');
-  return in;
 }
 
 inline static std::string Trim(std::string str) {
@@ -315,9 +311,18 @@ inline static const char* Atof(const char* p, double* out) {
       }
       if (expon > 308) expon = 308;
       // Calculate scaling factor.
-      while (expon >= 50) { scale *= 1E50; expon -= 50; }
-      while (expon >= 8) { scale *= 1E8;  expon -= 8; }
-      while (expon > 0) { scale *= 10.0; expon -= 1; }
+      while (expon >= 50) {
+        scale *= 1E50;
+        expon -= 50;
+      }
+      while (expon >= 8) {
+        scale *= 1E8;
+        expon -= 8;
+      }
+      while (expon > 0) {
+        scale *= 10.0;
+        expon -= 1;
+      }
     }
     // Return signed and scaled floating point result.
     *out = sign * (frac ? (value / scale) : (value * scale));
@@ -331,7 +336,7 @@ inline static const char* Atof(const char* p, double* out) {
     }
     if (cnt > 0) {
       std::string tmp_str(p, cnt);
-      std::transform(tmp_str.begin(), tmp_str.end(), tmp_str.begin(), Common::tolower);
+      std::transform(tmp_str.begin(), tmp_str.end(), tmp_str.begin(), [](unsigned char c){ return std::tolower(c); });
       if (tmp_str == std::string("na") || tmp_str == std::string("nan") ||
           tmp_str == std::string("null")) {
         *out = NAN;
@@ -691,7 +696,7 @@ static void ParallelSort(_RanIt _First, _RanIt _Last, _Pr _Pred, _VTRanIt*) {
   size_t inner_size = (len + num_threads - 1) / num_threads;
   inner_size = std::max(inner_size, kMinInnerLen);
   num_threads = static_cast<int>((len + inner_size - 1) / inner_size);
-#pragma omp parallel for schedule(static, 1)
+#pragma omp parallel for num_threads(num_threads) schedule(static, 1)
   for (int i = 0; i < num_threads; ++i) {
     size_t left = inner_size*i;
     size_t right = left + inner_size;
@@ -707,13 +712,15 @@ static void ParallelSort(_RanIt _First, _RanIt _Last, _Pr _Pred, _VTRanIt*) {
   // Recursive merge
   while (s < len) {
     int loop_size = static_cast<int>((len + s * 2 - 1) / (s * 2));
-    #pragma omp parallel for schedule(static, 1)
+    #pragma omp parallel for num_threads(num_threads) schedule(static, 1)
     for (int i = 0; i < loop_size; ++i) {
       size_t left = i * 2 * s;
       size_t mid = left + s;
       size_t right = mid + s;
       right = std::min(len, right);
-      if (mid >= right) { continue; }
+      if (mid >= right) {
+        continue;
+      }
       std::copy(_First + left, _First + mid, buf + left);
       std::merge(buf + left, buf + mid, _First + mid, _First + right, _First + left, _Pred);
     }
@@ -925,11 +932,11 @@ class AlignmentAllocator {
 
   inline ~AlignmentAllocator() throw() {}
 
-  inline pointer adress(reference r) {
+  inline pointer address(reference r) {
     return &r;
   }
 
-  inline const_pointer adress(const_reference r) const {
+  inline const_pointer address(const_reference r) const {
     return &r;
   }
 
@@ -1232,7 +1239,7 @@ struct __TToStringHelper<T, true, true> {
 * Converts an array to a string with with values separated by the space character.
 * This method replaces Common's ``ArrayToString`` and ``ArrayToStringFast`` functionality
 * and is locale-independent.
-* 
+*
 * \note If ``high_precision_output`` is set to true,
 *       floating point values are output with more digits of precision.
 */
@@ -1261,4 +1268,4 @@ inline static std::string ArrayToString(const std::vector<T>& arr, size_t n) {
 
 }  // namespace LightGBM
 
-#endif  // LIGHTGBM_UTILS_COMMON_H_
+#endif  // LIGHTGBM_INCLUDE_LIGHTGBM_UTILS_COMMON_H_

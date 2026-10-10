@@ -1,0 +1,15 @@
+# oldest versions of dependencies published after
+# minimum supported Python version's first release,
+# for which there are wheels compatible with the
+# python:{version} image
+#
+# see https://devguide.python.org/versions/
+#
+cffi==1.15.1
+narwhals==1.15.0
+numpy==1.22.4
+pandas==1.3.4
+polars==1.0.0
+pyarrow==16.0.0
+scikit-learn==1.0.2
+scipy==1.7.2

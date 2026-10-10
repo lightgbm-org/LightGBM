@@ -1,10 +1,14 @@
 /*!
- * Copyright (c) 2021 Microsoft Corporation. All rights reserved.
+ * Copyright (c) 2021-2026 Microsoft Corporation. All rights reserved.
+ * Copyright (c) 2021-2026 The LightGBM developers. All rights reserved.
  * Licensed under the MIT License. See LICENSE file in the project root for license information.
  *
  * Author: Alberto Ferreira
  */
 #include <gtest/gtest.h>
+
+#include <vector>
+
 #include "../include/LightGBM/utils/chunked_array.hpp"
 
 using LightGBM::ChunkedArray;
@@ -67,14 +71,14 @@ class ChunkedArrayTest : public testing::Test {
 
 /*! ChunkedArray cannot be built from chunks of size 0. */
 TEST_F(ChunkedArrayTest, constructorWithChunkSize0Throws) {
-  ASSERT_THROW(ChunkedArray<int> ca(0), std::runtime_error);
+  ASSERT_THROW(ChunkedArray<int> chunked_array(0), std::runtime_error);
 }
 
 /*! get_chunk_size() should return the size used in the constructor */
 TEST_F(ChunkedArrayTest, constructorWithChunkSize) {
   for (size_t chunk_size = 1; chunk_size < 10; ++chunk_size) {
-    ChunkedArray<int> ca(chunk_size);
-    ASSERT_EQ(ca.get_chunk_size(), chunk_size);
+    ChunkedArray<int> chunked_array(chunk_size);
+    ASSERT_EQ(chunked_array.get_chunk_size(), chunk_size);
   }
 }
 
@@ -217,8 +221,8 @@ TEST_F(ChunkedArrayTest, testDataLayoutWithAdvancedInsertionAPI) {
   // Number of trials for each new ChunkedArray configuration. Pass 100 times over the search space:
   const size_t N_TRIALS = MAX_CHUNKS_SEARCH * MAX_IN_CHUNK_SEARCH_IDX * 100;
   const int INVALID = -1;  // A negative value signaling the requested value lives in an invalid address.
-  const int UNITIALIZED = -99;  // A negative value to signal this was never updated.
-  std::vector<int> ref_values(MAX_CHUNKS_SEARCH * CHUNK_SIZE, UNITIALIZED);  // Memorize latest inserted values.
+  const int UNINITIALIZED = -99;  // A negative value to signal this was never updated.
+  std::vector<int> ref_values(MAX_CHUNKS_SEARCH * CHUNK_SIZE, UNINITIALIZED);  // Memorize latest inserted values.
 
   // Each outer loop iteration changes the test by adding +1 chunk. We start with 1 chunk only:
   for (size_t chunks = 1; chunks < MAX_CHUNKS_SEARCH; ++chunks) {
@@ -249,10 +253,10 @@ TEST_F(ChunkedArrayTest, testDataLayoutWithAdvancedInsertionAPI) {
   }
 
   // Final check: ensure even with overrides, all valid insertions store the latest value at that address:
-  std::vector<int> coalesced_out(MAX_CHUNKS_SEARCH * CHUNK_SIZE, UNITIALIZED);
+  std::vector<int> coalesced_out(MAX_CHUNKS_SEARCH * CHUNK_SIZE, UNINITIALIZED);
   ca_.coalesce_to(coalesced_out.data(), true);  // Export all valid addresses.
   for (size_t i = 0; i < ref_values.size(); ++i) {
-    if (ref_values[i] != UNITIALIZED) {
+    if (ref_values[i] != UNINITIALIZED) {
       // Test in 2 ways that the values are correctly laid out in memory:
       EXPECT_EQ(ca_.getitem(i / CHUNK_SIZE, i % CHUNK_SIZE, INVALID), ref_values[i]);
       EXPECT_EQ(coalesced_out[i], ref_values[i]);

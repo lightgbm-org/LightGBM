@@ -1,9 +1,10 @@
 /*!
- * Copyright (c) 2016 Microsoft Corporation. All rights reserved.
+ * Copyright (c) 2016-2026 Microsoft Corporation. All rights reserved.
+ * Copyright (c) 2016-2026 The LightGBM developers. All rights reserved.
  * Licensed under the MIT License. See LICENSE file in the project root for license information.
  */
-#ifndef LIGHTGBM_METRIC_RANK_METRIC_HPP_
-#define LIGHTGBM_METRIC_RANK_METRIC_HPP_
+#ifndef LIGHTGBM_SRC_METRIC_RANK_METRIC_HPP_
+#define LIGHTGBM_SRC_METRIC_RANK_METRIC_HPP_
 
 #include <LightGBM/metric.h>
 #include <LightGBM/utils/common.h>
@@ -57,7 +58,7 @@ class NDCGMetric:public Metric {
     }
     inverse_max_dcgs_.resize(num_queries_);
     // cache the inverse max DCG for all queries, used to calculate NDCG
-    #pragma omp parallel for schedule(static)
+    #pragma omp parallel for num_threads(OMP_NUM_THREADS()) schedule(static)
     for (data_size_t i = 0; i < num_queries_; ++i) {
       inverse_max_dcgs_[i].resize(eval_at_.size(), 0.0f);
       DCGCalculator::CalMaxDCG(eval_at_, label_ + query_boundaries_[i],
@@ -92,7 +93,7 @@ class NDCGMetric:public Metric {
     }
     std::vector<double> tmp_dcg(eval_at_.size(), 0.0f);
     if (query_weights_ == nullptr) {
-      #pragma omp parallel for schedule(static) firstprivate(tmp_dcg)
+      #pragma omp parallel for num_threads(OMP_NUM_THREADS()) schedule(static) firstprivate(tmp_dcg)
       for (data_size_t i = 0; i < num_queries_; ++i) {
         const int tid = omp_get_thread_num();
         // if all doc in this query are all negative, let its NDCG=1
@@ -112,7 +113,7 @@ class NDCGMetric:public Metric {
         }
       }
     } else {
-      #pragma omp parallel for schedule(static) firstprivate(tmp_dcg)
+      #pragma omp parallel for num_threads(OMP_NUM_THREADS()) schedule(static) firstprivate(tmp_dcg)
       for (data_size_t i = 0; i < num_queries_; ++i) {
         const int tid = omp_get_thread_num();
         // if all doc in this query are all negative, let its NDCG=1
@@ -166,4 +167,4 @@ class NDCGMetric:public Metric {
 
 }  // namespace LightGBM
 
-#endif   // LightGBM_METRIC_RANK_METRIC_HPP_
+#endif   // LIGHTGBM_SRC_METRIC_RANK_METRIC_HPP_

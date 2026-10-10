@@ -1,11 +1,16 @@
 #' @name lgb.model.dt.tree
 #' @title Parse a LightGBM model json dump
 #' @description Parse a LightGBM model json dump into a \code{data.table} structure.
-#' @param model object of class \code{lgb.Booster}
-#' @param num_iteration number of iterations you want to predict with. NULL or
-#'                      <= 0 means use best iteration
+#' @param model object of class \code{lgb.Booster}.
+#' @param num_iteration Number of iterations to include. NULL or <= 0 means use best iteration.
+#' @param start_iteration Index (1-based) of the first boosting round to include in the output.
+#'        For example, passing \code{start_iteration=5, num_iteration=3} for a regression model
+#'        means "return information about the fifth, sixth, and seventh trees".
+#'
+#'        \emph{New in version 4.4.0}
+#'
 #' @return
-#' A \code{data.table} with detailed information about model trees' nodes and leafs.
+#' A \code{data.table} with detailed information about model trees' nodes and leaves.
 #'
 #' The columns of the \code{data.table} are:
 #'
@@ -29,6 +34,8 @@
 #'
 #' @examples
 #' \donttest{
+#' \dontshow{setLGBMthreads(2L)}
+#' \dontshow{data.table::setDTthreads(1L)}
 #' data(agaricus.train, package = "lightgbm")
 #' train <- agaricus.train
 #' dtrain <- lgb.Dataset(train$data, label = train$label)
@@ -40,6 +47,7 @@
 #'   , max_depth = -1L
 #'   , min_data_in_leaf = 1L
 #'   , min_sum_hessian_in_leaf = 1.0
+#'   , num_threads = 2L
 #' )
 #' model <- lgb.train(params, dtrain, 10L)
 #'
@@ -48,9 +56,15 @@
 #' @importFrom data.table := rbindlist
 #' @importFrom jsonlite fromJSON
 #' @export
-lgb.model.dt.tree <- function(model, num_iteration = NULL) {
+lgb.model.dt.tree <- function(
+    model, num_iteration = NULL, start_iteration = 1L
+  ) {
 
-  json_model <- lgb.dump(booster = model, num_iteration = num_iteration)
+  json_model <- lgb.dump(
+    booster = model
+    , num_iteration = num_iteration
+    , start_iteration = start_iteration
+  )
 
   parsed_json_model <- jsonlite::fromJSON(
     txt = json_model
@@ -61,7 +75,10 @@ lgb.model.dt.tree <- function(model, num_iteration = NULL) {
   )
 
   # Parse tree model
-  tree_list <- lapply(parsed_json_model$tree_info, single.tree.parse)
+  tree_list <- lapply(
+    X = parsed_json_model$tree_info
+    , FUN = .single_tree_parse
+  )
 
   # Combine into single data.table
   tree_dt <- data.table::rbindlist(l = tree_list, use.names = TRUE)
@@ -78,12 +95,21 @@ lgb.model.dt.tree <- function(model, num_iteration = NULL) {
   tree_dt[, split_feature := feature_names]
 
   return(tree_dt)
-
 }
 
 
 #' @importFrom data.table := data.table rbindlist
-single.tree.parse <- function(lgb_tree) {
+.single_tree_parse <- function(lgb_tree) {
+  tree_info_cols <- c(
+    "split_index"
+    , "split_feature"
+    , "split_gain"
+    , "threshold"
+    , "decision_type"
+    , "default_left"
+    , "internal_value"
+    , "internal_count"
+  )
 
   # Traverse tree function
   pre_order_traversal <- function(env = NULL, tree_node_leaf, current_depth = 0L, parent_index = NA_integer_) {
@@ -91,7 +117,8 @@ single.tree.parse <- function(lgb_tree) {
     if (is.null(env)) {
       # Setup initial default data.table with default types
       env <- new.env(parent = emptyenv())
-      env$single_tree_dt <- data.table::data.table(
+      env$single_tree_dt <- list()
+      env$single_tree_dt[[1L]] <- data.table::data.table(
         tree_index = integer(0L)
         , depth = integer(0L)
         , split_index = integer(0L)
@@ -121,19 +148,10 @@ single.tree.parse <- function(lgb_tree) {
       if (!is.null(tree_node_leaf$split_index)) {
 
         # update data.table
-        env$single_tree_dt <- data.table::rbindlist(l = list(env$single_tree_dt,
-                                                             c(tree_node_leaf[c("split_index",
-                                                                                "split_feature",
-                                                                                "split_gain",
-                                                                                "threshold",
-                                                                                "decision_type",
-                                                                                "default_left",
-                                                                                "internal_value",
-                                                                                "internal_count")],
-                                                               "depth" = current_depth,
-                                                               "node_parent" = parent_index)),
-                                                    use.names = TRUE,
-                                                    fill = TRUE)
+        env$single_tree_dt[[length(env$single_tree_dt) + 1L]] <- c(
+          tree_node_leaf[tree_info_cols]
+          , list("depth" = current_depth, "node_parent" = parent_index)
+        )
 
         # Traverse tree again both left and right
         pre_order_traversal(
@@ -148,31 +166,27 @@ single.tree.parse <- function(lgb_tree) {
           , current_depth = current_depth + 1L
           , parent_index = tree_node_leaf$split_index
         )
-
       } else if (!is.null(tree_node_leaf$leaf_index)) {
 
-        # update data.table
-        env$single_tree_dt <- data.table::rbindlist(l = list(env$single_tree_dt,
-                                                             c(tree_node_leaf[c("leaf_index",
-                                                                                "leaf_value",
-                                                                                "leaf_count")],
-                                                               "depth" = current_depth,
-                                                               "leaf_parent" = parent_index)),
-                                                    use.names = TRUE,
-                                                    fill = TRUE)
-
+        # update list
+        env$single_tree_dt[[length(env$single_tree_dt) + 1L]] <- c(
+          tree_node_leaf[c("leaf_index", "leaf_value", "leaf_count")]
+          , list("depth" = current_depth, "leaf_parent" = parent_index)
+        )
       }
-
     }
     return(env$single_tree_dt)
   }
 
-  # Traverse structure
-  single_tree_dt <- pre_order_traversal(tree_node_leaf = lgb_tree$tree_structure)
+  # Traverse structure and rowbind everything
+  single_tree_dt <- data.table::rbindlist(
+    pre_order_traversal(tree_node_leaf = lgb_tree$tree_structure)
+    , use.names = TRUE
+    , fill = TRUE
+  )
 
   # Store index
   single_tree_dt[, tree_index := lgb_tree$tree_index]
 
   return(single_tree_dt)
-
 }

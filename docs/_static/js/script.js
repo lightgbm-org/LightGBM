@@ -1,70 +1,52 @@
-$(function() {
+$(() => {
     /* Use wider container for the page content */
-    $('.wy-nav-content').each(function() { this.style.setProperty('max-width', 'none', 'important'); });
+    $(".wy-nav-content").each(function () {
+        this.style.setProperty("max-width", "none", "important");
+    });
 
     /* List each class property item on a new line
-       https://github.com/microsoft/LightGBM/issues/5073 */
-    if(window.location.pathname.toLocaleLowerCase().indexOf('pythonapi') != -1) {
-        $('.py.property').each(function() { this.style.setProperty('display', 'inline', 'important'); });
-    }
-
-    /* Point to the same version of R API as the current docs version */
-    var current_version_elems = $('.rst-current-version');
-    if(current_version_elems.length !== 0) {
-        var current_version = $(current_version_elems[0]).contents().filter(function() {
-            return this.nodeType == 3;
-        }).text().trim().split(' ').pop();
-        if(current_version !== 'latest') {
-            $('a.reference.external[href$="/latest/R/reference/"]').each(function() {
-                $(this).attr('href', function (_, val) { return val.replace('/latest/', '/' + current_version + '/'); });
-            });
-        }
+       https://github.com/lightgbm-org/LightGBM/issues/5073 */
+    if (window.location.pathname.toLocaleLowerCase().indexOf("pythonapi") !== -1) {
+        $(".py.property").each(function () {
+            this.style.setProperty("display", "inline", "important");
+        });
     }
 
     /* Collapse specified sections in the installation guide */
-    if(window.location.pathname.toLocaleLowerCase().indexOf('installation-guide') != -1) {
-        $('<style>.closed, .opened {cursor: pointer;} .closed:before, .opened:before {font-family: FontAwesome; display: inline-block; padding-right: 6px;} .closed:before {content: "\\f078";} .opened:before {content: "\\f077";}</style>').appendTo('body');
-        var collapsable = [
-            '#build-threadless-version-not-recommended',
-            '#build-mpi-version',
-            '#build-gpu-version',
-            '#build-cuda-version-experimental',
-            '#build-hdfs-version',
-            '#build-java-wrapper',
-            '#build-c-unit-tests'
+    if (window.location.pathname.toLocaleLowerCase().indexOf("installation-guide") !== -1) {
+        $(
+            '<style>.closed, .opened {cursor: pointer;} .closed:before, .opened:before {font-family: FontAwesome; display: inline-block; padding-right: 6px;} .closed:before {content: "\\f054";} .opened:before {content: "\\f078";}</style>',
+        ).appendTo("body");
+        const collapsible = [
+            "#build-threadless-version-not-recommended",
+            "#build-mpi-version",
+            "#build-gpu-version",
+            "#build-cuda-version",
+            "#build-rocm-version",
+            "#build-java-wrapper",
+            "#build-python-package",
+            "#build-r-package",
+            "#build-c-unit-tests",
         ];
-        $.each(collapsable, function(_, val) {
-            var header = val + ' > :header:first';
-            var content = val + ' :not(:header:first)';
-            $(header).addClass('closed');
+        $.each(collapsible, (_, val) => {
+            const header = `${val} > :header:first`;
+            const content = `${val} :not(:header:first)`;
+            $(header).addClass("closed");
             $(content).hide();
-            $(header).click(function() {
-                $(header).toggleClass('closed opened');
+            $(header).click(() => {
+                $(header).toggleClass("closed opened");
                 $(content).slideToggle(0);
             });
         });
         /* Uncollapse parent sections when nested section is specified in the URL or before navigate to it from navbar */
         function uncollapse(section) {
-            section.parents().each((_, val) => { $(val).children('.closed').click(); });
+            section.parents().each((_, val) => {
+                $(val).children(".closed").click();
+            });
         }
         uncollapse($(window.location.hash));
-        $('.wy-menu.wy-menu-vertical li a.reference.internal').click(function() {
-            uncollapse($($(this).attr('href')));
+        $(".wy-menu.wy-menu-vertical li a.reference.internal").click(function () {
+            uncollapse($($(this).attr("href")));
         });
-
-        /* Modify src and href attrs of artifacts badge */
-        function modifyBadge(src, href) {
-            $('img[alt="download artifacts"]').each(function() {
-                this.src = src;
-                this.parentNode.href = href;
-            });
-        }
-        /* Initialize artifacts badge */
-        modifyBadge('./_static/images/artifacts-fetching.svg', '#');
-        /* Fetch latest buildId and construct artifacts badge */
-        $.getJSON('https://dev.azure.com/lightgbm-ci/lightgbm-ci/_apis/build/builds?branchName=refs/heads/master&resultFilter=succeeded&queryOrder=finishTimeDescending&%24top=1&api-version=7.1-preview.7', function(data) {
-            modifyBadge('./_static/images/artifacts-download.svg',
-                        'https://dev.azure.com/lightgbm-ci/lightgbm-ci/_apis/build/builds/' + data['value'][0]['id'] + '/artifacts?artifactName=PackageAssets&api-version=7.1-preview.5&%24format=zip');
-            });
     }
 });

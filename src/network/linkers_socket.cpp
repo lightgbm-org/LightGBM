@@ -1,5 +1,6 @@
 /*!
- * Copyright (c) 2016 Microsoft Corporation. All rights reserved.
+ * Copyright (c) 2016-2026 Microsoft Corporation. All rights reserved.
+ * Copyright (c) 2016-2026 The LightGBM developers. All rights reserved.
  * Licensed under the MIT License. See LICENSE file in the project root for license information.
  */
 #ifdef USE_SOCKET
@@ -11,6 +12,7 @@
 #include <algorithm>
 #include <chrono>
 #include <cstring>
+#include <memory>
 #include <string>
 #include <thread>
 #include <unordered_map>
@@ -157,6 +159,9 @@ void Linkers::ListenThread(int incoming_cnt) {
     }
     int* ptr_in_rank = reinterpret_cast<int*>(buffer);
     int in_rank = *ptr_in_rank;
+    if (in_rank < 0 || in_rank >= num_machines_) {
+      Log::Fatal("Invalid rank %d found during initialization of linkers. The world size is %d.", in_rank, num_machines_);
+    }
     // add new socket
     SetLinker(in_rank, handler);
     ++connected_cnt;
@@ -171,20 +176,16 @@ void Linkers::Construct() {
       need_connect[i] = 1;
     }
   }
-  int need_connect_cnt = 0;
   int incoming_cnt = 0;
   for (auto it = need_connect.begin(); it != need_connect.end(); ++it) {
     int machine_rank = it->first;
-    if (machine_rank >= 0 && machine_rank != rank_) {
-      ++need_connect_cnt;
-    }
     if (machine_rank < rank_) {
       ++incoming_cnt;
     }
   }
 
   // start listener
-  listener_->SetTimeout(socket_timeout_);
+  listener_->SetTimeout(socket_timeout_ * 1000 * 60);
   listener_->Listen(incoming_cnt);
   std::thread listen_thread(&Linkers::ListenThread, this, incoming_cnt);
   const int connect_fail_constant_factor = 20;

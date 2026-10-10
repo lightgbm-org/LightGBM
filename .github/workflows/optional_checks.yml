@@ -3,28 +3,41 @@ name: Optional checks
 on:
   pull_request:
     branches:
-      - master
-      - release/*
+      - main
+
+# automatically cancel in-progress builds if another commit is pushed
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+# default to 0 permissions
+# (job-level overrides add the minimal permissions needed)
+permissions:
+  contents: none
 
 jobs:
   all-optional-checks-successful:
-    timeout-minutes: 120
+    timeout-minutes: 30
     runs-on: ubuntu-latest
+    env:
+      GITHUB_TOKEN: ${{ github.token }}
+    permissions:
+      contents: write
+      id-token: write
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v3
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
         with:
           fetch-depth: 5
+          persist-credentials: false
           submodules: false
-      - name: Check that all tests succeeded
+      - name: Check valgrind workflow
+        shell: bash
         run: |
-            workflows=(
-                "R valgrind tests;r-valgrind"
-            )
-            for i in "${workflows[@]}"; do
-                workflow_name=${i%;*}
-                trigger_phrase=${i#*;}
-                python "$GITHUB_WORKSPACE/.ci/get_workflow_status.py" "$trigger_phrase" \
-                || { echo "The last reported status from workflow \"$workflow_name\" is failure. Commit fixes and rerun the workflow."; \
-                exit -1; }
-            done
+            # ref: https://docs.github.com/en/actions/reference/workflows-and-actions/contexts#github-context
+            PR_BRANCH="${GITHUB_HEAD_REF:-${GITHUB_REF#refs/heads/}}"
+            echo "checking status for branch '${PR_BRANCH}'"
+            ./.ci/check-workflow-status.sh \
+                "${PR_BRANCH}" \
+                'r_valgrind.yml' \
+                ${{ github.event.number }}

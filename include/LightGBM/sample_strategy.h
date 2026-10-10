@@ -1,12 +1,13 @@
 /*!
- * Copyright (c) 2021 Microsoft Corporation. All rights reserved.
+ * Copyright (c) 2021-2026 Microsoft Corporation. All rights reserved.
+ * Copyright (c) 2021-2026 The LightGBM developers. All rights reserved.
  * Licensed under the MIT License. See LICENSE file in the project root for license information.
  */
 
-#ifndef LIGHTGBM_SAMPLE_STRATEGY_H_
-#define LIGHTGBM_SAMPLE_STRATEGY_H_
+#ifndef LIGHTGBM_INCLUDE_LIGHTGBM_SAMPLE_STRATEGY_H_
+#define LIGHTGBM_INCLUDE_LIGHTGBM_SAMPLE_STRATEGY_H_
 
-#include <LightGBM/cuda/cuda_utils.h>
+#include <LightGBM/cuda/cuda_utils.hu>
 #include <LightGBM/utils/random.h>
 #include <LightGBM/utils/common.h>
 #include <LightGBM/utils/threading.h>
@@ -55,6 +56,10 @@ class SampleStrategy {
 
   bool NeedResizeGradients() const { return need_resize_gradients_; }
 
+  virtual data_size_t num_sampled_queries() const { return 0; }
+
+  virtual const data_size_t* sampled_query_indices() const { return nullptr; }
+
  protected:
   const Config* config_;
   const Dataset* train_data_;
@@ -80,4 +85,4 @@ class SampleStrategy {
 
 }  // namespace LightGBM
 
-#endif  // LIGHTGBM_SAMPLE_STRATEGY_H_
+#endif  // LIGHTGBM_INCLUDE_LIGHTGBM_SAMPLE_STRATEGY_H_

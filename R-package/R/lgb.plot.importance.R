@@ -19,6 +19,8 @@
 #'
 #' @examples
 #' \donttest{
+#' \dontshow{setLGBMthreads(2L)}
+#' \dontshow{data.table::setDTthreads(1L)}
 #' data(agaricus.train, package = "lightgbm")
 #' train <- agaricus.train
 #' dtrain <- lgb.Dataset(train$data, label = train$label)
@@ -28,6 +30,7 @@
 #'     , learning_rate = 0.1
 #'     , min_data_in_leaf = 1L
 #'     , min_sum_hessian_in_leaf = 1.0
+#'     , num_threads = 2L
 #' )
 #'
 #' model <- lgb.train(

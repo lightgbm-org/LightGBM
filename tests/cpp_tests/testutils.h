@@ -1,9 +1,10 @@
 /*!
- * Copyright (c) 2022 Microsoft Corporation. All rights reserved.
+ * Copyright (c) 2022-2026 Microsoft Corporation. All rights reserved.
+ * Copyright (c) 2022-2026 The LightGBM developers. All rights reserved.
  * Licensed under the MIT License. See LICENSE file in the project root for license information.
  */
-#ifndef LIGHTGBM_TESTUTILS_H_
-#define LIGHTGBM_TESTUTILS_H_
+#ifndef LIGHTGBM_TESTS_CPP_TESTS_TESTUTILS_H_
+#define LIGHTGBM_TESTS_CPP_TESTS_TESTUTILS_H_
 
 #include <LightGBM/c_api.h>
 #include <LightGBM/dataset.h>
@@ -121,4 +122,4 @@ class TestUtils {
     int32_t thread_id);
 };
 }  // namespace LightGBM
-#endif  // LIGHTGBM_TESTUTILS_H_
+#endif  // LIGHTGBM_TESTS_CPP_TESTS_TESTUTILS_H_

@@ -1,4 +1,4 @@
-CXX_STD = @CXX_STD@
+CXX_STD = CXX17
 
 PKGROOT=.
 
@@ -19,7 +19,7 @@ PKG_LIBS = \
     ${SHLIB_OPENMP_CXXFLAGS} \
     ${SHLIB_PTHREAD_FLAGS} \
     -lws2_32 \
-    -lIphlpapi
+    -liphlpapi
 
 OBJECTS = \
     boosting/boosting.o \
@@ -47,11 +47,14 @@ OBJECTS = \
     network/linkers_socket.o \
     network/network.o \
     treelearner/data_parallel_tree_learner.o \
+    treelearner/feature_histogram.o \
     treelearner/feature_parallel_tree_learner.o \
     treelearner/gpu_tree_learner.o \
+    treelearner/gradient_discretizer.o \
     treelearner/linear_tree_learner.o \
     treelearner/serial_tree_learner.o \
     treelearner/tree_learner.o \
     treelearner/voting_parallel_tree_learner.o \
+    utils/openmp_wrapper.o \
     c_api.o \
     lightgbm_R.o

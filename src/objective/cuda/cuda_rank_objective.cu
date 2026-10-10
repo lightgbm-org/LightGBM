@@ -1,7 +1,9 @@
 /*!
- * Copyright (c) 2021 Microsoft Corporation. All rights reserved.
+ * Copyright (c) 2021-2026 Microsoft Corporation. All rights reserved.
+ * Copyright (c) 2021-2026 The LightGBM developers. All rights reserved.
  * Licensed under the MIT License. See LICENSE file in the project root for
  * license information.
+ * Modifications Copyright(C) 2023 Advanced Micro Devices, Inc. All rights reserved.
  */
 
 #ifdef USE_CUDA
@@ -307,6 +309,9 @@ __global__ void GetGradientsKernel_LambdarankNDCG_Sorted(
 void CUDALambdarankNDCG::LaunchGetGradientsKernel(const double* score, score_t* gradients, score_t* hessians) const {
   const int num_blocks = (num_queries_ + NUM_QUERY_PER_BLOCK - 1) / NUM_QUERY_PER_BLOCK;
   const data_size_t num_rank_label = static_cast<int>(label_gain_.size());
+  const int device_index = GetCUDADevice(__FILE__, __LINE__);
+  cudaDeviceProp device_prop;
+  CUDASUCCESS_OR_FATAL(cudaGetDeviceProperties(&device_prop, device_index));
 
   #define GetGradientsKernel_LambdarankNDCG_ARGS \
     score, cuda_labels_, num_data_, \
@@ -321,7 +326,7 @@ void CUDALambdarankNDCG::LaunchGetGradientsKernel(const double* score, score_t* 
     gradients, hessians
 
   if (max_items_in_query_aligned_ <= 1024) {
-    if (num_rank_label <= 32) {
+    if (num_rank_label <= 32 && device_prop.warpSize == 32) {
       GetGradientsKernel_LambdarankNDCG<false, 32><<<num_blocks, max_items_in_query_aligned_>>>(GetGradientsKernel_LambdarankNDCG_ARGS);
     } else if (num_rank_label <= 64) {
       GetGradientsKernel_LambdarankNDCG<false, 64><<<num_blocks, max_items_in_query_aligned_>>>(GetGradientsKernel_LambdarankNDCG_ARGS);
@@ -337,7 +342,7 @@ void CUDALambdarankNDCG::LaunchGetGradientsKernel(const double* score, score_t* 
       GetGradientsKernel_LambdarankNDCG<false, 2048><<<num_blocks, max_items_in_query_aligned_>>>(GetGradientsKernel_LambdarankNDCG_ARGS);
     }
   } else if (max_items_in_query_aligned_ <= 2048) {
-    if (num_rank_label <= 32) {
+    if (num_rank_label <= 32 && device_prop.warpSize == 32) {
       GetGradientsKernel_LambdarankNDCG<true, 32><<<num_blocks, 1024>>>(GetGradientsKernel_LambdarankNDCG_ARGS);
     } else if (num_rank_label <= 64) {
       GetGradientsKernel_LambdarankNDCG<true, 64><<<num_blocks, 1024>>>(GetGradientsKernel_LambdarankNDCG_ARGS);
@@ -354,7 +359,7 @@ void CUDALambdarankNDCG::LaunchGetGradientsKernel(const double* score, score_t* 
     }
   } else {
     BitonicArgSortItemsGlobal(score, num_queries_, cuda_query_boundaries_, cuda_item_indices_buffer_.RawData());
-    if (num_rank_label <= 32) {
+    if (num_rank_label <= 32 && device_prop.warpSize == 32) {
       GetGradientsKernel_LambdarankNDCG_Sorted<32><<<num_blocks, 1024>>>(GetGradientsKernel_LambdarankNDCG_Sorted_ARGS);
     } else if (num_rank_label <= 64) {
       GetGradientsKernel_LambdarankNDCG_Sorted<64><<<num_blocks, 1024>>>(GetGradientsKernel_LambdarankNDCG_Sorted_ARGS);
@@ -405,7 +410,7 @@ __global__ void GetGradientsKernel_RankXENDCG_SharedMemory(
     const data_size_t block_reduce_size = query_item_count >= 1024 ? 1024 : query_item_count;
     __shared__ double shared_rho[SHARED_MEMORY_SIZE];
     // assert that warpSize == 32
-    __shared__ double shared_buffer[32];
+    __shared__ double shared_buffer[1024 / WARPSIZE];
     __shared__ double shared_params[SHARED_MEMORY_SIZE];
     __shared__ score_t shared_lambdas[SHARED_MEMORY_SIZE];
     __shared__ double reduce_result;
@@ -523,7 +528,7 @@ __global__ void GetGradientsKernel_RankXENDCG_GlobalMemory(
     double* cuda_params_buffer_pointer = cuda_params_buffer + item_index_start;
     const data_size_t block_reduce_size = query_item_count > 1024 ? 1024 : query_item_count;
     // assert that warpSize == 32, so we use buffer size 1024 / 32 = 32
-    __shared__ double shared_buffer[32];
+    __shared__ double shared_buffer[1024 / WARPSIZE];
     __shared__ double reduce_result;
     if (query_item_count <= 1) {
       for (data_size_t i = 0; i <= query_item_count; ++i) {

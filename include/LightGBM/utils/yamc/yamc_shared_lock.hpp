@@ -4,6 +4,8 @@
  * MIT License
  *
  * Copyright (c) 2017 yohhoy
+ * Copyright (c) 2017-2026 Microsoft Corporation. All rights reserved.
+ * Copyright (c) 2017-2026 The LightGBM developers. All rights reserved.
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -23,8 +25,8 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
  * SOFTWARE.
  */
-#ifndef YAMC_SHARED_LOCK_HPP_
-#define YAMC_SHARED_LOCK_HPP_
+#ifndef LIGHTGBM_INCLUDE_LIGHTGBM_UTILS_YAMC_YAMC_SHARED_LOCK_HPP_
+#define LIGHTGBM_INCLUDE_LIGHTGBM_UTILS_YAMC_YAMC_SHARED_LOCK_HPP_
 
 #include <cassert>
 #include <chrono>
@@ -194,4 +196,4 @@ void swap(yamc::shared_lock<Mutex>& lhs,
 
 }  // namespace std
 
-#endif
+#endif  // LIGHTGBM_INCLUDE_LIGHTGBM_UTILS_YAMC_YAMC_SHARED_LOCK_HPP_

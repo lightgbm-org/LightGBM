@@ -139,15 +139,14 @@ publish/
 # Publish Web Output
 *.[Pp]ublish.xml
 *.azurePubxml
-# TODO: Comment the next line if you want to checkin your web deploy settings 
-# but database connection strings (with potential passwords) will be unencrypted
 *.pubxml
 *.publishproj
 
 # NuGet Packages
 *.nupkg
+nuget/
 # The packages folder can be ignored because of Package Restore
-**/packages/*
+**/packages/
 # except build/, which is used as an MSBuild target.
 !**/packages/build/
 # Uncomment if necessary however generally it will be regenerated when needed
@@ -268,7 +267,7 @@ _Pvt_Extensions
 *.out
 *.app
 /windows/LightGBM.VC.db
-lightgbm
+/lightgbm
 /testlightgbm
 
 # Created by https://www.gitignore.io/api/python
@@ -315,6 +314,7 @@ pip-delete-this-directory.txt
 # Unit test / coverage reports
 htmlcov/
 .tox/
+.nox/
 .coverage
 .coverage.*
 .cache
@@ -322,8 +322,12 @@ nosetests.xml
 prof/
 *.prof
 coverage.xml
-*,cover
+*.cover
+*.py.cover
 .hypothesis/
+.pytest_cache/
+.ruff_cache/
+cover/
 **/coverage.html
 **/coverage.html.zip
 **/Rplots.pdf
@@ -344,6 +348,7 @@ instance/
 .scrapy
 
 # Sphinx documentation
+docs/CONTRIBUTING.md
 docs/_build/
 docs/pythonapi/
 *.flag
@@ -399,6 +404,7 @@ lightgbm.model
 /cmake-build-debug/
 
 # Files from local Python install
+lightgbm-python/
 python-package/LICENSE
 python-package/build_cpp/
 python-package/compile/
@@ -406,7 +412,7 @@ python-package/lightgbm/VERSION.txt
 
 # R build artefacts
 **/autom4te.cache/
-conftest*
+R-package/conftest*
 R-package/config.status
 !R-package/data/agaricus.test.rda
 !R-package/data/agaricus.train.rda
@@ -420,7 +426,7 @@ R-package/src-x64
 R-package/src-i386
 R-package/**/VERSION.txt
 **/Makevars.win
-lightgbm_r/*
+lightgbm_r/
 lightgbm*.tar.gz
 lightgbm*.tgz
 lightgbm.Rcheck/
@@ -464,3 +470,18 @@ dask-worker-space/
 *.pub
 *.rdp
 *_rsa
+
+# hipify-perl -inplace leaves behind *.prehip files
+*.prehip
+
+# pixi environments
+.pixi
+!.pixi/config.toml
+
+# mypy
+.mypy_cache/
+.dmypy.json
+dmypy.json
+
+# files created by release tasks
+/release-artifacts

@@ -1,16 +1,17 @@
 /*!
- * Copyright (c) 2022 Microsoft Corporation. All rights reserved.
+ * Copyright (c) 2022-2026 Microsoft Corporation. All rights reserved.
+ * Copyright (c) 2022-2026 The LightGBM developers. All rights reserved.
  * Licensed under the MIT License. See LICENSE file in the project root for
  * license information.
  */
 
-#ifndef LIGHTGBM_METRIC_CUDA_CUDA_POINTWISE_METRIC_HPP_
-#define LIGHTGBM_METRIC_CUDA_CUDA_POINTWISE_METRIC_HPP_
+#ifndef LIGHTGBM_SRC_METRIC_CUDA_CUDA_POINTWISE_METRIC_HPP_
+#define LIGHTGBM_SRC_METRIC_CUDA_CUDA_POINTWISE_METRIC_HPP_
 
 #ifdef USE_CUDA
 
 #include <LightGBM/cuda/cuda_metric.hpp>
-#include <LightGBM/cuda/cuda_utils.h>
+#include <LightGBM/cuda/cuda_utils.hu>
 
 #include <vector>
 
@@ -30,6 +31,8 @@ class CUDAPointwiseMetricInterface: public CUDAMetricInterface<HOST_METRIC> {
  protected:
   void LaunchEvalKernel(const double* score_convert, double* sum_loss, double* sum_weight) const;
 
+  virtual double GetParamFromConfig() const { return 0.0; }
+
   mutable CUDAVector<double> score_convert_buffer_;
   CUDAVector<double> reduce_block_buffer_;
   CUDAVector<double> reduce_block_buffer_inner_;
@@ -40,4 +43,4 @@ class CUDAPointwiseMetricInterface: public CUDAMetricInterface<HOST_METRIC> {
 
 #endif  // USE_CUDA
 
-#endif  // LIGHTGBM_METRIC_CUDA_CUDA_POINTWISE_METRIC_HPP_
+#endif  // LIGHTGBM_SRC_METRIC_CUDA_CUDA_POINTWISE_METRIC_HPP_

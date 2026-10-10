@@ -22,7 +22,7 @@ To get good results using a leaf-wise tree, these are some important parameters:
 1. ``num_leaves``. This is the main parameter to control the complexity of the tree model.
    Theoretically, we can set ``num_leaves = 2^(max_depth)`` to obtain the same number of leaves as depth-wise tree.
    However, this simple conversion is not good in practice.
-   The reason is that a leaf-wise tree is typically much deeper than a depth-wise tree for a fixed number of leaves. Unconstrained depth can induce over-fitting.
+   A leaf-wise tree is typically much deeper than a depth-wise tree for a fixed number of leaves. Unconstrained depth can induce over-fitting.
    Thus, when trying to tune the ``num_leaves``, we should let it be smaller than ``2^(max_depth)``.
    For example, when the ``max_depth=7`` the depth-wise tree can get good accuracy,
    but setting ``num_leaves`` to ``127`` may cause over-fitting, and setting it to ``70`` or ``80`` may get better accuracy than depth-wise.
@@ -33,6 +33,7 @@ To get good results using a leaf-wise tree, these are some important parameters:
    In practice, setting it to hundreds or thousands is enough for a large dataset.
 
 3. ``max_depth``. You also can use ``max_depth`` to limit the tree depth explicitly.
+   If you set ``max_depth``, also explicitly set ``num_leaves`` to some value ``<= 2^max_depth``.
 
 For Faster Speed
 ----------------

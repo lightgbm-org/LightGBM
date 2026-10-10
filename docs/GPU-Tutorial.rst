@@ -3,8 +3,6 @@ LightGBM GPU Tutorial
 
 The purpose of this document is to give you a quick step-by-step tutorial on GPU training.
 
-For Windows, please see `GPU Windows Tutorial <./GPU-Windows.rst>`__.
-
 We will use the GPU instance on `Microsoft Azure cloud computing platform`_ for demonstration,
 but you can use any machine with modern AMD or NVIDIA GPUs.
 
@@ -33,7 +31,7 @@ After installing the drivers you need to restart the server.
 
 After about 30 seconds, the server should be up again.
 
-If you are using an AMD GPU, you should download and install the `AMDGPU-Pro`_ driver and also install package ``ocl-icd-libopencl1`` and ``ocl-icd-opencl-dev``.
+If you are using an AMD GPU, you should download and install the `AMDGPU-Pro`_ driver and also install packages ``ocl-icd-libopencl1`` and ``ocl-icd-opencl-dev``.
 
 Build LightGBM
 --------------
@@ -57,15 +55,12 @@ Now we are ready to checkout LightGBM and compile it with GPU support:
 
 ::
 
-    git clone --recursive https://github.com/microsoft/LightGBM
+    git clone --recursive https://github.com/lightgbm-org/LightGBM
     cd LightGBM
-    mkdir build
-    cd build
-    cmake -DUSE_GPU=1 .. 
+    cmake -B build -S . -DUSE_GPU=1
     # if you have installed NVIDIA CUDA to a customized location, you should specify paths to OpenCL headers and library like the following:
-    # cmake -DUSE_GPU=1 -DOpenCL_LIBRARY=/usr/local/cuda/lib64/libOpenCL.so -DOpenCL_INCLUDE_DIR=/usr/local/cuda/include/ ..
-    make -j$(nproc)
-    cd ..
+    # cmake -B build -S . -DUSE_GPU=1 -DOpenCL_LIBRARY=/usr/local/cuda/lib64/libOpenCL.so -DOpenCL_INCLUDE_DIR=/usr/local/cuda/include/
+    cmake --build build -j$(nproc)
 
 You will see two binaries are generated, ``lightgbm`` and ``lib_lightgbm.so``.
 
@@ -78,11 +73,9 @@ If you want to use the Python interface of LightGBM, you can install it now (alo
 
 ::
 
-    sudo apt-get -y install python-pip
-    sudo -H pip install setuptools numpy scipy scikit-learn -U
-    cd python-package/
-    sudo python setup.py install --precompile
-    cd ..
+    sudo apt-get -y install python3-pip python3-venv
+    sudo -H pip install numpy scipy scikit-learn -U
+    sudo sh ./build-python.sh install --precompile
 
 You need to set an additional parameter ``"device" : "gpu"`` (along with your other options like ``learning_rate``, ``num_leaves``, etc) to use GPU in Python.
 
@@ -181,8 +174,6 @@ Further Reading
 
 - `GPU SDK Correspondence and Device Targeting Table <./GPU-Targets.rst>`__
 
-- `GPU Windows Tutorial <./GPU-Windows.rst>`__
-
 Reference
 ---------
 
@@ -192,9 +183,9 @@ Huan Zhang, Si Si and Cho-Jui Hsieh. "`GPU Acceleration for Large-scale Tree Boo
 
 .. _Microsoft Azure cloud computing platform: https://azure.microsoft.com/
 
-.. _AMDGPU-Pro: https://www.amd.com/en/support
+.. _AMDGPU-Pro: https://www.amd.com/en/support.html
 
-.. _Python-package Examples: https://github.com/microsoft/LightGBM/tree/master/examples/python-guide
+.. _Python-package Examples: https://github.com/lightgbm-org/LightGBM/tree/main/examples/python-guide
 
 .. _GPU Acceleration for Large-scale Tree Boosting: https://arxiv.org/abs/1706.08359
 

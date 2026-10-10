@@ -1,26 +1,28 @@
 /*!
- * Copyright (c) 2021 Microsoft Corporation. All rights reserved.
+ * Copyright (c) 2021-2026 Microsoft Corporation. All rights reserved.
+ * Copyright (c) 2021-2026 The LightGBM developers. All rights reserved.
  * Licensed under the MIT License. See LICENSE file in the project root for license information.
  */
 
-#ifdef USE_CUDA
+#ifndef LIGHTGBM_INCLUDE_LIGHTGBM_CUDA_CUDA_ROW_DATA_HPP_
+#define LIGHTGBM_INCLUDE_LIGHTGBM_CUDA_CUDA_ROW_DATA_HPP_
 
-#ifndef LIGHTGBM_CUDA_CUDA_ROW_DATA_HPP_
-#define LIGHTGBM_CUDA_CUDA_ROW_DATA_HPP_
+#ifdef USE_CUDA
 
 #include <LightGBM/bin.h>
 #include <LightGBM/config.h>
-#include <LightGBM/cuda/cuda_utils.h>
+#include <LightGBM/cuda/cuda_utils.hu>
 #include <LightGBM/dataset.h>
 #include <LightGBM/train_share_states.h>
 #include <LightGBM/utils/openmp_wrapper.h>
 
+#include <cstdint>
 #include <vector>
 
 #define COPY_SUBROW_BLOCK_SIZE_ROW_DATA (1024)
 
 #if CUDART_VERSION == 10000
-#define DP_SHARED_HIST_SIZE (5560)
+#define DP_SHARED_HIST_SIZE (5176)
 #else
 #define DP_SHARED_HIST_SIZE (6144)
 #endif
@@ -68,11 +70,11 @@ class CUDARowData {
 
   uint8_t row_ptr_bit_type() const { return row_ptr_bit_type_; }
 
-  const int* cuda_feature_partition_column_index_offsets() const { return cuda_feature_partition_column_index_offsets_; }
+  const int* cuda_feature_partition_column_index_offsets() const { return cuda_feature_partition_column_index_offsets_.RawData(); }
 
-  const uint32_t* cuda_column_hist_offsets() const { return cuda_column_hist_offsets_; }
+  const uint32_t* cuda_column_hist_offsets() const { return cuda_column_hist_offsets_.RawData(); }
 
-  const uint32_t* cuda_partition_hist_offsets() const { return cuda_partition_hist_offsets_; }
+  const uint32_t* cuda_partition_hist_offsets() const { return cuda_partition_hist_offsets_.RawData(); }
 
   int shared_hist_size() const { return shared_hist_size_; }
 
@@ -92,9 +94,9 @@ class CUDARowData {
   template <typename BIN_TYPE, typename ROW_PTR_TYPE>
   void InitSparseData(const BIN_TYPE* host_data,
                       const ROW_PTR_TYPE* host_row_ptr,
-                      BIN_TYPE** cuda_data,
-                      ROW_PTR_TYPE** cuda_row_ptr,
-                      ROW_PTR_TYPE** cuda_partition_ptr);
+                      CUDAVector<BIN_TYPE>* cuda_data,
+                      CUDAVector<ROW_PTR_TYPE>* cuda_row_ptr,
+                      CUDAVector<ROW_PTR_TYPE>* cuda_partition_ptr);
 
   /*! \brief number of threads to use */
   int num_threads_;
@@ -116,7 +118,7 @@ class CUDARowData {
   std::vector<int> feature_partition_column_index_offsets_;
   /*! \brief histogram offset of each column */
   std::vector<uint32_t> column_hist_offsets_;
-  /*! \brief hisotgram offset of each partition */
+  /*! \brief histogram offset of each partition */
   std::vector<uint32_t> partition_hist_offsets_;
   /*! \brief maximum number of columns among all feature partitions */
   int max_num_column_per_partition_;
@@ -142,38 +144,39 @@ class CUDARowData {
   // CUDA memory
 
   /*! \brief row-wise data stored in CUDA, 8 bits */
-  uint8_t* cuda_data_uint8_t_;
+  CUDAVector<uint8_t> cuda_data_uint8_t_;
   /*! \brief row-wise data stored in CUDA, 16 bits */
-  uint16_t* cuda_data_uint16_t_;
+  CUDAVector<uint16_t> cuda_data_uint16_t_;
   /*! \brief row-wise data stored in CUDA, 32 bits */
-  uint32_t* cuda_data_uint32_t_;
+  CUDAVector<uint32_t> cuda_data_uint32_t_;
   /*! \brief row pointer stored in CUDA, 16 bits */
-  uint16_t* cuda_row_ptr_uint16_t_;
+  CUDAVector<uint16_t> cuda_row_ptr_uint16_t_;
   /*! \brief row pointer stored in CUDA, 32 bits */
-  uint32_t* cuda_row_ptr_uint32_t_;
+  CUDAVector<uint32_t> cuda_row_ptr_uint32_t_;
   /*! \brief row pointer stored in CUDA, 64 bits */
-  uint64_t* cuda_row_ptr_uint64_t_;
+  CUDAVector<uint64_t> cuda_row_ptr_uint64_t_;
   /*! \brief partition bin offsets, 16 bits */
-  uint16_t* cuda_partition_ptr_uint16_t_;
+  CUDAVector<uint16_t> cuda_partition_ptr_uint16_t_;
   /*! \brief partition bin offsets, 32 bits */
-  uint32_t* cuda_partition_ptr_uint32_t_;
+  CUDAVector<uint32_t> cuda_partition_ptr_uint32_t_;
   /*! \brief partition bin offsets, 64 bits */
-  uint64_t* cuda_partition_ptr_uint64_t_;
+  CUDAVector<uint64_t> cuda_partition_ptr_uint64_t_;
   /*! \brief start column index of each feature partition */
-  int* cuda_feature_partition_column_index_offsets_;
+  CUDAVector<int> cuda_feature_partition_column_index_offsets_;
   /*! \brief histogram offset of each column */
-  uint32_t* cuda_column_hist_offsets_;
-  /*! \brief hisotgram offset of each partition */
-  uint32_t* cuda_partition_hist_offsets_;
+  CUDAVector<uint32_t> cuda_column_hist_offsets_;
+  /*! \brief histogram offset of each partition */
+  CUDAVector<uint32_t> cuda_partition_hist_offsets_;
   /*! \brief block buffer when calculating prefix sum */
-  uint16_t* cuda_block_buffer_uint16_t_;
+  CUDAVector<uint16_t> cuda_block_buffer_uint16_t_;
   /*! \brief block buffer when calculating prefix sum */
-  uint32_t* cuda_block_buffer_uint32_t_;
+  CUDAVector<uint32_t> cuda_block_buffer_uint32_t_;
   /*! \brief block buffer when calculating prefix sum */
-  uint64_t* cuda_block_buffer_uint64_t_;
+  CUDAVector<uint64_t> cuda_block_buffer_uint64_t_;
 };
 
 }  // namespace LightGBM
-#endif  // LIGHTGBM_CUDA_CUDA_ROW_DATA_HPP_
 
 #endif  // USE_CUDA
+
+#endif  // LIGHTGBM_INCLUDE_LIGHTGBM_CUDA_CUDA_ROW_DATA_HPP_

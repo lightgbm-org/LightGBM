@@ -1,9 +1,10 @@
 /*!
- * Copyright (c) 2018 Microsoft Corporation. All rights reserved.
+ * Copyright (c) 2018-2026 Microsoft Corporation. All rights reserved.
+ * Copyright (c) 2018-2026 The LightGBM developers. All rights reserved.
  * Licensed under the MIT License. See LICENSE file in the project root for license information.
  */
-#ifndef LIGHTGBM_UTILS_FILE_IO_H_
-#define LIGHTGBM_UTILS_FILE_IO_H_
+#ifndef LIGHTGBM_INCLUDE_LIGHTGBM_UTILS_FILE_IO_H_
+#define LIGHTGBM_INCLUDE_LIGHTGBM_UTILS_FILE_IO_H_
 
 #include <LightGBM/utils/binary_writer.h>
 
@@ -75,4 +76,4 @@ struct VirtualFileReader {
 
 }  // namespace LightGBM
 
-#endif   // LightGBM_UTILS_FILE_IO_H_
+#endif   // LIGHTGBM_INCLUDE_LIGHTGBM_UTILS_FILE_IO_H_

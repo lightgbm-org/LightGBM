@@ -1,9 +1,10 @@
 /*!
- * Copyright (c) 2017 Microsoft Corporation. All rights reserved.
+ * Copyright (c) 2017-2026 Microsoft Corporation. All rights reserved.
+ * Copyright (c) 2017-2026 The LightGBM developers. All rights reserved.
  * Licensed under the MIT License. See LICENSE file in the project root for license information.
  */
-#ifndef LIGHTGBM_EXPORT_H_
-#define LIGHTGBM_EXPORT_H_
+#ifndef LIGHTGBM_INCLUDE_LIGHTGBM_EXPORT_H_
+#define LIGHTGBM_INCLUDE_LIGHTGBM_EXPORT_H_
 
 /** Macros for exporting symbols in MSVC/GCC/CLANG **/
 
@@ -22,4 +23,4 @@
 #define LIGHTGBM_C_EXPORT LIGHTGBM_EXTERN_C
 #endif
 
-#endif /** LIGHTGBM_EXPORT_H_ **/
+#endif  // LIGHTGBM_INCLUDE_LIGHTGBM_EXPORT_H_

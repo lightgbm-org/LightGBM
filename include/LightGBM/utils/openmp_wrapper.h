@@ -1,9 +1,19 @@
 /*!
- * Copyright (c) 2017 Microsoft Corporation. All rights reserved.
+ * Copyright (c) 2017-2026 Microsoft Corporation. All rights reserved.
+ * Copyright (c) 2017-2026 The LightGBM developers. All rights reserved.
  * Licensed under the MIT License. See LICENSE file in the project root for license information.
  */
-#ifndef LIGHTGBM_OPENMP_WRAPPER_H_
-#define LIGHTGBM_OPENMP_WRAPPER_H_
+#ifndef LIGHTGBM_INCLUDE_LIGHTGBM_UTILS_OPENMP_WRAPPER_H_
+#define LIGHTGBM_INCLUDE_LIGHTGBM_UTILS_OPENMP_WRAPPER_H_
+
+#include <LightGBM/export.h>
+
+// this can only be changed by LGBM_SetMaxThreads()
+LIGHTGBM_EXTERN_C int LGBM_MAX_NUM_THREADS;
+
+// this is modified by OMP_SET_NUM_THREADS(), for example
+// by passing num_thread through params
+LIGHTGBM_EXTERN_C int LGBM_DEFAULT_NUM_THREADS;
 
 #ifdef _OPENMP
 
@@ -17,22 +27,25 @@
 #include <stdexcept>
 #include <vector>
 
-inline int OMP_NUM_THREADS() {
-  int ret = 1;
-#pragma omp parallel
-#pragma omp master
-  { ret = omp_get_num_threads(); }
-  return ret;
-}
+/*
+    Get number of threads to use in OpenMP parallel regions.
 
-inline void OMP_SET_NUM_THREADS(int num_threads) {
-  static const int default_omp_num_threads = OMP_NUM_THREADS();
-  if (num_threads > 0) {
-    omp_set_num_threads(num_threads);
-  } else {
-    omp_set_num_threads(default_omp_num_threads);
-  }
-}
+    By default, this will return the result of omp_get_max_threads(),
+    which is OpenMP-implementation dependent but generally can be controlled
+    by environment variable OMP_NUM_THREADS.
+
+    ref:
+      - https://www.openmp.org/spec-html/5.0/openmpsu112.html
+      - https://gcc.gnu.org/onlinedocs/libgomp/omp_005fget_005fmax_005fthreads.html
+*/
+LIGHTGBM_EXTERN_C int OMP_NUM_THREADS();
+
+/*
+    Update the default number of threads that'll be used in OpenMP parallel
+    regions for LightGBM routines where the number of threads aren't directly
+    supplied.
+*/
+LIGHTGBM_EXTERN_C void OMP_SET_NUM_THREADS(int num_threads);
 
 class ThreadExceptionHelper {
  public:
@@ -50,9 +63,13 @@ class ThreadExceptionHelper {
   }
   void CaptureException() {
     // only catch first exception.
-    if (ex_ptr_ != nullptr) { return; }
+    if (ex_ptr_ != nullptr) {
+      return;
+    }
     std::unique_lock<std::mutex> guard(lock_);
-    if (ex_ptr_ != nullptr) { return; }
+    if (ex_ptr_ != nullptr) {
+      return;
+    }
     ex_ptr_ = std::current_exception();
   }
 
@@ -102,10 +119,7 @@ class ThreadExceptionHelper {
   /** Fall here if no OPENMP support, so just
       simulate a single thread running.
       All #pragma omp should be ignored by the compiler **/
-  inline void omp_set_num_threads(int) __GOMP_NOTHROW {}  // NOLINT (no cast done here)
   inline void OMP_SET_NUM_THREADS(int) __GOMP_NOTHROW {}
-  inline int omp_get_num_threads() __GOMP_NOTHROW {return 1;}
-  inline int omp_get_max_threads() __GOMP_NOTHROW {return 1;}
   inline int omp_get_thread_num() __GOMP_NOTHROW {return 0;}
   inline int OMP_NUM_THREADS() __GOMP_NOTHROW { return 1; }
 #ifdef __cplusplus
@@ -119,6 +133,4 @@ class ThreadExceptionHelper {
 
 #endif
 
-
-
-#endif /* LIGHTGBM_OPENMP_WRAPPER_H_ */
+#endif  // LIGHTGBM_INCLUDE_LIGHTGBM_UTILS_OPENMP_WRAPPER_H_

@@ -1,5 +1,5 @@
 library(testthat)
-library(lightgbm)
+library(lightgbm)  # nolint: unused_import.
 
 test_check(
     package = "lightgbm"

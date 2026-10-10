@@ -1,9 +1,10 @@
 /*!
- * Copyright (c) 2016 Microsoft Corporation. All rights reserved.
+ * Copyright (c) 2016-2026 Microsoft Corporation. All rights reserved.
+ * Copyright (c) 2016-2026 The LightGBM developers. All rights reserved.
  * Licensed under the MIT License. See LICENSE file in the project root for license information.
  */
-#ifndef LIGHTGBM_TREELEARNER_DATA_PARTITION_HPP_
-#define LIGHTGBM_TREELEARNER_DATA_PARTITION_HPP_
+#ifndef LIGHTGBM_SRC_TREELEARNER_DATA_PARTITION_HPP_
+#define LIGHTGBM_SRC_TREELEARNER_DATA_PARTITION_HPP_
 
 #include <LightGBM/dataset.h>
 #include <LightGBM/meta.h>
@@ -52,7 +53,7 @@ class DataPartition {
     if (used_data_indices_ == nullptr) {
       // if using all data
       leaf_count_[0] = num_data_;
-#pragma omp parallel for schedule(static, 512) if (num_data_ >= 1024)
+#pragma omp parallel for num_threads(OMP_NUM_THREADS()) schedule(static, 512) if (num_data_ >= 1024)
       for (data_size_t i = 0; i < num_data_; ++i) {
         indices_[i] = i;
       }
@@ -81,8 +82,8 @@ class DataPartition {
   /*!
   * \brief Get the data indices of one leaf
   * \param leaf index of leaf
-  * \param indices output data indices
-  * \return number of data on this leaf
+  * \param out_len number of data on this leaf
+  * \return the data indices of this leaf
   */
   const data_size_t* GetIndexOnLeaf(int leaf, data_size_t* out_len) const {
     // copy reference, maybe unsafe, but faster
@@ -94,8 +95,11 @@ class DataPartition {
   /*!
   * \brief Split the data
   * \param leaf index of leaf
-  * \param feature_bins feature bin data
+  * \param dataset dataset that holds the bin data
+  * \param feature index of the feature to split on
   * \param threshold threshold that want to split
+  * \param num_threshold number of "words" in the bitset for categorical features, 1 for continuous features
+  * \param default_left whether missing values go to the left leaf
   * \param right_leaf index of right leaf
   */
   void Split(int leaf, const Dataset* dataset, int feature,
@@ -167,4 +171,4 @@ class DataPartition {
 };
 
 }  // namespace LightGBM
-#endif   // LightGBM_TREELEARNER_DATA_PARTITION_HPP_
+#endif   // LIGHTGBM_SRC_TREELEARNER_DATA_PARTITION_HPP_

@@ -1,5 +1,4 @@
 library(lightgbm)
-library(methods)
 
 # Load in the agaricus dataset
 data(agaricus.train, package = "lightgbm")
@@ -30,7 +29,7 @@ logregobj <- function(preds, dtrain) {
 
 # User-defined evaluation function returns a pair (metric_name, result, higher_better)
 # NOTE: when you do customized loss function, the default prediction value is margin
-# This may make built-in evalution metric calculate wrong results
+# This may make built-in evaluation metric calculate wrong results
 # For example, we are doing logistic loss, the prediction is score before logistic transformation
 # The built-in evaluation error assumes input is after logistic transformation
 # Keep this in mind when you use the customization, and maybe you need write customized evaluation function

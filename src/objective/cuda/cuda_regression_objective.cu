@@ -1,5 +1,6 @@
 /*!
- * Copyright (c) 2021 Microsoft Corporation. All rights reserved.
+ * Copyright (c) 2021-2026 Microsoft Corporation. All rights reserved.
+ * Copyright (c) 2021-2026 The LightGBM developers. All rights reserved.
  * Licensed under the MIT License. See LICENSE file in the project root for
  * license information.
  */
@@ -350,6 +351,131 @@ const double* CUDARegressionPoissonLoss::LaunchConvertOutputCUDAKernel(const dat
   return output;
 }
 
+
+double CUDARegressionQuantileloss::LaunchCalcInitScoreKernel(const int /*class_id*/) const {
+  if (cuda_weights_ == nullptr) {
+    PercentileGlobal<label_t, data_size_t, label_t, double, false, false>(
+      cuda_labels_, nullptr, cuda_data_indices_buffer_.RawData(), nullptr, nullptr, alpha_, num_data_, cuda_percentile_result_.RawData());
+  } else {
+    PercentileGlobal<label_t, data_size_t, label_t, double, false, true>(
+      cuda_labels_, cuda_weights_, cuda_data_indices_buffer_.RawData(), cuda_weights_prefix_sum_.RawData(),
+      cuda_weights_prefix_sum_buffer_.RawData(), alpha_, num_data_, cuda_percentile_result_.RawData());
+  }
+  label_t percentile_result = 0.0f;
+  CopyFromCUDADeviceToHost<label_t>(&percentile_result, cuda_percentile_result_.RawData(), 1, __FILE__, __LINE__);
+  SynchronizeCUDADevice(__FILE__, __LINE__);
+  return static_cast<label_t>(percentile_result);
+}
+
+template <bool USE_WEIGHT>
+__global__ void RenewTreeOutputCUDAKernel_RegressionQuantile(
+  const double* score,
+  const label_t* label,
+  const label_t* weight,
+  double* residual_buffer,
+  label_t* weight_by_leaf,
+  double* weight_prefix_sum_buffer,
+  const data_size_t* data_indices_in_leaf,
+  const data_size_t* num_data_in_leaf,
+  const data_size_t* data_start_in_leaf,
+  data_size_t* data_indices_buffer,
+  double* leaf_value,
+  const double alpha) {
+  const int leaf_index = static_cast<int>(blockIdx.x);
+  const data_size_t data_start = data_start_in_leaf[leaf_index];
+  const data_size_t num_data = num_data_in_leaf[leaf_index];
+  data_size_t* data_indices_buffer_pointer = data_indices_buffer + data_start;
+  const label_t* weight_by_leaf_pointer = weight_by_leaf + data_start;
+  double* weight_prefix_sum_buffer_pointer = weight_prefix_sum_buffer + data_start;
+  const double* residual_buffer_pointer = residual_buffer + data_start;
+  for (data_size_t inner_data_index = data_start + static_cast<data_size_t>(threadIdx.x); inner_data_index < data_start + num_data; inner_data_index += static_cast<data_size_t>(blockDim.x)) {
+    const data_size_t data_index = data_indices_in_leaf[inner_data_index];
+    const label_t data_label = label[data_index];
+    const double data_score = score[data_index];
+    residual_buffer[inner_data_index] = static_cast<double>(data_label) - data_score;
+    if (USE_WEIGHT) {
+      weight_by_leaf[inner_data_index] = weight[data_index];
+    }
+  }
+  __syncthreads();
+  const double renew_leaf_value = PercentileDevice<double, data_size_t, label_t, double, false, USE_WEIGHT>(
+    residual_buffer_pointer, weight_by_leaf_pointer, data_indices_buffer_pointer,
+    weight_prefix_sum_buffer_pointer, alpha, num_data);
+  if (threadIdx.x == 0) {
+    leaf_value[leaf_index] = renew_leaf_value;
+  }
+}
+
+void CUDARegressionQuantileloss::LaunchRenewTreeOutputCUDAKernel(
+  const double* score, const data_size_t* data_indices_in_leaf, const data_size_t* num_data_in_leaf,
+  const data_size_t* data_start_in_leaf, const int num_leaves, double* leaf_value) const {
+  if (cuda_weights_ == nullptr) {
+    RenewTreeOutputCUDAKernel_RegressionQuantile<false><<<num_leaves, GET_GRADIENTS_BLOCK_SIZE_REGRESSION / 2>>>(
+      score,
+      cuda_labels_,
+      cuda_weights_,
+      cuda_residual_buffer_.RawData(),
+      cuda_weight_by_leaf_buffer_.RawData(),
+      cuda_weights_prefix_sum_.RawData(),
+      data_indices_in_leaf,
+      num_data_in_leaf,
+      data_start_in_leaf,
+      cuda_data_indices_buffer_.RawData(),
+      leaf_value,
+      alpha_);
+  } else {
+    RenewTreeOutputCUDAKernel_RegressionQuantile<true><<<num_leaves, GET_GRADIENTS_BLOCK_SIZE_REGRESSION / 4>>>(
+      score,
+      cuda_labels_,
+      cuda_weights_,
+      cuda_residual_buffer_.RawData(),
+      cuda_weight_by_leaf_buffer_.RawData(),
+      cuda_weights_prefix_sum_.RawData(),
+      data_indices_in_leaf,
+      num_data_in_leaf,
+      data_start_in_leaf,
+      cuda_data_indices_buffer_.RawData(),
+      leaf_value,
+      alpha_);
+  }
+  SynchronizeCUDADevice(__FILE__, __LINE__);
+}
+
+template <bool USE_WEIGHT>
+__global__ void GetGradientsKernel_RegressionQuantile(const double* cuda_scores, const label_t* cuda_labels,
+  const label_t* cuda_weights, const data_size_t num_data, const double alpha,
+  score_t* cuda_out_gradients, score_t* cuda_out_hessians) {
+  const data_size_t data_index = static_cast<data_size_t>(blockDim.x * blockIdx.x + threadIdx.x);
+  if (data_index < num_data) {
+    if (!USE_WEIGHT) {
+      const double diff = cuda_scores[data_index] - static_cast<double>(cuda_labels[data_index]);
+      if (diff >= 0.0f) {
+        cuda_out_gradients[data_index] = (1.0f - alpha);
+      } else {
+        cuda_out_gradients[data_index] = -alpha;
+      }
+      cuda_out_hessians[data_index] = 1.0f;
+    } else {
+      const double diff = cuda_scores[data_index] - static_cast<double>(cuda_labels[data_index]);
+      const score_t weight = static_cast<score_t>(cuda_weights[data_index]);
+      if (diff >= 0.0f) {
+        cuda_out_gradients[data_index] = (1.0f - alpha) * weight;
+      } else {
+        cuda_out_gradients[data_index] = -alpha * weight;
+      }
+      cuda_out_hessians[data_index] = weight;
+    }
+  }
+}
+
+void CUDARegressionQuantileloss::LaunchGetGradientsKernel(const double* score, score_t* gradients, score_t* hessians) const {
+  const int num_blocks = (num_data_ + GET_GRADIENTS_BLOCK_SIZE_REGRESSION - 1) / GET_GRADIENTS_BLOCK_SIZE_REGRESSION;
+  if (cuda_weights_ == nullptr) {
+    GetGradientsKernel_RegressionQuantile<false><<<num_blocks, GET_GRADIENTS_BLOCK_SIZE_REGRESSION>>>(score, cuda_labels_, nullptr, num_data_, alpha_, gradients, hessians);
+  } else {
+    GetGradientsKernel_RegressionQuantile<true><<<num_blocks, GET_GRADIENTS_BLOCK_SIZE_REGRESSION>>>(score, cuda_labels_, cuda_weights_, num_data_, alpha_, gradients, hessians);
+  }
+}
 
 }  // namespace LightGBM
 

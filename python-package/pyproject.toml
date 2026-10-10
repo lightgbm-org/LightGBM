@@ -1,0 +1,229 @@
+[project]
+
+classifiers = [
+    "Development Status :: 5 - Production/Stable",
+    "Intended Audience :: Science/Research",
+    "Natural Language :: English",
+    "Operating System :: MacOS",
+    "Operating System :: Microsoft :: Windows",
+    "Operating System :: POSIX",
+    "Operating System :: Unix",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence"
+]
+dependencies = [
+    "narwhals>=1.15",
+    "numpy>=1.21.3",
+    "scipy"
+]
+description = "LightGBM Python-package"
+license = "MIT"
+license-files = [
+    "LICENSE"
+]
+maintainers = [
+  {name = "Yu Shi", email = "yushi@microsoft.com"}
+]
+name = "lightgbm"
+readme = "README.rst"
+requires-python = ">=3.10"
+version = "4.7.0.99"
+
+[project.optional-dependencies]
+arrow = [
+    "narwhals[pyarrow]",
+    "pyarrow>=16.0.0"
+]
+dask = [
+    "dask[array,dataframe,distributed]>=2.0.0",
+    "narwhals[pandas]",
+    "pandas>=1.3.4"
+]
+pandas = [
+    "narwhals[pandas]",
+    "pandas>=1.3.4"
+]
+plotting = [
+    "graphviz",
+    "matplotlib"
+]
+polars = [
+    "narwhals[polars]",
+    "polars>=1.0.0"
+]
+scikit-learn = [
+    "scikit-learn>=1.0.2"
+]
+
+[project.urls]
+homepage = "https://github.com/lightgbm-org/LightGBM"
+documentation = "https://lightgbm.readthedocs.io/en/latest/"
+repository = "https://github.com/lightgbm-org/LightGBM.git"
+changelog = "https://github.com/lightgbm-org/LightGBM/releases"
+
+# start:build-system
+[build-system]
+
+requires = ["scikit-build-core>=0.11.0"]
+build-backend = "scikit_build_core.build"
+
+# based on https://github.com/scikit-build/scikit-build-core#configuration
+[tool.scikit-build]
+ninja.version = ">=1.11"
+ninja.make-fallback = true
+build.verbose = false
+build.targets = ["_lightgbm"]
+install.strip = true
+logging.level = "INFO"
+sdist.reproducible = true
+wheel.py-api = "py3"
+experimental = false
+strict-config = false
+minimum-version = "build-system.requires"
+
+[tool.scikit-build.cmake]
+version = "CMakeLists.txt"
+build-type = "Release"
+
+[tool.scikit-build.cmake.define]
+__BUILD_FOR_PYTHON = "ON"
+
+# end:build-system
+
+[tool.mypy]
+disallow_untyped_defs = true
+exclude = 'build/*|compile/*|docs/*|examples/*|external_libs/*|lightgbm-python/*|.pixi/*|tests/*'
+ignore_missing_imports = true
+
+[tool.rstcheck]
+report_level = "WARNING"
+ignore_directives = [
+    "autoclass",
+    "autofunction",
+    "autosummary",
+    "doxygenfile"
+]
+
+[tool.ruff]
+exclude = [
+    "build",
+    "compile",
+    "external_libs",
+    "lightgbm-python",
+]
+line-length = 120
+
+# this should be set to the oldest version of python LightGBM supports
+target-version = "py310"
+
+[tool.ruff.format]
+docstring-code-format = false
+exclude = [
+    "build/*.py",
+    "compile/*.py",
+    "external_libs/*.py",
+    "lightgbm-python/*.py",
+]
+indent-style = "space"
+quote-style = "double"
+skip-magic-trailing-comma = false
+
+[tool.ruff.lint]
+ignore = [
+    # (pydocstyle) Missing docstring in magic method
+    "D105",
+    # (pycodestyle) Line too long
+    "E501",
+    # (pylint) Too many branches
+    "PLR0912",
+    # (pylint) Too many arguments in function definition
+    "PLR0913",
+    # (pylint) Too many statements
+    "PLR0915",
+    # (pylint) Consider merging multiple comparisons
+    "PLR1714",
+    # (pylint) Magic value used in comparison
+    "PLR2004",
+    # (pylint) for loop variable overwritten by assignment target
+    "PLW2901",
+    # (pylint) use 'elif' instead of 'else' then 'if', to reduce indentation
+    "PLR5501",
+    # (flake8-pytest-style) `scope='function'` is implied in `@pytest.fixture()`
+    "PT003"
+]
+select = [
+    # flake8-bugbear
+    "B",
+    # flake8-comprehensions
+    "C4",
+    # pydocstyle
+    "D",
+    # pycodestyle (errors)
+    "E",
+    # pyflakes
+    "F",
+    # isort
+    "I",
+    # NumPy-specific rules
+    "NPY",
+    # pylint
+    "PL",
+    # flake8-pytest-style
+    "PT",
+    # flake8-return: unnecessary assignment before return
+    "RET504",
+    # flake8-return: superfluous-else-raise
+    "RET506",
+    # flake8-simplify: use dict.get() instead of an if-else block
+    "SIM401",
+    # flake8-print
+    "T",
+    # pycodestyle (warnings)
+    "W",
+]
+
+[tool.ruff.lint.flake8-pytest-style]
+raises-extend-require-match-for = ["*Exception", "*Error"]
+
+[tool.ruff.lint.per-file-ignores]
+".ci/create-nuget.py" = [
+    # (flake8-print) flake8-print
+    "T201"
+]
+"docs/conf.py" = [
+    # (flake8-bugbear) raise exceptions with "raise ... from err"
+    "B904",
+    # (flake8-print) flake8-print
+    "T"
+]
+"examples/*" = [
+    # pydocstyle
+    "D",
+    # flake8-print
+    "T"
+]
+"python-package/lightgbm/basic.py" = [
+    # (pylint) Using the global statement is discouraged
+    "PLW0603"
+]
+"tests/*" = [
+    # (flake8-bugbear) Found useless expression
+    "B018",
+    # (pycodestyle) Module level import not at top of file
+    "E402",
+    # pydocstyle
+    "D",
+    # flake8-print
+    "T"
+]
+
+[tool.ruff.lint.pydocstyle]
+convention = "numpy"
+
+[tool.ruff.lint.isort]
+known-first-party = ["lightgbm"]

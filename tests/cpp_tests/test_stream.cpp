@@ -1,5 +1,6 @@
 /*!
- * Copyright (c) 2022 Microsoft Corporation. All rights reserved.
+ * Copyright (c) 2022-2026 Microsoft Corporation. All rights reserved.
+ * Copyright (c) 2022-2026 The LightGBM developers. All rights reserved.
  * Licensed under the MIT License. See LICENSE file in the project root for license information.
  */
 
@@ -10,6 +11,8 @@
 #include <LightGBM/dataset.h>
 
 #include <iostream>
+#include <string>
+#include <vector>
 
 using LightGBM::Dataset;
 using LightGBM::Log;
@@ -17,7 +20,7 @@ using LightGBM::TestUtils;
 
 void test_stream_dense(
   int8_t creation_type,
-  DatasetHandle ref_datset_handle,
+  DatasetHandle ref_dataset_handle,
   int32_t nrows,
   int32_t ncols,
   int32_t nclasses,
@@ -86,7 +89,7 @@ void test_stream_dense(
 
       case 1:
         Log::Info("Creating Dataset using LGBM_DatasetCreateByReference, %d rows dense data with a batch size of %d", nrows, batch_count);
-        result = LGBM_DatasetCreateByReference(ref_datset_handle, nrows, &dataset_handle);
+        result = LGBM_DatasetCreateByReference(ref_dataset_handle, nrows, &dataset_handle);
         EXPECT_EQ(0, result) << "LGBM_DatasetCreateByReference result code: " << result;
         break;
     }
@@ -131,7 +134,7 @@ void test_stream_dense(
 
 void test_stream_sparse(
   int8_t creation_type,
-  DatasetHandle ref_datset_handle,
+  DatasetHandle ref_dataset_handle,
   int32_t nrows,
   int32_t ncols,
   int32_t nclasses,
@@ -203,7 +206,7 @@ void test_stream_sparse(
 
       case 1:
         Log::Info("Creating Dataset using LGBM_DatasetCreateByReference, %d rows sparse data with a batch size of %d", nrows, batch_count);
-        result = LGBM_DatasetCreateByReference(ref_datset_handle, nrows, &dataset_handle);
+        result = LGBM_DatasetCreateByReference(ref_dataset_handle, nrows, &dataset_handle);
         EXPECT_EQ(0, result) << "LGBM_DatasetCreateByReference result code: " << result;
         break;
     }
@@ -249,13 +252,13 @@ void test_stream_sparse(
 
 TEST(Stream, PushDenseRowsWithMetadata) {
   // Load some test data
-  DatasetHandle ref_datset_handle;
+  DatasetHandle ref_dataset_handle;
   const char* params = "max_bin=15";
   // Use the smaller ".test" data because we don't care about the actual data and it's smaller
-  int result = TestUtils::LoadDatasetFromExamples("binary_classification/binary.test", params, &ref_datset_handle);
+  int result = TestUtils::LoadDatasetFromExamples("binary_classification/binary.test", params, &ref_dataset_handle);
   EXPECT_EQ(0, result) << "LoadDatasetFromExamples result code: " << result;
 
-  Dataset* ref_dataset = static_cast<Dataset*>(ref_datset_handle);
+  Dataset* ref_dataset = static_cast<Dataset*>(ref_dataset_handle);
   auto noriginalrows = ref_dataset->num_data();
   Log::Info("Row count: %d", noriginalrows);
   Log::Info("Feature group count: %d", ref_dataset->num_features());
@@ -266,9 +269,9 @@ TEST(Stream, PushDenseRowsWithMetadata) {
   unused_init_scores.resize(noriginalrows * nclasses);
   std::vector<int32_t> unused_groups;
   unused_groups.assign(noriginalrows, 1);
-  result = LGBM_DatasetSetField(ref_datset_handle, "init_score", unused_init_scores.data(), noriginalrows * nclasses, 1);
+  result = LGBM_DatasetSetField(ref_dataset_handle, "init_score", unused_init_scores.data(), noriginalrows * nclasses, 1);
   EXPECT_EQ(0, result) << "LGBM_DatasetSetField init_score result code: " << result;
-  result = LGBM_DatasetSetField(ref_datset_handle, "group", unused_groups.data(), noriginalrows, 2);
+  result = LGBM_DatasetSetField(ref_dataset_handle, "group", unused_groups.data(), noriginalrows, 2);
   EXPECT_EQ(0, result) << "LGBM_DatasetSetField group result code: " << result;
 
   // Now use the reference dataset schema to make some testable Datasets with N rows each
@@ -290,23 +293,23 @@ TEST(Stream, PushDenseRowsWithMetadata) {
     for (size_t j = 0; j < batch_counts.size(); ++j) {
       auto type = creation_types[i];
       auto batch_count = batch_counts[j];
-      test_stream_dense(type, ref_datset_handle, nrows, ncols, nclasses, batch_count, &features, &labels, &weights, &init_scores, &groups);
+      test_stream_dense(type, ref_dataset_handle, nrows, ncols, nclasses, batch_count, &features, &labels, &weights, &init_scores, &groups);
     }
   }
 
-  result = LGBM_DatasetFree(ref_datset_handle);
+  result = LGBM_DatasetFree(ref_dataset_handle);
   EXPECT_EQ(0, result) << "LGBM_DatasetFree result code: " << result;
 }
 
 TEST(Stream, PushSparseRowsWithMetadata) {
   // Load some test data
-  DatasetHandle ref_datset_handle;
+  DatasetHandle ref_dataset_handle;
   const char* params = "max_bin=15";
   // Use the smaller ".test" data because we don't care about the actual data and it's smaller
-  int result = TestUtils::LoadDatasetFromExamples("binary_classification/binary.test", params, &ref_datset_handle);
+  int result = TestUtils::LoadDatasetFromExamples("binary_classification/binary.test", params, &ref_dataset_handle);
   EXPECT_EQ(0, result) << "LoadDatasetFromExamples result code: " << result;
 
-  Dataset* ref_dataset = static_cast<Dataset*>(ref_datset_handle);
+  Dataset* ref_dataset = static_cast<Dataset*>(ref_dataset_handle);
   auto noriginalrows = ref_dataset->num_data();
   Log::Info("Row count: %d", noriginalrows);
   Log::Info("Feature group count: %d", ref_dataset->num_features());
@@ -317,9 +320,9 @@ TEST(Stream, PushSparseRowsWithMetadata) {
   unused_init_scores.resize(noriginalrows * nclasses);
   std::vector<int32_t> unused_groups;
   unused_groups.assign(noriginalrows, 1);
-  result = LGBM_DatasetSetField(ref_datset_handle, "init_score", unused_init_scores.data(), noriginalrows * nclasses, 1);
+  result = LGBM_DatasetSetField(ref_dataset_handle, "init_score", unused_init_scores.data(), noriginalrows * nclasses, 1);
   EXPECT_EQ(0, result) << "LGBM_DatasetSetField init_score result code: " << result;
-  result = LGBM_DatasetSetField(ref_datset_handle, "group", unused_groups.data(), noriginalrows, 2);
+  result = LGBM_DatasetSetField(ref_dataset_handle, "group", unused_groups.data(), noriginalrows, 2);
   EXPECT_EQ(0, result) << "LGBM_DatasetSetField group result code: " << result;
 
   // Now use the reference dataset schema to make some testable Datasets with N rows each
@@ -344,10 +347,10 @@ TEST(Stream, PushSparseRowsWithMetadata) {
     for (size_t j = 0; j < batch_counts.size(); ++j) {
       auto type = creation_types[i];
       auto batch_count = batch_counts[j];
-      test_stream_sparse(type, ref_datset_handle, nrows, ncols, nclasses, batch_count, &indptr, &indices, &vals, &labels, &weights, &init_scores, &groups);
+      test_stream_sparse(type, ref_dataset_handle, nrows, ncols, nclasses, batch_count, &indptr, &indices, &vals, &labels, &weights, &init_scores, &groups);
     }
   }
 
-  result = LGBM_DatasetFree(ref_datset_handle);
+  result = LGBM_DatasetFree(ref_dataset_handle);
   EXPECT_EQ(0, result) << "LGBM_DatasetFree result code: " << result;
 }

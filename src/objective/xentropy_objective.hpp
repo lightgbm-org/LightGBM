@@ -1,9 +1,10 @@
 /*!
- * Copyright (c) 2017 Microsoft Corporation. All rights reserved.
+ * Copyright (c) 2017-2026 Microsoft Corporation. All rights reserved.
+ * Copyright (c) 2017-2026 The LightGBM developers. All rights reserved.
  * Licensed under the MIT License. See LICENSE file in the project root for license information.
  */
-#ifndef LIGHTGBM_OBJECTIVE_XENTROPY_OBJECTIVE_HPP_
-#define LIGHTGBM_OBJECTIVE_XENTROPY_OBJECTIVE_HPP_
+#ifndef LIGHTGBM_SRC_OBJECTIVE_XENTROPY_OBJECTIVE_HPP_
+#define LIGHTGBM_SRC_OBJECTIVE_XENTROPY_OBJECTIVE_HPP_
 
 #include <LightGBM/meta.h>
 #include <LightGBM/objective_function.h>
@@ -75,21 +76,54 @@ class CrossEntropy: public ObjectiveFunction {
   }
 
   void GetGradients(const double* score, score_t* gradients, score_t* hessians) const override {
+    // z = expit(score) = 1 / (1 + exp(-score))
+    // gradient = z - label = expit(score) - label
+    // Numerically more stable, see http://fa.bianp.net/blog/2019/evaluate_logistic/
+    //     if score < 0:
+    //         exp_tmp = exp(score)
+    //         return ((1 - label) * exp_tmp - label) / (1 + exp_tmp)
+    //     else:
+    //         exp_tmp = exp(-score)
+    //         return ((1 - label) - label * exp_tmp) / (1 + exp_tmp)
+    // Note that optimal speed would be achieved, at the cost of precision, by
+    //     return expit(score) - y_true
+    // i.e. no "if else" and an own inline implementation of expit.
+    // The case distinction score < 0 in the stable implementation does not
+    // provide significant better precision apart from protecting overflow of exp(..).
+    // The branch (if else), however, can incur runtime costs of up to 30%.
+    // Instead, we help branch prediction by almost always ending in the first if clause
+    // and making the second branch (else) a bit simpler. This has the exact same
+    // precision but is faster than the stable implementation.
+    // As branching criteria, we use the same cutoff as in log1pexp, see link above.
+    // Note that the maximal value to get gradient = -1 with label = 1 is -37.439198610162731
+    // (based on mpmath), and scipy.special.logit(np.finfo(float).eps) ~ -36.04365.
     if (weights_ == nullptr) {
       // compute pointwise gradients and Hessians with implied unit weights
-      #pragma omp parallel for schedule(static)
+      #pragma omp parallel for num_threads(OMP_NUM_THREADS()) schedule(static)
       for (data_size_t i = 0; i < num_data_; ++i) {
-        const double z = 1.0f / (1.0f + std::exp(-score[i]));
-        gradients[i] = static_cast<score_t>(z - label_[i]);
-        hessians[i] = static_cast<score_t>(z * (1.0f - z));
+        if (score[i] > -37.0) {
+          const double exp_tmp = std::exp(-score[i]);
+          gradients[i] = static_cast<score_t>(((1.0f - label_[i]) - label_[i] * exp_tmp) / (1.0f + exp_tmp));
+          hessians[i] = static_cast<score_t>(exp_tmp / ((1 + exp_tmp) * (1 + exp_tmp)));
+        } else {
+          const double exp_tmp = std::exp(score[i]);
+          gradients[i] = static_cast<score_t>(exp_tmp - label_[i]);
+          hessians[i] = static_cast<score_t>(exp_tmp);
+        }
       }
     } else {
       // compute pointwise gradients and Hessians with given weights
-      #pragma omp parallel for schedule(static)
+      #pragma omp parallel for num_threads(OMP_NUM_THREADS()) schedule(static)
       for (data_size_t i = 0; i < num_data_; ++i) {
-        const double z = 1.0f / (1.0f + std::exp(-score[i]));
-        gradients[i] = static_cast<score_t>((z - label_[i]) * weights_[i]);
-        hessians[i] = static_cast<score_t>(z * (1.0f - z) * weights_[i]);
+        if (score[i] > -37.0) {
+          const double exp_tmp = std::exp(-score[i]);
+          gradients[i] = static_cast<score_t>(((1.0f - label_[i]) - label_[i] * exp_tmp) / (1.0f + exp_tmp) * weights_[i]);
+          hessians[i] = static_cast<score_t>(exp_tmp / ((1 + exp_tmp) * (1 + exp_tmp)) * weights_[i]);
+        } else {
+          const double exp_tmp = std::exp(score[i]);
+          gradients[i] = static_cast<score_t>((exp_tmp - label_[i]) * weights_[i]);
+          hessians[i] = static_cast<score_t>(exp_tmp * weights_[i]);
+        }
       }
     }
   }
@@ -114,7 +148,7 @@ class CrossEntropy: public ObjectiveFunction {
     double suml = 0.0f;
     double sumw = 0.0f;
     if (weights_ != nullptr) {
-      #pragma omp parallel for schedule(static) reduction(+:suml, sumw) if (!deterministic_)
+      #pragma omp parallel for num_threads(OMP_NUM_THREADS()) schedule(static) reduction(+:suml, sumw) if (!deterministic_)
 
       for (data_size_t i = 0; i < num_data_; ++i) {
         suml += static_cast<double>(label_[i]) * weights_[i];
@@ -122,7 +156,7 @@ class CrossEntropy: public ObjectiveFunction {
       }
     } else {
       sumw = static_cast<double>(num_data_);
-      #pragma omp parallel for schedule(static) reduction(+:suml) if (!deterministic_)
+      #pragma omp parallel for num_threads(OMP_NUM_THREADS()) schedule(static) reduction(+:suml) if (!deterministic_)
 
       for (data_size_t i = 0; i < num_data_; ++i) {
         suml += label_[i];
@@ -190,7 +224,7 @@ class CrossEntropyLambda: public ObjectiveFunction {
   void GetGradients(const double* score, score_t* gradients, score_t* hessians) const override {
     if (weights_ == nullptr) {
       // compute pointwise gradients and Hessians with implied unit weights; exactly equivalent to CrossEntropy with unit weights
-      #pragma omp parallel for schedule(static)
+      #pragma omp parallel for num_threads(OMP_NUM_THREADS()) schedule(static)
       for (data_size_t i = 0; i < num_data_; ++i) {
         const double z = 1.0f / (1.0f + std::exp(-score[i]));
         gradients[i] = static_cast<score_t>(z - label_[i]);
@@ -198,7 +232,7 @@ class CrossEntropyLambda: public ObjectiveFunction {
       }
     } else {
       // compute pointwise gradients and Hessians with given weights
-      #pragma omp parallel for schedule(static)
+      #pragma omp parallel for num_threads(OMP_NUM_THREADS()) schedule(static)
       for (data_size_t i = 0; i < num_data_; ++i) {
         const double w = weights_[i];
         const double y = label_[i];
@@ -244,7 +278,7 @@ class CrossEntropyLambda: public ObjectiveFunction {
     double suml = 0.0f;
     double sumw = 0.0f;
     if (weights_ != nullptr) {
-      #pragma omp parallel for schedule(static) reduction(+:suml, sumw) if (!deterministic_)
+      #pragma omp parallel for num_threads(OMP_NUM_THREADS()) schedule(static) reduction(+:suml, sumw) if (!deterministic_)
 
       for (data_size_t i = 0; i < num_data_; ++i) {
         suml += static_cast<double>(label_[i]) * weights_[i];
@@ -252,7 +286,7 @@ class CrossEntropyLambda: public ObjectiveFunction {
       }
     } else {
       sumw = static_cast<double>(num_data_);
-      #pragma omp parallel for schedule(static) reduction(+:suml) if (!deterministic_)
+      #pragma omp parallel for num_threads(OMP_NUM_THREADS()) schedule(static) reduction(+:suml) if (!deterministic_)
 
       for (data_size_t i = 0; i < num_data_; ++i) {
         suml += label_[i];
@@ -280,4 +314,4 @@ class CrossEntropyLambda: public ObjectiveFunction {
 
 }  // end namespace LightGBM
 
-#endif   // end #ifndef LIGHTGBM_OBJECTIVE_XENTROPY_OBJECTIVE_HPP_
+#endif  // LIGHTGBM_SRC_OBJECTIVE_XENTROPY_OBJECTIVE_HPP_

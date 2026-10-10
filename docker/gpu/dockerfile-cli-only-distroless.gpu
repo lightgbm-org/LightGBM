@@ -39,10 +39,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 # LightGBM
 WORKDIR /opt
-RUN git clone --recursive --branch stable --depth 1 https://github.com/Microsoft/LightGBM && \
-    cd LightGBM && mkdir build && cd build && \
-    cmake -DUSE_GPU=1 -DOpenCL_LIBRARY=${OPENCL_LIBRARIES}/libOpenCL.so.1 -DOpenCL_INCLUDE_DIR=$OPENCL_INCLUDE_DIR .. && \
-    make OPENCL_HEADERS=$OPENCL_INCLUDE_DIR LIBOPENCL=$OPENCL_LIBRARIES
+RUN git clone --recursive --branch stable --depth 1 https://github.com/lightgbm-org/LightGBM && \
+    cd LightGBM && \
+    cmake -B build -S . -DUSE_GPU=1 -DOpenCL_LIBRARY=${OPENCL_LIBRARIES}/libOpenCL.so.1 -DOpenCL_INCLUDE_DIR=$OPENCL_INCLUDE_DIR && \
+    OPENCL_HEADERS=$OPENCL_INCLUDE_DIR LIBOPENCL=$OPENCL_LIBRARIES cmake --build build
 
 FROM gcr.io/distroless/cc-debian10
 COPY --from=build \

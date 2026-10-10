@@ -8,7 +8,7 @@ ENV \
 RUN apt-get update -y && \
     apt-get install -y --no-install-recommends \
         ca-certificates \
-        cmake \
+        curl \
         build-essential \
         gcc \
         g++ \
@@ -16,16 +16,20 @@ RUN apt-get update -y && \
         libomp-dev && \
     rm -rf /var/lib/apt/lists/*
 
+RUN curl -L -o cmake.sh https://github.com/Kitware/CMake/releases/download/v3.29.2/cmake-3.29.2-linux-x86_64.sh && \
+    chmod +x cmake.sh && \
+    sh ./cmake.sh --prefix=/usr/local --skip-license && \
+    rm cmake.sh
+
 RUN git clone \
         --recursive \
         --branch stable \
         --depth 1 \
-        https://github.com/Microsoft/LightGBM && \
-    mkdir LightGBM/build && \
-    cd LightGBM/build && \
-    cmake .. && \
-    make -j4 && \
-    make install && \
+        https://github.com/lightgbm-org/LightGBM && \
+    cd ./LightGBM && \
+    cmake -B build -S . && \
+    cmake --build build -j4 && \
+    cmake --install build && \
     cd "${HOME}" && \
     rm -rf LightGBM
 

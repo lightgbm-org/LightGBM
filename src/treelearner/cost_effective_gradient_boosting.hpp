@@ -1,10 +1,11 @@
 /*!
- * Copyright (c) 2019 Microsoft Corporation. All rights reserved.
+ * Copyright (c) 2019-2026 Microsoft Corporation. All rights reserved.
+ * Copyright (c) 2019-2026 The LightGBM developers. All rights reserved.
  * Licensed under the MIT License. See LICENSE file in the project root for
  * license information.
  */
-#ifndef LIGHTGBM_TREELEARNER_COST_EFFECTIVE_GRADIENT_BOOSTING_HPP_
-#define LIGHTGBM_TREELEARNER_COST_EFFECTIVE_GRADIENT_BOOSTING_HPP_
+#ifndef LIGHTGBM_SRC_TREELEARNER_COST_EFFECTIVE_GRADIENT_BOOSTING_HPP_
+#define LIGHTGBM_SRC_TREELEARNER_COST_EFFECTIVE_GRADIENT_BOOSTING_HPP_
 
 #include <LightGBM/config.h>
 #include <LightGBM/dataset.h>
@@ -171,4 +172,4 @@ class CostEfficientGradientBoosting {
 
 }  // namespace LightGBM
 
-#endif  // LIGHTGBM_TREELEARNER_COST_EFFECTIVE_GRADIENT_BOOSTING_HPP_
+#endif  // LIGHTGBM_SRC_TREELEARNER_COST_EFFECTIVE_GRADIENT_BOOSTING_HPP_

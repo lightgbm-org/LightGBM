@@ -1,15 +1,17 @@
 /*!
- * Copyright (c) 2017 Microsoft Corporation. All rights reserved.
+ * Copyright (c) 2017-2026 Microsoft Corporation. All rights reserved.
+ * Copyright (c) 2017-2026 The LightGBM developers. All rights reserved.
  * Licensed under the MIT License. See LICENSE file in the project root for
  * license information.
  */
-#ifndef LIGHTGBM_FEATURE_GROUP_H_
-#define LIGHTGBM_FEATURE_GROUP_H_
+#ifndef LIGHTGBM_INCLUDE_LIGHTGBM_FEATURE_GROUP_H_
+#define LIGHTGBM_INCLUDE_LIGHTGBM_FEATURE_GROUP_H_
 
 #include <LightGBM/bin.h>
 #include <LightGBM/meta.h>
 #include <LightGBM/utils/random.h>
 
+#include <cstdint>
 #include <cstdio>
 #include <memory>
 #include <vector>
@@ -361,7 +363,7 @@ class FeatureGroup {
   inline void FinishLoad() {
     if (is_multi_val_) {
       OMP_INIT_EX();
-#pragma omp parallel for schedule(guided)
+#pragma omp parallel for num_threads(OMP_NUM_THREADS()) schedule(guided)
       for (int i = 0; i < num_feature_; ++i) {
         OMP_LOOP_EX_BEGIN();
         multi_bin_data_[i]->FinishLoad();
@@ -564,7 +566,7 @@ class FeatureGroup {
     }
   }
 
-  uint32_t feature_max_bin(const int sub_feature_index) {
+  uint32_t feature_max_bin(const int sub_feature_index) const {
     if (!is_multi_val_) {
       return bin_offsets_[sub_feature_index + 1] - 1;
     } else {
@@ -573,7 +575,7 @@ class FeatureGroup {
     }
   }
 
-  uint32_t feature_min_bin(const int sub_feature_index) {
+  uint32_t feature_min_bin(const int sub_feature_index) const {
     if (!is_multi_val_) {
       return bin_offsets_[sub_feature_index];
     } else {
@@ -628,4 +630,4 @@ class FeatureGroup {
 
 }  // namespace LightGBM
 
-#endif  // LIGHTGBM_FEATURE_GROUP_H_
+#endif  // LIGHTGBM_INCLUDE_LIGHTGBM_FEATURE_GROUP_H_

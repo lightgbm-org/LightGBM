@@ -5,7 +5,7 @@
         vapply(
             X = df
             , FUN = function(x) {
-                paste0(class(x), collapse = ",")
+                paste(class(x), collapse = ",")
             }
             , FUN.VALUE = character(1L)
         )
@@ -115,10 +115,6 @@
 lgb.convert_with_rules <- function(data, rules = NULL) {
 
     column_classes <- .get_column_classes(df = data)
-
-    is_char <- which(column_classes == "character")
-    is_factor <- which(column_classes == "factor")
-    is_logical <- which(column_classes == "logical")
 
     is_data_table <- data.table::is.data.table(x = data)
     is_data_frame <- is.data.frame(data)

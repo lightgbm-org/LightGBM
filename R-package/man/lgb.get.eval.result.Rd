@@ -33,6 +33,8 @@ Given a \code{lgb.Booster}, return evaluation results for a
 }
 \examples{
 \donttest{
+\dontshow{setLGBMthreads(2L)}
+\dontshow{data.table::setDTthreads(1L)}
 # train a regression model
 data(agaricus.train, package = "lightgbm")
 train <- agaricus.train
@@ -45,6 +47,7 @@ params <- list(
   , metric = "l2"
   , min_data = 1L
   , learning_rate = 1.0
+  , num_threads = 2L
 )
 valids <- list(test = dtest)
 model <- lgb.train(

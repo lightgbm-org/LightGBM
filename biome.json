@@ -1,0 +1,41 @@
+{
+    "root": false,
+    "vcs": {
+        "enabled": true,
+        "clientKind": "git",
+        "useIgnoreFile": true
+    },
+    "files": {
+        "includes": [
+            "**",
+            "!**/lib",
+            "!build",
+            "!external_libs",
+            "!lightgbm-python",
+            "!lightgbm_r",
+            "!.pixi",
+            "!R-package/docs"
+        ]
+    },
+    "formatter": {
+        "enabled": true,
+        "expand": "always",
+        "useEditorconfig": true,
+        "lineWidth": 120
+    },
+    "assist": {
+        "enabled": true,
+        "actions": {
+            "recommended": true
+        }
+    },
+    "linter": {
+        "enabled": true,
+        "domains": {
+            "project": "all"
+        },
+        "rules": {
+            "recommended": true
+        }
+    }
+}

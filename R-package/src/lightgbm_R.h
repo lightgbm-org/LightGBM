@@ -1,14 +1,21 @@
 /*!
- * Copyright (c) 2017 Microsoft Corporation. All rights reserved.
+ * Copyright (c) 2017-2026 Microsoft Corporation. All rights reserved.
+ * Copyright (c) 2017-2026 The LightGBM developers. All rights reserved.
  * Licensed under the MIT License. See LICENSE file in the project root for license information.
  */
-#ifndef LIGHTGBM_R_H_
-#define LIGHTGBM_R_H_
+#ifndef LIGHTGBM_R_PACKAGE_SRC_LIGHTGBM_R_H_
+#define LIGHTGBM_R_PACKAGE_SRC_LIGHTGBM_R_H_
 
 #include <LightGBM/c_api.h>
 
+#ifndef R_NO_REMAP
 #define R_NO_REMAP
+#endif
+
+#ifndef R_USE_C99_IN_CXX
 #define R_USE_C99_IN_CXX
+#endif
+
 #include <Rinternals.h>
 
 /*!
@@ -382,6 +389,28 @@ LIGHTGBM_C_EXPORT SEXP LGBM_BoosterRollbackOneIter_R(
 LIGHTGBM_C_EXPORT SEXP LGBM_BoosterGetCurrentIteration_R(
   SEXP handle,
   SEXP out
+);
+
+/*!
+ * \brief Get number of trees per iteration
+ * \param handle Booster handle
+ * \param out Number of trees per iteration
+ * \return R NULL value
+ */
+LIGHTGBM_C_EXPORT SEXP LGBM_BoosterNumModelPerIteration_R(
+    SEXP handle,
+    SEXP out
+);
+
+/*!
+ * \brief Get total number of trees
+ * \param handle Booster handle
+ * \param out Total number of trees of Booster
+ * \return R NULL value
+ */
+LIGHTGBM_C_EXPORT SEXP LGBM_BoosterNumberOfTotalModel_R(
+    SEXP handle,
+    SEXP out
 );
 
 /*!
@@ -809,13 +838,15 @@ LIGHTGBM_C_EXPORT SEXP LGBM_BoosterPredictForMatSingleRowFast_R(
 * \param num_iteration, <= 0 means save all
 * \param feature_importance_type type of feature importance, 0: split, 1: gain
 * \param filename file name
+* \param start_iteration Starting iteration (0 based)
 * \return R NULL value
 */
 LIGHTGBM_C_EXPORT SEXP LGBM_BoosterSaveModel_R(
   SEXP handle,
   SEXP num_iteration,
   SEXP feature_importance_type,
-  SEXP filename
+  SEXP filename,
+  SEXP start_iteration
 );
 
 /*!
@@ -823,12 +854,14 @@ LIGHTGBM_C_EXPORT SEXP LGBM_BoosterSaveModel_R(
 * \param handle Booster handle
 * \param num_iteration, <= 0 means save all
 * \param feature_importance_type type of feature importance, 0: split, 1: gain
+* \param start_iteration Starting iteration (0 based)
 * \return R character vector (length=1) with model string
 */
 LIGHTGBM_C_EXPORT SEXP LGBM_BoosterSaveModelToString_R(
   SEXP handle,
   SEXP num_iteration,
-  SEXP feature_importance_type
+  SEXP feature_importance_type,
+  SEXP start_iteration
 );
 
 /*!
@@ -836,12 +869,14 @@ LIGHTGBM_C_EXPORT SEXP LGBM_BoosterSaveModelToString_R(
 * \param handle Booster handle
 * \param num_iteration, <= 0 means save all
 * \param feature_importance_type type of feature importance, 0: split, 1: gain
+* \param start_iteration Index of starting iteration (0 based)
 * \return R character vector (length=1) with model JSON
 */
 LIGHTGBM_C_EXPORT SEXP LGBM_BoosterDumpModel_R(
   SEXP handle,
   SEXP num_iteration,
-  SEXP feature_importance_type
+  SEXP feature_importance_type,
+  SEXP start_iteration
 );
 
 /*!
@@ -850,4 +885,23 @@ LIGHTGBM_C_EXPORT SEXP LGBM_BoosterDumpModel_R(
 */
 LIGHTGBM_C_EXPORT SEXP LGBM_DumpParamAliases_R();
 
-#endif  // LIGHTGBM_R_H_
+/*!
+* \brief Get current maximum number of threads used by LightGBM routines in this process.
+* \param[out] out current maximum number of threads used by LightGBM. -1 means defaulting to omp_get_num_threads().
+* \return R NULL value
+*/
+LIGHTGBM_C_EXPORT SEXP LGBM_GetMaxThreads_R(
+  SEXP out
+);
+
+
+/*!
+* \brief Set maximum number of threads used by LightGBM routines in this process.
+* \param num_threads maximum number of threads used by LightGBM. -1 means defaulting to omp_get_num_threads().
+* \return R NULL value
+*/
+LIGHTGBM_C_EXPORT SEXP LGBM_SetMaxThreads_R(
+  SEXP num_threads
+);
+
+#endif  // LIGHTGBM_R_PACKAGE_SRC_LIGHTGBM_R_H_

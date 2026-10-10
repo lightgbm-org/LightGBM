@@ -24,6 +24,7 @@
             , "map" = TRUE
             , "auc" = TRUE
             , "average_precision" = TRUE
+            , "r2" = TRUE
             , "binary_logloss" = FALSE
             , "binary_error" = FALSE
             , "auc_mu" = TRUE

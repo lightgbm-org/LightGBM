@@ -1,6 +1,7 @@
 /*!
  * \file c_api.h
- * \copyright Copyright (c) 2016 Microsoft Corporation. All rights reserved.
+ * \copyright Copyright (c) 2016-2026 Microsoft Corporation. All rights reserved.
+ *            Copyright (c) 2016-2026 The LightGBM developers. All rights reserved.
  *            Licensed under the MIT License. See LICENSE file in the project root for license information.
  * \note
  * To avoid type conversion on large data, the most of our exposed interface supports both float32 and float64,
@@ -10,9 +11,10 @@
  * .
  * The reason is that they are called frequently, and the type conversion on them may be time-cost.
  */
-#ifndef LIGHTGBM_C_API_H_
-#define LIGHTGBM_C_API_H_
+#ifndef LIGHTGBM_INCLUDE_LIGHTGBM_C_API_H_
+#define LIGHTGBM_INCLUDE_LIGHTGBM_C_API_H_
 
+#include <LightGBM/arrow.h>
 #include <LightGBM/export.h>
 
 #ifdef __cplusplus
@@ -46,6 +48,14 @@ typedef void* ByteBufferHandle; /*!< \brief Handle of ByteBuffer. */
 
 #define C_API_FEATURE_IMPORTANCE_SPLIT (0)  /*!< \brief Split type of feature importance. */
 #define C_API_FEATURE_IMPORTANCE_GAIN  (1)  /*!< \brief Gain type of feature importance. */
+
+#if defined(_MSC_VER)
+#  define LIGHTGBM_DEPRECATED(msg) __declspec(deprecated(msg))  /*!< \brief Deprecated function. */
+#elif defined(__GNUC__) || defined(__clang__)
+#  define LIGHTGBM_DEPRECATED(msg) __attribute__((deprecated(msg)))  /*!< \brief Deprecated function. */
+#else
+#  define LIGHTGBM_DEPRECATED(msg)  /*!< \brief Deprecated function. */
+#endif
 
 /*!
  * \brief Get string message of the last error.
@@ -421,7 +431,7 @@ LIGHTGBM_C_EXPORT int LGBM_DatasetCreateFromMat(const void* data,
  * \param data_type Type of ``data`` pointer, can be ``C_API_DTYPE_FLOAT32`` or ``C_API_DTYPE_FLOAT64``
  * \param nrow Number of rows
  * \param ncol Number of columns
- * \param is_row_major 1 for row-major, 0 for column-major
+ * \param is_row_major Pointer to the data layouts. 1 for row-major, 0 for column-major
  * \param parameters Additional parameters
  * \param reference Used to align bin mapper with other dataset, nullptr means isn't used
  * \param[out] out Created dataset
@@ -432,10 +442,42 @@ LIGHTGBM_C_EXPORT int LGBM_DatasetCreateFromMats(int32_t nmat,
                                                  int data_type,
                                                  int32_t* nrow,
                                                  int32_t ncol,
-                                                 int is_row_major,
+                                                 int* is_row_major,
                                                  const char* parameters,
                                                  const DatasetHandle reference,
                                                  DatasetHandle* out);
+
+/*!
+ * \brief Create dataset from Arrow.
+ * \deprecated This function is deprecated in favor of ``LGBM_DatasetCreateFromArrowStream``.
+ * \param n_chunks The number of Arrow arrays passed to this function
+ * \param chunks Pointer to the list of Arrow arrays
+ * \param schema Pointer to the schema of all Arrow arrays
+ * \param parameters Additional parameters
+ * \param reference Used to align bin mapper with other dataset, nullptr means isn't used
+ * \param[out] out Created dataset
+ * \return 0 when succeed, -1 when failure happens
+ */
+LIGHTGBM_C_EXPORT LIGHTGBM_DEPRECATED("Use LGBM_DatasetCreateFromArrowStream instead.")
+int LGBM_DatasetCreateFromArrow(int64_t n_chunks,
+                                                  struct ArrowArray* chunks,
+                                                  struct ArrowSchema* schema,
+                                                  const char* parameters,
+                                                  const DatasetHandle reference,
+                                                  DatasetHandle *out);
+
+/*!
+ * \brief Create dataset from Arrow stream.
+ * \param stream Arrow stream pointer
+ * \param parameters Additional parameters
+ * \param reference Used to align bin mapper with other dataset, nullptr means isn't used
+ * \param[out] out Created dataset
+ * \return 0 when succeed, -1 when failure happens
+ */
+LIGHTGBM_C_EXPORT int LGBM_DatasetCreateFromArrowStream(struct ArrowArrayStream* stream,
+                                                        const char* parameters,
+                                                        const DatasetHandle reference,
+                                                        DatasetHandle *out);
 
 /*!
  * \brief Create subset of a data.
@@ -521,11 +563,11 @@ LIGHTGBM_C_EXPORT int LGBM_DatasetDumpText(DatasetHandle handle,
 /*!
  * \brief Set vector to a content in info.
  * \note
- * - \a group only works for ``C_API_DTYPE_INT32``;
+ * - \a group and \a position only work for ``C_API_DTYPE_INT32``;
  * - \a label and \a weight only work for ``C_API_DTYPE_FLOAT32``;
  * - \a init_score only works for ``C_API_DTYPE_FLOAT64``.
  * \param handle Handle of dataset
- * \param field_name Field name, can be \a label, \a weight, \a init_score, \a group
+ * \param field_name Field name, can be \a label, \a weight, \a init_score, \a group, \a position
  * \param field_data Pointer to data vector
  * \param num_element Number of elements in ``field_data``
  * \param type Type of ``field_data`` pointer, can be ``C_API_DTYPE_INT32``, ``C_API_DTYPE_FLOAT32`` or ``C_API_DTYPE_FLOAT64``
@@ -536,6 +578,42 @@ LIGHTGBM_C_EXPORT int LGBM_DatasetSetField(DatasetHandle handle,
                                            const void* field_data,
                                            int num_element,
                                            int type);
+
+/*!
+ * \brief Set vector to a content in info.
+ * \deprecated This function is deprecated in favor of ``LGBM_DatasetSetFieldFromArrowStream``.
+ * \note
+ * - \a group and \a position convert input datatype into ``int32``;
+ * - \a label and \a weight convert input datatype into ``float32``;
+ * - \a init_score converts input datatype into ``float64``.
+ * \param handle Handle of dataset
+ * \param field_name Field name, can be \a label, \a weight, \a init_score, \a group, \a position
+ * \param n_chunks The number of Arrow arrays passed to this function
+ * \param chunks Pointer to the list of Arrow arrays
+ * \param schema Pointer to the schema of all Arrow arrays
+ * \return 0 when succeed, -1 when failure happens
+ */
+LIGHTGBM_C_EXPORT LIGHTGBM_DEPRECATED("Use LGBM_DatasetSetFieldFromArrowStream instead.")
+int LGBM_DatasetSetFieldFromArrow(DatasetHandle handle,
+                                                    const char* field_name,
+                                                    int64_t n_chunks,
+                                                    struct ArrowArray* chunks,
+                                                    struct ArrowSchema* schema);
+
+/*!
+ * \brief Set vector to a content in info.
+ * \note
+ * - \a group converts input datatype into ``int32``;
+ * - \a label and \a weight convert input datatype into ``float32``;
+ * - \a init_score converts input datatype into ``float64``.
+ * \param handle Handle of dataset
+ * \param field_name Field name, can be \a label, \a weight, \a init_score, \a group
+ * \param stream Arrow stream pointer
+ * \return 0 when succeed, -1 when failure happens
+ */
+LIGHTGBM_C_EXPORT int LGBM_DatasetSetFieldFromArrowStream(DatasetHandle handle,
+                                                          const char* field_name,
+                                                          struct ArrowArrayStream* stream);
 
 /*!
  * \brief Get info vector from dataset.
@@ -722,11 +800,15 @@ LIGHTGBM_C_EXPORT int LGBM_BoosterGetNumClasses(BoosterHandle handle,
 /*!
  * \brief Update the model for one iteration.
  * \param handle Handle of booster
- * \param[out] is_finished 1 means the update was successfully finished (cannot split any more), 0 indicates failure
+ * \param[out] produced_empty_tree 1 means the tree(s) produced by this iteration did not have any splits.
+ *                         This usually means that training is "finished" (calling this function again will not change the model's predictions).
+ *                         However, that is not always the case.
+ *                         For example, if you have added any randomness (like column sampling by setting ``feature_fraction_bynode < 1.0``),
+ *                         it is possible that another call to this function would produce a non-empty tree.
  * \return 0 when succeed, -1 when failure happens
  */
 LIGHTGBM_C_EXPORT int LGBM_BoosterUpdateOneIter(BoosterHandle handle,
-                                                int* is_finished);
+                                                int* produced_empty_tree);
 
 /*!
  * \brief Refit the tree model using the new data (online learning).
@@ -750,13 +832,17 @@ LIGHTGBM_C_EXPORT int LGBM_BoosterRefit(BoosterHandle handle,
  * \param handle Handle of booster
  * \param grad The first order derivative (gradient) statistics
  * \param hess The second order derivative (Hessian) statistics
- * \param[out] is_finished 1 means the update was successfully finished (cannot split any more), 0 indicates failure
+ * \param[out] produced_empty_tree 1 means the tree(s) produced by this iteration did not have any splits.
+ *                         This usually means that training is "finished" (calling this function again will not change the model's predictions).
+ *                         However, that is not always the case.
+ *                         For example, if you have added any randomness (like column sampling by setting ``feature_fraction_bynode < 1.0``),
+ *                         it is possible that another call to this function would produce a non-empty tree.
  * \return 0 when succeed, -1 when failure happens
  */
 LIGHTGBM_C_EXPORT int LGBM_BoosterUpdateOneIterCustom(BoosterHandle handle,
                                                       const float* grad,
                                                       const float* hess,
-                                                      int* is_finished);
+                                                      int* produced_empty_tree);
 
 /*!
  * \brief Rollback one iteration.
@@ -1381,6 +1467,72 @@ LIGHTGBM_C_EXPORT int LGBM_BoosterPredictForMats(BoosterHandle handle,
                                                  double* out_result);
 
 /*!
+ * \brief Make prediction for a new dataset.
+ * \deprecated This function is deprecated in favor of ``LGBM_BoosterPredictForArrowStream``.
+ * \note
+ * You should pre-allocate memory for ``out_result``:
+ *   - for normal and raw score, its length is equal to ``num_class * num_data``;
+ *   - for leaf index, its length is equal to ``num_class * num_data * num_iteration``;
+ *   - for feature contributions, its length is equal to ``num_class * num_data * (num_feature + 1)``.
+ * \param handle Handle of booster
+ * \param n_chunks The number of Arrow arrays passed to this function
+ * \param chunks Pointer to the list of Arrow arrays
+ * \param schema Pointer to the schema of all Arrow arrays
+ * \param predict_type What should be predicted
+ *   - ``C_API_PREDICT_NORMAL``: normal prediction, with transform (if needed);
+ *   - ``C_API_PREDICT_RAW_SCORE``: raw score;
+ *   - ``C_API_PREDICT_LEAF_INDEX``: leaf index;
+ *   - ``C_API_PREDICT_CONTRIB``: feature contributions (SHAP values)
+ * \param start_iteration Start index of the iteration to predict
+ * \param num_iteration Number of iteration for prediction, <= 0 means no limit
+ * \param parameter Other parameters for prediction, e.g. early stopping for prediction
+ * \param[out] out_len Length of output result
+ * \param[out] out_result Pointer to array with predictions
+ * \return 0 when succeed, -1 when failure happens
+ */
+LIGHTGBM_C_EXPORT LIGHTGBM_DEPRECATED("Use LGBM_BoosterPredictForArrowStream instead.")
+int LGBM_BoosterPredictForArrow(BoosterHandle handle,
+                                                  int64_t n_chunks,
+                                                  struct ArrowArray* chunks,
+                                                  struct ArrowSchema* schema,
+                                                  int predict_type,
+                                                  int start_iteration,
+                                                  int num_iteration,
+                                                  const char* parameter,
+                                                  int64_t* out_len,
+                                                  double* out_result);
+
+/*!
+ * \brief Make prediction for a new dataset.
+ * \note
+ * You should pre-allocate memory for ``out_result``:
+ *   - for normal and raw score, its length is equal to ``num_class * num_data``;
+ *   - for leaf index, its length is equal to ``num_class * num_data * num_iteration``;
+ *   - for feature contributions, its length is equal to ``num_class * num_data * (num_feature + 1)``.
+ * \param handle Handle of booster
+ * \param stream Arrow stream pointer
+ * \param predict_type What should be predicted
+ *   - ``C_API_PREDICT_NORMAL``: normal prediction, with transform (if needed);
+ *   - ``C_API_PREDICT_RAW_SCORE``: raw score;
+ *   - ``C_API_PREDICT_LEAF_INDEX``: leaf index;
+ *   - ``C_API_PREDICT_CONTRIB``: feature contributions (SHAP values)
+ * \param start_iteration Start index of the iteration to predict
+ * \param num_iteration Number of iteration for prediction, <= 0 means no limit
+ * \param parameter Other parameters for prediction, e.g. early stopping for prediction
+ * \param[out] out_len Length of output result
+ * \param[out] out_result Pointer to array with predictions
+ * \return 0 when succeed, -1 when failure happens
+ */
+LIGHTGBM_C_EXPORT int LGBM_BoosterPredictForArrowStream(BoosterHandle handle,
+                                                        struct ArrowArrayStream* stream,
+                                                        int predict_type,
+                                                        int start_iteration,
+                                                        int num_iteration,
+                                                        const char* parameter,
+                                                        int64_t* out_len,
+                                                        double* out_result);
+
+/*!
  * \brief Save model into file.
  * \param handle Handle of booster
  * \param start_iteration Start index of the iteration that should be saved
@@ -1524,6 +1676,20 @@ LIGHTGBM_C_EXPORT int LGBM_NetworkInitWithFunctions(int num_machines,
                                                     void* reduce_scatter_ext_fun,
                                                     void* allgather_ext_fun);
 
+/*!
+ * \brief Set maximum number of threads used by LightGBM routines in this process.
+ * \param num_threads maximum number of threads used by LightGBM. -1 means defaulting to omp_get_num_threads().
+ * \return 0 when succeed, -1 when failure happens
+ */
+LIGHTGBM_C_EXPORT int LGBM_SetMaxThreads(int num_threads);
+
+/*!
+ * \brief Get current maximum number of threads used by LightGBM routines in this process.
+ * \param[out] out current maximum number of threads used by LightGBM. -1 means defaulting to omp_get_num_threads().
+ * \return 0 when succeed, -1 when failure happens
+ */
+LIGHTGBM_C_EXPORT int LGBM_GetMaxThreads(int* out);
+
 #if !defined(__cplusplus) && (!defined(__STDC__) || (__STDC_VERSION__ < 199901L))
 /*! \brief Inline specifier no-op in C using standards before C99. */
 #define INLINE_FUNCTION
@@ -1570,4 +1736,4 @@ INLINE_FUNCTION void LGBM_SetLastError(const char* msg) {
 #endif
 }
 
-#endif  /* LIGHTGBM_C_API_H_ */
+#endif  /* LIGHTGBM_INCLUDE_LIGHTGBM_C_API_H_ */

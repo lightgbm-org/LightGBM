@@ -1,5 +1,6 @@
 /*!
- * Copyright (c) 2021 Microsoft Corporation. All rights reserved.
+ * Copyright (c) 2021-2026 Microsoft Corporation. All rights reserved.
+ * Copyright (c) 2021-2026 The LightGBM developers. All rights reserved.
  * Licensed under the MIT License. See LICENSE file in the project root for license information.
  */
 
@@ -8,6 +9,7 @@
 #include <LightGBM/utils/array_args.h>
 
 #include <random>
+#include <vector>
 
 using LightGBM::data_size_t;
 using LightGBM::score_t;

@@ -17,6 +17,8 @@ If a LightGBM model object was produced with argument `serializable=FALSE`, the 
 be serializable (e.g. cannot save and load with \code{saveRDS} and \code{readRDS}) as it will lack the raw bytes
 needed to reconstruct its underlying C++ object. This function can be used to forcibly produce those serialized
 raw bytes and make the object serializable. Note that the object will be modified in-place.
+
+             \emph{New in version 4.0.0}
 }
 \seealso{
 \link{lgb.restore_handle}, \link{lgb.drop_serialized}.

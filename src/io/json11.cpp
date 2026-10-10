@@ -23,11 +23,16 @@
 #include <LightGBM/utils/log.h>
 
 #include <cmath>
+#include <cstdint>
 #include <cstdio>
 #include <cstdlib>
 #include <limits>
+#include <memory>
+#include <string>
+#include <utility>
+#include <vector>
 
-namespace json11 {
+namespace json11_internal_lightgbm {
 
 static const int max_depth = 200;
 
@@ -160,7 +165,7 @@ class Value : public JsonValue {
   }
 
   const T m_value;
-  void dump(string *out) const override { json11::dump(m_value, out); }
+  void dump(string *out) const override { json11_internal_lightgbm::dump(m_value, out); }
 };
 
 class JsonDouble final : public Value<Json::NUMBER, double> {
@@ -777,4 +782,4 @@ bool Json::has_shape(const shape &types, string *err) const {
   return true;
 }
 
-}  // namespace json11
+}  // namespace json11_internal_lightgbm

@@ -24,7 +24,7 @@ TEMP_SOURCE_DIR <- file.path(TEMP_R_DIR, "src")
     , "make_args" = character(0L)
   )
   for (arg in args) {
-    if (any(grepl("^\\-j[0-9]+", arg))) {  # nolint: non_portable_path
+    if (any(grepl("^\\-j[0-9]+", arg))) {  # nolint: non_portable_path.
         out_list[["make_args"]] <- arg
     } else if (any(grepl("=", arg, fixed = TRUE))) {
       split_arg <- strsplit(arg, "=", fixed = TRUE)[[1L]]
@@ -97,7 +97,7 @@ install_libs_content <- .replace_flag("use_msys2", USING_MSYS2, install_libs_con
 keyword_args <- parsed_args[["keyword_args"]]
 if (length(keyword_args) > 0L) {
   cmake_args_to_add <- NULL
-  for (i in seq_len(length(keyword_args))) {
+  for (i in seq_along(keyword_args)) {
     arg_name <- names(keyword_args)[[i]]
     define_name <- ARGS_TO_DEFINES[[arg_name]]
     arg_value <- shQuote(normalizePath(keyword_args[[arg_name]], winslash = "/"))
@@ -121,7 +121,7 @@ if (length(parsed_args[["make_args"]]) > 0L) {
     pattern = "make_args_from_build_script <- character(0L)"
     , replacement = paste0(
       "make_args_from_build_script <- c(\""
-      , paste0(parsed_args[["make_args"]], collapse = "\", \"")
+      , paste(parsed_args[["make_args"]], collapse = "\", \"")
       , "\")"
     )
     , x = install_libs_content
@@ -147,7 +147,7 @@ if (length(parsed_args[["make_args"]]) > 0L) {
     on_windows <- .Platform$OS.type == "windows"
     has_processx <- suppressMessages({
       suppressWarnings({
-        require("processx")  # nolint: undesirable_function
+        require("processx")  # nolint: undesirable_function, unused_import.
       })
     })
     if (has_processx && on_windows) {
@@ -167,7 +167,7 @@ if (length(parsed_args[["make_args"]]) > 0L) {
           , "make this faster."
         ))
       }
-      cmd <- paste0(cmd, " ", paste0(args, collapse = " "))
+      cmd <- paste0(cmd, " ", paste(args, collapse = " "))
       exit_code <- system(cmd)
     }
 
@@ -321,9 +321,13 @@ for (submodule in list.dirs(
   , recursive = FALSE
 )) {
   # compute/ is a submodule with boost, only needed if
-  # building the R package with GPU support;
-  # eigen/ has a special treatment due to licensing aspects
-  if ((submodule == "compute" && !USING_GPU) || submodule == "eigen") {
+  # building the R-package with GPU support;
+  # eigen/ has a special treatment due to licensing aspects;
+  # nanoarrow/ is only needed by the Arrow-based C API entry points, which
+  # are excluded from the R build (the R API never calls into them).
+  if ((submodule == "compute" && !USING_GPU)
+      || submodule == "eigen"
+      || submodule == "nanoarrow") {
     next
   }
   result <- file.copy(
@@ -336,11 +340,17 @@ for (submodule in list.dirs(
 }
 
 # copy files into the place CMake expects
+CMAKE_R_DIR <- file.path(TEMP_SOURCE_DIR, "cmake")
 CMAKE_MODULES_R_DIR <- file.path(TEMP_SOURCE_DIR, "cmake", "modules")
 dir.create(CMAKE_MODULES_R_DIR, recursive = TRUE)
 result <- file.copy(
   from = file.path("cmake", "modules", "FindLibR.cmake")
   , to = sprintf("%s/", CMAKE_MODULES_R_DIR)
+  , overwrite = TRUE
+)
+result <- file.copy(
+  from = file.path("cmake", "Utils.cmake")
+  , to = sprintf("%s/", CMAKE_R_DIR)
   , overwrite = TRUE
 )
 .handle_result(result)
@@ -363,76 +373,6 @@ result <- file.copy(
   , overwrite = TRUE
 )
 .handle_result(result)
-
-# R packages cannot have versions like 3.0.0rc1, but
-# 3.0.0-1 is acceptable
-LGB_VERSION <- readLines("VERSION.txt")[1L]
-LGB_VERSION <- gsub(
-  pattern = "rc"
-  , replacement = "-"
-  , x = LGB_VERSION
-  , fixed = TRUE
-)
-
-# DESCRIPTION has placeholders for version
-# and date so it doesn't have to be updated manually
-DESCRIPTION_FILE <- file.path(TEMP_R_DIR, "DESCRIPTION")
-description_contents <- readLines(DESCRIPTION_FILE)
-description_contents <- gsub(
-  pattern = "~~VERSION~~"
-  , replacement = LGB_VERSION
-  , x = description_contents
-  , fixed = TRUE
-)
-description_contents <- gsub(
-  pattern = "~~DATE~~"
-  , replacement = as.character(Sys.Date())
-  , x = description_contents
-  , fixed = TRUE
-)
-description_contents <- gsub(
-  pattern = "~~CXXSTD~~"
-  , replacement = "C++11"
-  , x = description_contents
-  , fixed = TRUE
-)
-writeLines(description_contents, DESCRIPTION_FILE)
-
-# CMake-based builds can't currently use R's builtin routine registration,
-# so have to update NAMESPACE manually, with a statement like this:
-#
-# useDynLib(lib_lightgbm, LGBM_DatasetCreateFromFile_R, ...)
-#
-# See https://cran.r-project.org/doc/manuals/r-release/R-exts.html#useDynLib for
-# documentation of this approach, where the NAMESPACE file uses a statement like
-# useDynLib(foo, myRoutine, myOtherRoutine)
-NAMESPACE_FILE <- file.path(TEMP_R_DIR, "NAMESPACE")
-namespace_contents <- readLines(NAMESPACE_FILE)
-dynlib_line <- grep(
-  pattern = "^useDynLib"
-  , x = namespace_contents
-)
-
-c_api_contents <- readLines(file.path(TEMP_SOURCE_DIR, "src", "lightgbm_R.h"))
-c_api_contents <- c_api_contents[startsWith(c_api_contents, "LIGHTGBM_C_EXPORT")]
-c_api_contents <- gsub(
-  pattern = "LIGHTGBM_C_EXPORT SEXP "
-  , replacement = ""
-  , x = c_api_contents
-  , fixed = TRUE
-)
-c_api_symbols <- gsub(
-  pattern = "\\(.*"
-  , replacement = ""
-  , x = c_api_contents
-)
-dynlib_statement <- paste0(
-  "useDynLib(lib_lightgbm, "
-  , toString(c_api_symbols)
-  , ")"
-)
-namespace_contents[dynlib_line] <- dynlib_statement
-writeLines(namespace_contents, NAMESPACE_FILE)
 
 # NOTE: --keep-empty-dirs is necessary to keep the deep paths expected
 #       by CMake while also meeting the CRAN req to create object files
@@ -462,6 +402,6 @@ install_args <- c("CMD", "INSTALL", "--no-multiarch", "--with-keep.source", tarb
 if (INSTALL_AFTER_BUILD) {
   .run_shell_command(install_cmd, install_args)
 } else {
-  cmd <- paste0(install_cmd, " ", paste0(install_args, collapse = " "))
+  cmd <- paste0(install_cmd, " ", paste(install_args, collapse = " "))
   print(sprintf("Skipping installation. Install the package with command '%s'", cmd))
 }

@@ -1,21 +1,18 @@
 root = true
 
 [*]
-charset=utf-8
+charset = utf-8
 trim_trailing_whitespace = true
 insert_final_newline = true
+end_of_line = lf
 indent_style = space
 indent_size = 2
 
-[*.{py,sh,js}]
+[*.{py,sh,ps1,js,json}]
 indent_size = 4
-line_length = 120
+max_line_length = 120
 skip = external_libs
 known_first_party = lightgbm
-
-# Placeholder files
-[{*.gitkeep,__init__.py}]
-insert_final_newline = none
 
 # Tabs matter for Makefile and .gitmodules
 [{makefile*,Makefile*,*.mk,*.mak,*.makefile,*.Makefile,GNUmakefile,BSDmakefile,make.bat,Makevars*,*.gitmodules}]

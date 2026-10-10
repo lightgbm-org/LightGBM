@@ -1,10 +1,11 @@
 /*!
- * Copyright (c) 2016 Microsoft Corporation. All rights reserved.
+ * Copyright (c) 2016-2026 Microsoft Corporation. All rights reserved.
+ * Copyright (c) 2016-2026 The LightGBM developers. All rights reserved.
  * Licensed under the MIT License. See LICENSE file in the project root for
  * license information.
  */
-#ifndef LIGHTGBM_UTILS_THREADING_H_
-#define LIGHTGBM_UTILS_THREADING_H_
+#ifndef LIGHTGBM_INCLUDE_LIGHTGBM_UTILS_THREADING_H_
+#define LIGHTGBM_INCLUDE_LIGHTGBM_UTILS_THREADING_H_
 
 #include <LightGBM/meta.h>
 #include <LightGBM/utils/common.h>
@@ -73,7 +74,7 @@ class Threading {
     INDEX_T num_inner = end - start;
     BlockInfo<INDEX_T>(num_inner, min_block_size, &n_block, &num_inner);
     OMP_INIT_EX();
-#pragma omp parallel for schedule(static, 1)
+#pragma omp parallel for num_threads(OMP_NUM_THREADS()) schedule(static, 1)
     for (int i = 0; i < n_block; ++i) {
       OMP_LOOP_EX_BEGIN();
       INDEX_T inner_start = start + num_inner * i;
@@ -119,6 +120,9 @@ class ParallelPartitionRunner {
       INDEX_T cnt,
       const std::function<INDEX_T(int, INDEX_T, INDEX_T, INDEX_T*, INDEX_T*)>& func,
       INDEX_T* out) {
+    if (cnt == 0) {
+      return 0;
+    }
     int nblock = 1;
     INDEX_T inner_size = cnt;
     if (FORCE_SIZE) {
@@ -197,4 +201,4 @@ class ParallelPartitionRunner {
 
 }  // namespace LightGBM
 
-#endif  // LightGBM_UTILS_THREADING_H_
+#endif  // LIGHTGBM_INCLUDE_LIGHTGBM_UTILS_THREADING_H_

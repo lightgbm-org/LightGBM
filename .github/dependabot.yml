@@ -1,0 +1,17 @@
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly
+    groups:
+      ci-dependencies:
+        patterns:
+          - "*"
+    cooldown:
+      # only accept releases that have been out for at least 15 days
+      default-days: 15
+    commit-message:
+      prefix: "[ci]"
+    labels:
+      - maintenance

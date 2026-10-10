@@ -1,0 +1,8 @@
+# introduce ruff-format (#6308)
+6330d6269c81dfd4c96e664b99239b8ff39ccf91
+# enable ruff format on tests and examples (#6317)
+1b792e716682254c33ddb5eb845357e84018636d
+# enable ruff-format on main library Python code (#6336)
+dd31208ab7a7aea86762830697b00666f843ded9
+# enable whitespace/indent_namespace rule from cpplint (#7056)
+50f11a9f3c066eadee475ea567f9e9d49e6bb827

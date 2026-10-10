@@ -15,14 +15,6 @@ if (.Machine$sizeof.pointer != 8L) {
   stop("LightGBM only supports 64-bit R, please check the version of R and Rtools.")
 }
 
-R_int_UUID <- .Internal(internalsID())
-R_ver <- as.double(R.Version()$major) + as.double(R.Version()$minor) / 10.0
-
-if (!(R_int_UUID == "0310d4b8-ccb1-4bb8-ba94-d36a55f60262"
-    || R_int_UUID == "2fdf6c18-697a-4ba7-b8ef-11c0d92f1327")) {
-  warning("Warning: unmatched R_INTERNALS_UUID, may not run normally.")
-}
-
 # Get some paths
 source_dir <- file.path(R_PACKAGE_SOURCE, "src", fsep = "/")
 build_dir <- file.path(source_dir, "build", fsep = "/")
@@ -37,7 +29,7 @@ inst_dir <- file.path(R_PACKAGE_SOURCE, "inst", fsep = "/")
     on_windows <- .Platform$OS.type == "windows"
     has_processx <- suppressMessages({
       suppressWarnings({
-        require("processx")  # nolint: undesirable_function
+        require("processx")  # nolint: undesirable_function, unused_import.
       })
     })
     if (has_processx && on_windows) {
@@ -57,7 +49,7 @@ inst_dir <- file.path(R_PACKAGE_SOURCE, "inst", fsep = "/")
           , "make this faster."
         ))
       }
-      cmd <- paste0(cmd, " ", paste0(args, collapse = " "))
+      cmd <- paste0(cmd, " ", paste(args, collapse = " "))
       exit_code <- system(cmd)
     }
 
@@ -73,7 +65,6 @@ inst_dir <- file.path(R_PACKAGE_SOURCE, "inst", fsep = "/")
     "Visual Studio 17 2022"
     , "Visual Studio 16 2019"
     , "Visual Studio 15 2017"
-    , "Visual Studio 14 2015"
   )
   working_vs_version <- NULL
   for (vs_version in vs_versions) {
@@ -133,7 +124,13 @@ if (WINDOWS && use_visual_studio) {
 }
 
 # Prepare installation steps
-cmake_args <- NULL
+cmake_args <- c(
+  "-D__BUILD_FOR_R=ON"
+  # pass in R version, to help FindLibR find the R library
+  , sprintf("-DCMAKE_R_VERSION='%s.%s'", R.Version()[["major"]], R.Version()[["minor"]])
+  # ensure CMake build respects how R is configured (`R CMD config SHLIB_EXT`)
+  , sprintf("-DCMAKE_SHARED_LIBRARY_SUFFIX_CXX='%s'", SHLIB_EXT)
+)
 build_cmd <- "make"
 build_args <- c("_lightgbm", make_args_from_build_script)
 lib_folder <- file.path(source_dir, fsep = "/")
@@ -162,11 +159,7 @@ if (use_mingw) {
   # Rtools 4.0 moved from MinGW to MSYS toolchain. If user tries
   # Visual Studio install but that fails, fall back to the toolchain
   # supported in Rtools
-  if (R_ver >= 4.0) {
-    windows_toolchain <- "MSYS2"
-  } else {
-    windows_toolchain <- "MinGW"
-  }
+  windows_toolchain <- "MSYS2"
 }
 windows_build_tool <- WINDOWS_BUILD_TOOLS[[windows_toolchain]][["build_tool"]]
 windows_makefile_generator <- WINDOWS_BUILD_TOOLS[[windows_toolchain]][["makefile_generator"]]
@@ -174,16 +167,6 @@ windows_makefile_generator <- WINDOWS_BUILD_TOOLS[[windows_toolchain]][["makefil
 if (use_gpu) {
   cmake_args <- c(cmake_args, "-DUSE_GPU=ON")
 }
-cmake_args <- c(cmake_args, "-D__BUILD_FOR_R=ON")
-
-# Pass in R version, used to help find R executable for linking
-R_version_string <- paste(
-  R.Version()[["major"]]
-  , R.Version()[["minor"]]
-  , sep = "."
-)
-r_version_arg <- sprintf("-DCMAKE_R_VERSION='%s'", R_version_string)
-cmake_args <- c(cmake_args, r_version_arg)
 
 # the checks below might already run `cmake -G`. If they do, set this flag
 # to TRUE to avoid re-running it later
@@ -225,9 +208,9 @@ if (!makefiles_already_generated) {
 }
 
 # build the library
-message("Building lib_lightgbm")
+message(paste0("Building lightgbm", SHLIB_EXT))
 .run_shell_command(build_cmd, build_args)
-src <- file.path(lib_folder, paste0("lib_lightgbm", SHLIB_EXT), fsep = "/")
+src <- file.path(lib_folder, paste0("lightgbm", SHLIB_EXT), fsep = "/")
 
 # Packages with install.libs.R need to copy some artifacts into the
 # expected places in the package structure.
@@ -245,7 +228,7 @@ if (file.exists(src)) {
   }
 
 } else {
-  stop(paste0("Cannot find lib_lightgbm", SHLIB_EXT))
+  stop(paste0("Cannot find lightgbm", SHLIB_EXT))
 }
 
 # clean up the "build" directory
