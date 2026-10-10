@@ -1202,15 +1202,26 @@ def test_model_and_local_version_are_picklable_whether_or_not_client_set_explici
 
 
 @pytest.mark.parametrize(
-    ("n_jobs", "expected_warnings"),
-    [(None, []), (-1, []), (3, ["Parameter n_jobs will be ignored."])],
+    ("params", "expected_warnings"),
+    [
+        ({}, []),
+        ({"n_jobs": None}, []),
+        ({"n_jobs": -1}, []),
+        (
+            {"n_jobs": 3},
+            [
+                "Parameter n_jobs=3 will be ignored. The number of threads is set by the Dask worker. "
+                "To avoid this warning, omit n_jobs or set it to None or -1."
+            ],
+        ),
+    ],
 )
-def test_thread_parameter_warnings(n_jobs, expected_warnings, cluster):
+def test_thread_parameter_warnings(params, expected_warnings, cluster):
     with Client(cluster) as client:
         X = da.from_array(np.arange(40).reshape(20, 2), chunks=(10, 2))
         y = da.from_array(np.arange(20), chunks=10)
         model = lgb.DaskLGBMRegressor(
-            client=client, n_jobs=n_jobs, n_estimators=1, num_leaves=2, min_child_samples=2, verbosity=-1
+            client=client, n_estimators=1, num_leaves=2, min_child_samples=2, verbosity=-1, **params
         )
         with warnings.catch_warnings(record=True) as recorded:
             warnings.simplefilter("always")

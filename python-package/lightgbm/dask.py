@@ -586,8 +586,14 @@ def _train(
         for param_alias in _ConfigAliases.get(param):
             if param_alias in params:
                 value = params.pop(param_alias)
-                if param != "num_threads" or value not in (None, -1):
+                if param == "num_machines":
                     _log_warning(f"Parameter {param_alias} will be ignored.")
+                elif value not in (None, -1):
+                    _log_warning(
+                        f"Parameter {param_alias}={value} will be ignored. "
+                        "The number of threads is set by the Dask worker. "
+                        f"To avoid this warning, omit {param_alias} or set it to None or -1."
+                    )
 
     # Split arrays/dataframes into parts. Arrange parts into dicts to enforce co-locality
     data_parts = _split_to_parts(data=data, is_matrix=True)
