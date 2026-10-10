@@ -910,6 +910,7 @@ class LGBMModel(_LGBMModelBase):
 
         eval_set : list or None, optional (default=None)
             A list of (X, y) tuple pairs to use as validation sets.
+
             .. deprecated:: 4.7.0
                 Use ``eval_X`` and ``eval_y`` instead.
         eval_names : list of str, or None, optional (default=None)
@@ -1667,6 +1668,7 @@ class LGBMRegressor(_LGBMRegressorBase, LGBMModel):
 
         eval_set : list or None, optional (default=None)
             A list of (X, y) tuple pairs to use as validation sets.
+
             .. deprecated:: 4.7.0
                 Use ``eval_X`` and ``eval_y`` instead.
         eval_names : list of str, or None, optional (default=None)
@@ -2014,6 +2016,7 @@ class LGBMClassifier(_LGBMClassifierBase, LGBMModel):
 
         eval_set : list or None, optional (default=None)
             A list of (X, y) tuple pairs to use as validation sets.
+
             .. deprecated:: 4.7.0
                 Use ``eval_X`` and ``eval_y`` instead.
         eval_names : list of str, or None, optional (default=None)
@@ -2642,6 +2645,7 @@ class LGBMRanker(LGBMModel):
 
         eval_set : list or None, optional (default=None)
             A list of (X, y) tuple pairs to use as validation sets.
+
             .. deprecated:: 4.7.0
                 Use ``eval_X`` and ``eval_y`` instead.
         eval_names : list of str, or None, optional (default=None)

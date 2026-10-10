@@ -3646,7 +3646,7 @@ class EvalResult(NamedTuple):
       * train(): ``(dataset_name, metric_name, metric_value, maximize)``
       * cv(): ``(dataset_name, metric_name, mean(metric_value), maximize, std_dev(metric_value))``
 
-    Attributes
+    Parameters
     ----------
     dataset_name : str
         Unique identifier for the dataset this result was computed on.
@@ -3659,7 +3659,7 @@ class EvalResult(NamedTuple):
     metric_std_dev : float or None
         If not ``None``, the standard deviation of metric values computed over a range of results.
         For example, used when aggregating over cross-validation folds in ``cv()``.
-    """  # noqa: DOC605
+    """  # noqa: DOC601, DOC603
 
     dataset_name: str
     metric_name: str

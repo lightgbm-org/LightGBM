@@ -1444,6 +1444,7 @@ class DaskLGBMClassifier(LGBMClassifier, _DaskLGBMModel):
 
         eval_set : list or None, optional (default=None)
             A list of (X, y) tuple pairs to use as validation sets.
+
             .. deprecated:: 4.7.0
                 Use ``eval_X`` and ``eval_y`` instead.
         eval_names : list of str, or None, optional (default=None)
@@ -1923,6 +1924,7 @@ class DaskLGBMRegressor(LGBMRegressor, _DaskLGBMModel):
 
         eval_set : list or None, optional (default=None)
             A list of (X, y) tuple pairs to use as validation sets.
+
             .. deprecated:: 4.7.0
                 Use ``eval_X`` and ``eval_y`` instead.
         eval_names : list of str, or None, optional (default=None)
@@ -2345,6 +2347,7 @@ class DaskLGBMRanker(LGBMRanker, _DaskLGBMModel):
 
         eval_set : list or None, optional (default=None)
             A list of (X, y) tuple pairs to use as validation sets.
+
             .. deprecated:: 4.7.0
                 Use ``eval_X`` and ``eval_y`` instead.
         eval_names : list of str, or None, optional (default=None)
