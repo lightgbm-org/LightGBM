@@ -5,6 +5,7 @@ import inspect
 import re
 import socket
 import textwrap
+import warnings
 from itertools import groupby
 from sys import platform
 from urllib.parse import urlparse
@@ -1198,6 +1199,24 @@ def test_model_and_local_version_are_picklable_whether_or_not_client_set_explici
 
             assert_eq(preds_orig, preds_loaded_model)
             assert_eq(preds_orig_local, preds_loaded_model_local)
+
+
+@pytest.mark.parametrize(
+    ("n_jobs", "expected_warnings"),
+    [(None, []), (-1, []), (3, ["Parameter n_jobs will be ignored."])],
+)
+def test_thread_parameter_warnings(n_jobs, expected_warnings, cluster):
+    with Client(cluster) as client:
+        X = da.from_array(np.arange(40).reshape(20, 2), chunks=(10, 2))
+        y = da.from_array(np.arange(20), chunks=10)
+        model = lgb.DaskLGBMRegressor(
+            client=client, n_jobs=n_jobs, n_estimators=1, num_leaves=2, min_child_samples=2, verbosity=-1
+        )
+        with warnings.catch_warnings(record=True) as recorded:
+            warnings.simplefilter("always")
+            model.fit(X, y)
+        assert [str(w.message) for w in recorded] == expected_warnings
+        assert model.booster_.params["num_threads"] == 2
 
 
 def test_warns_and_continues_on_unrecognized_tree_learner(cluster):
