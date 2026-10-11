@@ -2,7 +2,7 @@
 """Compatibility library."""
 
 import inspect
-from typing import TYPE_CHECKING, Any, List
+from typing import Any, List
 
 # scikit-learn is intentionally imported first here,
 # see https://github.com/lightgbm-org/LightGBM/issues/6509
@@ -11,11 +11,7 @@ try:
     from sklearn import __version__ as _sklearn_version
     from sklearn.base import BaseEstimator, ClassifierMixin, RegressorMixin
     from sklearn.exceptions import NotFittedError
-    from sklearn.model_selection import BaseCrossValidator, GroupKFold, StratifiedKFold
-    from sklearn.preprocessing import LabelEncoder
-    from sklearn.utils.class_weight import compute_sample_weight
-    from sklearn.utils.multiclass import check_classification_targets
-    from sklearn.utils.validation import _check_sample_weight, assert_all_finite, check_array, check_X_y
+    from sklearn.utils.validation import _check_sample_weight
 
     # As of https://github.com/scikit-learn/scikit-learn/pull/32212, scikit-learn started raising an error
     # when sample weights are all 0. This argument allow_all_zero_weights can be used switch back
@@ -29,6 +25,8 @@ try:
     try:
         from sklearn.utils.validation import validate_data
     except ImportError:
+        from sklearn.utils.validation import check_array, check_X_y
+
         # validate_data() was added in scikit-learn 1.6, this function roughly imitates it for older versions.
         # It can be removed when lightgbm's minimum scikit-learn version is at least 1.6.
         def validate_data(
@@ -95,18 +93,11 @@ try:
                 return X, y
 
     SKLEARN_INSTALLED = True
-    _LGBMBaseCrossValidator = BaseCrossValidator
     _LGBMModelBase = BaseEstimator
     _LGBMRegressorBase = RegressorMixin
     _LGBMClassifierBase = ClassifierMixin
-    _LGBMLabelEncoder = LabelEncoder
     LGBMNotFittedError = NotFittedError
-    _LGBMStratifiedKFold = StratifiedKFold
-    _LGBMGroupKFold = GroupKFold
     _LGBMCheckSampleWeight = _check_sample_weight
-    _LGBMAssertAllFinite = assert_all_finite
-    _LGBMCheckClassificationTargets = check_classification_targets
-    _LGBMComputeSampleWeight = compute_sample_weight
     _LGBMValidateData = validate_data
 except ImportError:
     SKLEARN_INSTALLED = False
@@ -127,26 +118,10 @@ except ImportError:
 
         pass
 
-    _LGBMBaseCrossValidator = None
-    _LGBMLabelEncoder = None
     LGBMNotFittedError = ValueError
-    _LGBMStratifiedKFold = None
-    _LGBMGroupKFold = None
     _LGBMCheckSampleWeight = None
-    _LGBMAssertAllFinite = None
-    _LGBMCheckClassificationTargets = None
-    _LGBMComputeSampleWeight = None
     _LGBMValidateData = None
     _sklearn_version = None
-
-# additional scikit-learn imports only for type hints
-if TYPE_CHECKING:
-    # sklearn.utils.Tags can be imported unconditionally once
-    # lightgbm's minimum scikit-learn version is 1.6 or higher
-    try:
-        from sklearn.utils import Tags as _sklearn_Tags
-    except ImportError:
-        _sklearn_Tags = None
 
 """pandas"""
 try:
@@ -178,26 +153,5 @@ except ImportError:
             pass
 
     concat = None
-
-"""cpu_count()"""
-
-
-def _LGBMCpuCount(only_physical_cores: bool = True) -> int:
-    ret: int
-    try:
-        from joblib import cpu_count  # noqa: I001,PLC0415
-
-        ret = cpu_count(only_physical_cores=only_physical_cores)
-    except ImportError:
-        try:
-            from psutil import cpu_count  # noqa: I001,PLC0415
-
-            ret = cpu_count(logical=not only_physical_cores) or 1
-        except ImportError:
-            from multiprocessing import cpu_count  # noqa: I001,PLC0415
-
-            ret = cpu_count()
-    return ret
-
 
 __all__: List[str] = []

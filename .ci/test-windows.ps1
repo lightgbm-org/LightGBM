@@ -180,6 +180,8 @@ if ($env:TASK -eq "bdist") {
     $env:LIGHTGBM_TEST_DUAL_CPU_GPU = "0"
 }
 
+python "$env:BUILD_SOURCESDIRECTORY/.ci/test-imports.py"
+
 pytest -ra $tests ; Assert-Output $?
 
 if (($env:TASK -eq "regular") -or (($env:APPVEYOR -eq "true") -and ($env:TASK -eq "python"))) {
