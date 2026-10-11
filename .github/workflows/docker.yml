@@ -8,6 +8,11 @@ on:
     branches:
       - main
   workflow_dispatch:
+    inputs:
+      test-on-gpu:
+        description: 'Run the GPU image tests on a GPU runner'
+        type: boolean
+        default: false
 
 # automatically cancel in-progress builds if another commit is pushed
 concurrency:
@@ -58,10 +63,13 @@ jobs:
       - name: dockerfile-cli (test)
         run: |
           docker run \
-            --entrypoint="" \
             --rm \
+            -v "${PWD}:/LightGBM:ro" \
+            -w /LightGBM/examples/binary_classification \
             lightgbm:cli \
-            which lightgbm
+            config=train.conf \
+            num_trees=5 \
+            output_model=/tmp/model.txt
       - name: dockerfile-r (build)
         env:
           LIGHTGBM_GIT_REF: ${{ github.head_ref }}
@@ -75,8 +83,10 @@ jobs:
         run: |
           docker run \
             --rm \
+            -v "${PWD}:/LightGBM:ro" \
+            -w /tmp \
             lightgbm:r \
-            Rscript -e "library(lightgbm); print(sessionInfo())"
+            Rscript /LightGBM/R-package/demo/basic_walkthrough.R
       - name: dockerfile-python (build)
         env:
           LIGHTGBM_GIT_REF: ${{ github.head_ref }}
@@ -90,13 +100,19 @@ jobs:
         run: |
           docker run \
             --rm \
+            -v "${PWD}:/LightGBM:ro" \
+            -w /tmp \
             lightgbm:python \
-            python -c "import lightgbm; print(f'lightgbm version: {lightgbm.__version__}')"
+            python /LightGBM/examples/python-guide/simple_example.py
   build-gpu:
     name: build (GPU)
-    runs-on: ubuntu-latest
+    runs-on: ${{ inputs.test-on-gpu && 'github-hosted-linux-gpu-amd64' || 'ubuntu-latest' }}
     permissions:
       contents: read
+    env:
+      # 'true' only when manually triggered with 'test-on-gpu', empty otherwise
+      TEST_ON_GPU: ${{ inputs.test-on-gpu && 'true' || '' }}
+      DEVICE: ${{ inputs.test-on-gpu && 'gpu' || 'cpu' }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
@@ -117,10 +133,13 @@ jobs:
       - name: dockerfile.gpu (test)
         run: |
           docker run \
+            ${TEST_ON_GPU:+--gpus=all} \
             --entrypoint="" \
             --rm \
-            -t lightgbm:gpu \
-            python -c "import lightgbm; print(f'lightgbm version: {lightgbm.__version__}')"
+            -v "${PWD}:/LightGBM:ro" \
+            -w /tmp \
+            lightgbm:gpu \
+            python /LightGBM/examples/python-guide/simple_example.py --device="${DEVICE}"
       - name: dockerfile-cli-only.gpu (build)
         env:
           LIGHTGBM_GIT_REF: ${{ github.head_ref }}
@@ -133,13 +152,14 @@ jobs:
       - name: dockerfile-cli-only.gpu (test)
         run: |
           docker run \
+            ${TEST_ON_GPU:+--gpus=all} \
             --rm \
-            -v "${PWD}/examples/binary_classification:/data:ro" \
-            -w /data \
+            -v "${PWD}:/LightGBM:ro" \
+            -w /LightGBM/examples/binary_classification \
             lightgbm:cli-only.gpu \
             config=train.conf \
             num_trees=5 \
-            device_type=cpu \
+            device_type="${DEVICE}" \
             output_model=/tmp/model.txt
       - name: dockerfile-cli-only-distroless.gpu (build)
         env:
@@ -153,13 +173,14 @@ jobs:
       - name: dockerfile-cli-only-distroless.gpu (test)
         run: |
           docker run \
+            ${TEST_ON_GPU:+--gpus=all} \
             --rm \
-            -v "${PWD}/examples/binary_classification:/data:ro" \
-            -w /data \
+            -v "${PWD}:/LightGBM:ro" \
+            -w /LightGBM/examples/binary_classification \
             lightgbm:cli-only-distroless.gpu \
             config=train.conf \
             num_trees=5 \
-            device_type=cpu \
+            device_type="${DEVICE}" \
             output_model=/tmp/model.txt
   all-docker-jobs-successful:
     if: always()

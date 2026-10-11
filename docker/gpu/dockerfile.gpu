@@ -104,21 +104,12 @@ RUN apt-get autoremove -y && apt-get clean && \
 #           JUPYTER
 #################################################################################################################
 
-# password: keras
-# password key: --NotebookApp.password='sha1:98b767162d34:8da1bc3c75a0f29145769edc977375a373407824'
-
-# Add a notebook profile.
-RUN <<EOF
-# shellcheck disable=SC2174
-mkdir -p -m 700 ~/.jupyter/
-echo "c.NotebookApp.ip = '*'" >> ~/.jupyter/jupyter_notebook_config.py
-EOF
-
 VOLUME /home
 WORKDIR /home
 
-# IPython
+# Jupyter Notebook
 EXPOSE 8888
 
+# listen on all interfaces so the server is reachable through the published port
 ENTRYPOINT ["/tini", "--"]
-CMD ["jupyter", "notebook", "--allow-root", "--no-browser", "--NotebookApp.password=sha1:98b767162d34:8da1bc3c75a0f29145769edc977375a373407824"]
+CMD ["jupyter", "notebook", "--allow-root", "--no-browser", "--ServerApp.ip=0.0.0.0", "--ServerApp.port=8888"]
