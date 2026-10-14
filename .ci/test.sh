@@ -300,6 +300,8 @@ if [[ "${TASK}" != "mpi" ]]; then
     PYTHONOPTIMIZE=2 python -c "import lightgbm; print(lightgbm.__version__)"
 fi
 
+python ./.ci/test-imports.py
+
 echo "running tests"
 pytest -ra ./tests || exit 1
 
