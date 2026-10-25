@@ -8,6 +8,7 @@ import textwrap
 import warnings
 from functools import partial
 from pathlib import Path
+from unittest import mock
 
 import joblib
 import numpy as np
@@ -1938,10 +1939,10 @@ def test_estimator_fit_docstrings_are_consistent():
             -    .. versionadded:: 4.7.0
             -        Support for ``polars`` inputs
             -
-            @@ -67,2 +53,0 @@
+            @@ -68,2 +54,0 @@
             -eval_group : list of array (same types as ``group`` supports), or None, optional (default=None)
             -    Group data of eval data.
-            @@ -105 +90 @@
+            @@ -106 +91 @@
             -self : LGBMModel
             +self : LGBMClassifier
         """),
@@ -1968,16 +1969,16 @@ def test_estimator_fit_docstrings_are_consistent():
             +    .. versionadded:: 4.7.0
             +        Support for ``polars`` inputs
             +
-            @@ -50,2 +62,0 @@
+            @@ -51,2 +63,0 @@
             -eval_class_weight : list or None, optional (default=None)
             -    Class weights of eval data.
-            @@ -53,0 +65,2 @@
+            @@ -54,0 +66,2 @@
             +eval_group : list of array (same types as ``group`` supports), or None, optional (default=None)
             +    Group data of eval data.
-            @@ -59,0 +73,2 @@
+            @@ -60,0 +74,2 @@
             +eval_at : list or tuple of int, optional (default=(1, 2, 3, 4, 5))
             +    The evaluation positions of the specified metric.
-            @@ -90 +105 @@
+            @@ -91 +106 @@
             -self : LGBMClassifier
             +self : LGBMRanker
         """),
@@ -2004,13 +2005,13 @@ def test_estimator_fit_docstrings_are_consistent():
             -    .. versionadded:: 4.7.0
             -        Support for ``polars`` inputs
             -
-            @@ -65,2 +51,0 @@
+            @@ -66,2 +52,0 @@
             -eval_group : list of array (same types as ``group`` supports), or None, optional (default=None)
             -    Group data of eval data.
-            @@ -73,2 +57,0 @@
+            @@ -74,2 +58,0 @@
             -eval_at : list or tuple of int, optional (default=(1, 2, 3, 4, 5))
             -    The evaluation positions of the specified metric.
-            @@ -105 +88 @@
+            @@ -106 +89 @@
             -self : LGBMRanker
             +self : LGBMRegressor
         """),
@@ -2520,3 +2521,44 @@ def test_eval_X_eval_y_eval_set_equivalence():
     assert gbm2.evals_result_["valid_0"]["l2"] != gbm2.evals_result_["valid_1"]["l2"], (
         "Evaluation results for the 2 validation sets are not different. This might mean they weren't both used."
     )
+
+
+@pytest.mark.parametrize(
+    "classes",
+    [
+        pytest.param(np.array(["down", "up"]), id="string-labels"),
+        pytest.param(np.array([1, 2]), id="non-zero-based-integer-labels"),
+        pytest.param(np.array([0, 2, 7, 10]), id="non-contiguous-integer-labels"),
+    ],
+)
+@pytest.mark.parametrize("pass_as_tuples", [False, True])
+def test_classifier_eval_X_eval_y_encodes_labels(classes, pass_as_tuples, rng):
+    """Test that eval_y labels use the classifier's label encoding."""
+    X = rng.uniform(low=0.01, high=0.06, size=(1_000, 3))
+    y = rng.choice(classes, size=(X.shape[0],))
+    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.25, random_state=42)
+
+    if pass_as_tuples:
+        eval_X = (X_test,)
+        eval_y = (y_test,)
+    else:
+        eval_X = X_test
+        eval_y = y_test
+
+    with mock.patch.object(lgb.LGBMModel, "fit") as mock_fit:
+        model = lgb.LGBMClassifier().fit(
+            X_train,
+            y_train,
+            eval_X=eval_X,
+            eval_y=eval_y,
+        )
+
+    mock_fit.assert_called_once()
+    forwarded_eval_y = mock_fit.call_args.kwargs["eval_y"]
+    expected_eval_y = model._le.transform(y_test)
+    if pass_as_tuples:
+        assert isinstance(forwarded_eval_y, tuple)
+        assert len(forwarded_eval_y) == 1
+        np.testing.assert_array_equal(forwarded_eval_y[0], expected_eval_y)
+    else:
+        np.testing.assert_array_equal(forwarded_eval_y, expected_eval_y)
