@@ -1147,6 +1147,8 @@ class _InnerPredictor:
                 predict_type=predict_type,
             )
         elif isinstance(data, pd_DataFrame):
+            # NumPy-backed frames can use this path without converting through Arrow, avoiding conversion overhead
+            # when their data is contiguous. pandas SparseDtype also cannot be exported through Arrow's C-stream.
             preds, nrow = self.__pred_for_np2d(
                 mat=_pandas_df_to_numpy(data),
                 start_iteration=start_iteration,
