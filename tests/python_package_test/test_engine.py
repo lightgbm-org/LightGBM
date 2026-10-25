@@ -3505,7 +3505,7 @@ def test_reset_feature_fraction_to_one(seed):
     expected_first_new_tree_splits = (
         expected.feature_importance(importance_type="split", iteration=2) - feature_importance_before
     )
-    np_assert_array_equal(first_new_tree_splits, expected_first_new_tree_splits, err_msg=f"seed={seed}")
+    np_assert_array_equal(first_new_tree_splits, expected_first_new_tree_splits, strict=True, err_msg=f"seed={seed}")
     for _ in range(num_extra_rounds - 1):
         actual.update()
     feature_importance_after = actual.feature_importance(importance_type="split")
