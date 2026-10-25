@@ -2,10 +2,12 @@
 exclude: |
   (?x)^(
       build|
+      dist|
       external_libs|
       lightgbm-python|
       lightgbm_r|
       \.pixi|
+      \.venv|
   )$
   |R-package/configure$
   |R-package/inst/Makevars$
@@ -16,10 +18,24 @@ repos:
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v6.0.0
     hooks:
+      - id: check-executables-have-shebangs
+      - id: check-added-large-files
+        args: ["--maxkb=2500"]
+      - id: check-case-conflict
+      - id: check-illegal-windows-names
+      - id: check-json
+      - id: check-shebang-scripts-are-executable
       - id: check-toml
       - id: check-xml
+      - id: fix-byte-order-marker
+        exclude: ^windows/.*$
       - id: end-of-file-fixer
       - id: trailing-whitespace
+  - repo: https://github.com/python-jsonschema/check-jsonschema
+    rev: 0.38.2
+    hooks:
+      - id: check-dependabot
+      - id: check-readthedocs
   - repo: https://github.com/cmake-lint/cmake-lint
     rev: '1.4.3'
     hooks:
@@ -63,6 +79,16 @@ repos:
           - ./.ci/parameter-generator.py
         language: python
         pass_filenames: false
+  - repo: https://github.com/numpy/numpydoc
+    rev: v1.11.0
+    hooks:
+      - id: numpydoc-validation
+        args: [--config=python-package]
+  - repo: https://github.com/jsh9/pydoclint
+    rev: 0.10.1
+    hooks:
+      - id: pydoclint
+        args: [--config=python-package/pyproject.toml]
   - repo: https://github.com/rstcheck/rstcheck
     rev: v6.2.5
     hooks:
@@ -76,7 +102,11 @@ repos:
     rev: v0.15.20
     hooks:
       - id: ruff-check
-        args: ["--config", "python-package/pyproject.toml"]
+        args:
+          - "--fix"
+          - "--config=python-package/pyproject.toml"
+          # (isort)  Import block is un-sorted or un-formatted
+          - "--fixable=I001"
         types_or: [python, jupyter]
       - id: ruff-format
         args: ["--config", "python-package/pyproject.toml"]
