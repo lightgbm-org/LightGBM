@@ -1856,17 +1856,17 @@ def test_estimator_fit_docstrings_are_consistent():
             @@ -32 +32 @@
             -init_score : numpy array, pandas DataFrame, pandas Series, list of int or float, list of lists, pyarrow ChunkedArray, pyarrow Table, polars Series, polars DataFrame of shape = [n_samples] or shape = [n_samples * n_classes] (for multi-class task) or shape = [n_samples, n_classes] (for multi-class task) or None, optional (default=None)
             +init_score : Dask Array or Dask Series of shape = [n_samples] or shape = [n_samples * n_classes] (for multi-class task), or Dask Array or Dask DataFrame of shape = [n_samples, n_classes] (for multi-class task), or None, optional (default=None)
-            @@ -48 +48 @@
+            @@ -49 +49 @@
             -eval_sample_weight : list of array (same types as ``sample_weight`` supports), or None, optional (default=None)
             +eval_sample_weight : list of Dask Array or Dask Series, or None, optional (default=None)
-            @@ -52 +52 @@
+            @@ -53 +53 @@
             -eval_init_score : list of array (same types as ``init_score`` supports), or None, optional (default=None)
             +eval_init_score : list of Dask Array, Dask Series or Dask DataFrame (for multi-class task), or None, optional (default=None)
-            @@ -60,3 +59,0 @@
+            @@ -61,3 +60,0 @@
             -feature_name : list of str, or 'auto', optional (default='auto')
             -    Feature names.
             -    If 'auto' and data is pandas DataFrame, data columns names are used.
-            @@ -73,6 +70 @@
+            @@ -74,6 +71 @@
             -callbacks : list of callable, or None, optional (default=None)
             -    List of callback functions that are applied at each iteration.
             -    See Callbacks in Python API for more information.
@@ -1874,13 +1874,13 @@ def test_estimator_fit_docstrings_are_consistent():
             -    Filename of LightGBM model, Booster instance or LGBMModel instance used for continue training.
             -eval_X : numpy array, pandas DataFrame, pyarrow Table, polars DataFrame, scipy.sparse, list of lists of int or float of shape = [n_samples, n_features], or tuple of such inputs, or None, optional (default=None)
             +eval_X : Dask Array or Dask DataFrame, tuple thereof or None, optional (default=None)
-            @@ -80,4 +72 @@
+            @@ -81,4 +73 @@
             -
             -    .. versionadded:: 4.7.0
             -
             -eval_y : numpy array, pandas DataFrame, pandas Series, list of int or float, pyarrow ChunkedArray or polars Series of shape = [n_samples], or tuple of such inputs, or None, optional (default=None)
             +eval_y : Dask Array or Dask DataFrame or Dask Series, tuple thereof or None, optional (default=None)
-            @@ -85,2 +74,5 @@
+            @@ -86,2 +75,5 @@
             -
             -    .. versionadded:: 4.7.0
             +feature_name : list of str, or 'auto', optional (default='auto')
@@ -1888,7 +1888,7 @@ def test_estimator_fit_docstrings_are_consistent():
             +    If 'auto' and data is pandas DataFrame, data columns names are used.
             +**kwargs
             +    Other parameters passed through to ``LGBMClassifier.fit()``.
-            @@ -90 +82 @@
+            @@ -91 +83 @@
             -self : LGBMClassifier
             +self : lightgbm.DaskLGBMClassifier
         """),
@@ -1918,21 +1918,21 @@ def test_estimator_fit_docstrings_are_consistent():
             +    sum(group) = n_samples.
             +    For example, if you have a 100-document dataset with ``group = [10, 20, 40, 10, 10, 10]``, that means that you have 6 groups,
             +    where the first 10 records are in the first group, records 11-30 are in the second group, records 31-70 are in the third group, etc.
-            @@ -50,3 +63 @@
+            @@ -51,3 +64 @@
             -eval_class_weight : list or None, optional (default=None)
             -    Class weights of eval data.
             -eval_init_score : list of Dask Array, Dask Series or Dask DataFrame (for multi-class task), or None, optional (default=None)
             +eval_init_score : list of Dask Array or Dask Series, or None, optional (default=None)
-            @@ -53,0 +65,2 @@
+            @@ -54,0 +66,2 @@
             +eval_group : list of Dask Array or Dask Series, or None, optional (default=None)
             +    Group data of eval data.
-            @@ -59,0 +73,2 @@
+            @@ -60,0 +74,2 @@
             +eval_at : list or tuple of int, optional (default=(1, 2, 3, 4, 5))
             +    The evaluation positions of the specified metric.
-            @@ -78 +93 @@
+            @@ -79 +94 @@
             -    Other parameters passed through to ``LGBMClassifier.fit()``.
             +    Other parameters passed through to ``LGBMRanker.fit()``.
-            @@ -82 +97 @@
+            @@ -83 +98 @@
             -self : lightgbm.DaskLGBMClassifier
             +self : lightgbm.DaskLGBMRanker
         """),
@@ -1959,16 +1959,16 @@ def test_estimator_fit_docstrings_are_consistent():
             -    .. versionadded:: 4.7.0
             -        Support for ``polars`` inputs
             -
-            @@ -65,2 +51,0 @@
+            @@ -66,2 +52,0 @@
             -eval_group : list of Dask Array or Dask Series, or None, optional (default=None)
             -    Group data of eval data.
-            @@ -73,2 +57,0 @@
+            @@ -74,2 +58,0 @@
             -eval_at : list or tuple of int, optional (default=(1, 2, 3, 4, 5))
             -    The evaluation positions of the specified metric.
-            @@ -93 +76 @@
+            @@ -94 +77 @@
             -    Other parameters passed through to ``LGBMRanker.fit()``.
             +    Other parameters passed through to ``LGBMRegressor.fit()``.
-            @@ -97 +80 @@
+            @@ -98 +81 @@
             -self : lightgbm.DaskLGBMRanker
             +self : lightgbm.DaskLGBMRegressor
         """),
