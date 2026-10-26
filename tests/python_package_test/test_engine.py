@@ -125,6 +125,8 @@ def test_reset_balanced_bagging(seed, bagging_fraction, balanced_fraction):
         "verbosity": -1,
     }
     actual = lgb.train(params, lgb.Dataset(X, label=y), num_boost_round=1, keep_training_booster=True)
+    initial_tree = actual.dump_model()["tree_info"][0]["tree_structure"]
+    assert 0 < initial_tree["internal_count"] < len(y), f"seed={seed}"
     for fraction in [1.0, balanced_fraction]:
         update = {"pos_bagging_fraction": fraction, "neg_bagging_fraction": fraction}
         params.update(update)
@@ -139,7 +141,11 @@ def test_reset_balanced_bagging(seed, bagging_fraction, balanced_fraction):
         actual.reset_parameter(update)
         for _ in range(2):
             actual.update()
+        loaded_params = lgb.Booster(model_str=actual.model_to_string()).params
+        for parameter, value in update.items():
+            assert loaded_params[parameter] == value, f"seed={seed}, fraction={fraction}"
         actual_counts = [tree["tree_structure"]["internal_count"] for tree in actual.dump_model()["tree_info"][-2:]]
+        assert all(0 < count < len(y) for count in actual_counts), f"seed={seed}, fraction={fraction}"
         expected_counts = [tree["tree_structure"]["internal_count"] for tree in expected.dump_model()["tree_info"][-2:]]
         assert actual_counts == expected_counts, f"seed={seed}, fraction={fraction}"
         np.testing.assert_allclose(actual.predict(X), expected.predict(X), err_msg=f"seed={seed}, fraction={fraction}")
@@ -171,11 +177,17 @@ def test_reset_bagging_seed(new_seed):
     actual.reset_parameter({"bagging_seed": new_seed})
     for _ in range(2):
         actual.update()
+    loaded_params = lgb.Booster(model_str=actual.model_to_string()).params
+    assert loaded_params["bagging_seed"] == new_seed, f"seed={new_seed}"
+    assert actual.dump_model()["tree_info"] == expected.dump_model()["tree_info"], f"seed={new_seed}"
     np.testing.assert_allclose(actual.predict(X), expected.predict(X), err_msg=f"seed={new_seed}")
 
     actual.reset_parameter({"bagging_seed": new_seed})
     actual.update()
     expected.update()
+    loaded_params = lgb.Booster(model_str=actual.model_to_string()).params
+    assert loaded_params["bagging_seed"] == new_seed, f"seed={new_seed}"
+    assert actual.dump_model()["tree_info"] == expected.dump_model()["tree_info"], f"seed={new_seed}"
     np.testing.assert_allclose(actual.predict(X), expected.predict(X), err_msg=f"seed={new_seed}")
 
 
@@ -3891,8 +3903,7 @@ def test_interaction_constraints():
 def test_reset_interaction_constraints(seed, initial_constraints, new_constraints):
     if seed is None:
         seed = int(np.random.default_rng().integers(0, 1000000))
-    X = np.random.RandomState(seed).normal(size=(600, 4))
-    y = X @ np.arange(1, 5)
+    X, y = make_synthetic_regression(n_samples=600, n_features=4, n_informative=4, random_state=seed)
     params = {
         "objective": "regression",
         "interaction_constraints": initial_constraints,
@@ -3901,12 +3912,26 @@ def test_reset_interaction_constraints(seed, initial_constraints, new_constraint
         "num_threads": 1,
         "verbosity": -1,
     }
+    groups = [set(group) for group in json.loads(initial_constraints)]
+
+    def check_branch(node, features):
+        if "split_feature" not in node:
+            return len(features)
+        features = features | {node["split_feature"]}
+        if groups:
+            assert any(features <= group for group in groups), f"seed={seed}, features={features}"
+        return max(check_branch(node["left_child"], features), check_branch(node["right_child"], features))
+
     actual = lgb.train(params, lgb.Dataset(X, label=y), num_boost_round=1, keep_training_booster=True)
+    initial_feature_count = check_branch(actual.dump_model()["tree_info"][0]["tree_structure"], set())
+    if new_constraints == "[]":
+        assert initial_feature_count == 1, f"seed={seed}"
     expected = lgb.train(
         dict(params, interaction_constraints=new_constraints),
         lgb.Dataset(X, label=y),
         num_boost_round=2,
         init_model=actual,
+        keep_training_booster=True,
     )
     actual.reset_parameter({"interaction_constraints": new_constraints})
     for _ in range(2):
@@ -3914,17 +3939,14 @@ def test_reset_interaction_constraints(seed, initial_constraints, new_constraint
 
     groups = [set(group) for group in json.loads(new_constraints)]
 
-    def check_branch(node, features):
-        if "split_feature" not in node:
-            return
-        features = features | {node["split_feature"]}
-        assert any(features <= group for group in groups), f"seed={seed}, features={features}"
-        check_branch(node["left_child"], features)
-        check_branch(node["right_child"], features)
-
-    if groups:
-        for tree in actual.dump_model()["tree_info"][-2:]:
-            check_branch(tree["tree_structure"], set())
+    loaded_params = lgb.Booster(model_str=actual.model_to_string()).params
+    assert loaded_params["interaction_constraints"] == [json.loads(new_constraints)], f"seed={seed}"
+    actual_trees = actual.dump_model()["tree_info"][-2:]
+    feature_counts = [check_branch(tree["tree_structure"], set()) for tree in actual_trees]
+    assert all(count > 0 for count in feature_counts), f"seed={seed}"
+    if not groups:
+        assert max(feature_counts) > 1, f"seed={seed}"
+    assert actual_trees == expected.dump_model()["tree_info"][-2:], f"seed={seed}"
     np.testing.assert_allclose(actual.predict(X), expected.predict(X), err_msg=f"seed={seed}")
 
 
