@@ -4,7 +4,6 @@ on:
   pull_request:
     branches:
       - main
-      - fix/docker-workflows
 
 concurrency:
   group: pr-${{ github.workflow }}-${{ github.ref }}
