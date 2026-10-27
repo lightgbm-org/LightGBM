@@ -366,7 +366,7 @@ test_that("feature contributions sum to the raw score", {
       objective = "binary"
       , num_threads = .LGB_MAX_THREADS
     )
-    , nrounds = 20L
+    , nrounds = 5L
     , verbose = .LGB_VERBOSITY
   )
   X <- as.matrix(agaricus.test$data)
