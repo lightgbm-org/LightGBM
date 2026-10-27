@@ -4218,6 +4218,48 @@ def test_reset_params_works_with_metric_num_class_and_boosting():
     assert new_bst.params == expected_params
 
 
+@pytest.mark.parametrize("seed", [123, None], ids=["fixed_seed", "randomized"])
+@pytest.mark.parametrize("histogram_mode", ["col", "row"])
+@pytest.mark.parametrize("new_fraction", [0.8, 1.0], ids=["indices", "full_data"])
+def test_reset_bagging_subset(seed, histogram_mode, new_fraction):
+    if seed is None:
+        seed = int(np.random.default_rng().integers(0, 1000000))
+    X, y = make_synthetic_regression(n_samples=600, n_features=4, n_informative=4, random_state=0)
+    params = {
+        "objective": "regression",
+        "bagging_fraction": 0.4,
+        "bagging_freq": 1,
+        "seed": seed,
+        "max_depth": 3,
+        "num_threads": 1,
+        "verbosity": -1,
+        f"force_{histogram_mode}_wise": True,
+    }
+    actual = lgb.train(params, lgb.Dataset(X, label=y), num_boost_round=1, keep_training_booster=True)
+    initial_tree = actual.dump_model()["tree_info"][0]["tree_structure"]
+    assert 0 < initial_tree["internal_count"] < len(y), f"seed={seed}"
+    for fraction in [new_fraction, 0.4]:
+        params["bagging_fraction"] = fraction
+        expected = lgb.train(
+            params, lgb.Dataset(X, label=y), num_boost_round=2, init_model=actual, keep_training_booster=True
+        )
+        actual.reset_parameter({"bagging_fraction": fraction})
+        for _ in range(2):
+            actual.update()
+        loaded_params = lgb.Booster(model_str=actual.model_to_string()).params
+        assert loaded_params["bagging_fraction"] == fraction, f"seed={seed}"
+        actual_trees = actual.dump_model()["tree_info"][-2:]
+        expected_trees = expected.dump_model()["tree_info"][-2:]
+        for tree in actual_trees:
+            count = tree["tree_structure"]["internal_count"]
+            if fraction == 1.0:
+                assert count == len(y), f"seed={seed}, fraction={fraction}"
+            else:
+                assert 0 < count < len(y), f"seed={seed}, fraction={fraction}"
+        assert actual_trees == expected_trees, f"seed={seed}, fraction={fraction}"
+        np.testing.assert_allclose(actual.predict(X), expected.predict(X), err_msg=f"seed={seed}, fraction={fraction}")
+
+
 @pytest.mark.parametrize("linear_tree", [False, True])
 def test_dump_model_stump(linear_tree):
     X, y = load_breast_cancer(return_X_y=True)
