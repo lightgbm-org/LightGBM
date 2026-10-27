@@ -16,6 +16,7 @@
 #include <functional>
 #include <sstream>
 #include <unordered_map>
+#include <utility>
 #include <vector>
 
 namespace LightGBM {
@@ -42,6 +43,143 @@ const size_t kInt32HistEntrySize = 2 * sizeof(int_hist_t);
 const size_t kInt16HistEntrySize = 2 * sizeof(int16_t);
 const int kHistOffset = 2;
 const double kSparseThreshold = 0.7;
+
+// A conservative support set: an unmarked bin is zero, while a marked bin may
+// have cancelled to zero. Logical bin IDs are unchanged, including bin zero.
+class HistogramBinMask {
+ public:
+  // Keep the current bitmap word while traversing descending bin IDs. The
+  // support set must not change while an iterator is in use.
+  class ReverseIterator {
+   public:
+    ReverseIterator() = default;
+
+    int Next() {
+      while (remaining_ == 0 && word_ > 0) { remaining_ = (*words_)[--word_]; }
+      if (remaining_ == 0) { return -1; }
+      const int bit = HighestBit(remaining_);
+      remaining_ &= ~(uint32_t{1} << bit);
+      return word_ * 32 + bit;
+    }
+
+   private:
+    friend class HistogramBinMask;
+    ReverseIterator(const std::vector<uint32_t>& words, int bin)
+        : words_(&words), word_(bin / 32),
+          remaining_(words[word_] & (~uint32_t{0} >> (31 - bin % 32))) {}
+
+    const std::vector<uint32_t>* words_ = nullptr;
+    int word_ = 0;
+    uint32_t remaining_ = 0;
+  };
+
+  bool valid() const { return valid_; }
+  void Invalidate() { valid_ = false; }
+
+  void Clear(hist_t* data, int num_bins) {
+    if (valid_ && num_bins_ == num_bins && Count() <= num_bins / 4) {
+      ForEach([data](int bin) {
+        const size_t index = 2 * static_cast<size_t>(bin);
+        data[index] = data[index + 1] = 0.0;
+      });
+    } else {
+      std::fill(data, data + 2 * static_cast<size_t>(num_bins), 0.0);
+    }
+    num_bins_ = num_bins;
+    bits_.assign((static_cast<size_t>(num_bins) + 31) / 32, 0);
+    valid_ = true;
+  }
+
+  void Mark(uint32_t bin) { bits_[bin / 32] |= uint32_t{1} << (bin % 32); }
+
+  void Unmark(uint32_t bin) { bits_[bin / 32] &= ~(uint32_t{1} << (bin % 32)); }
+
+  void FromHistogram(const hist_t* data, int num_bins) {
+    num_bins_ = num_bins;
+    bits_.resize((static_cast<size_t>(num_bins) + 31) / 32);
+    for (size_t word = 0; word < bits_.size(); ++word) {
+      uint32_t bits = 0;
+      const int first = static_cast<int>(word * 32);
+      const int length = std::min(32, num_bins - first);
+      for (int bit = 0; bit < length; ++bit) {
+        const size_t index = 2 * static_cast<size_t>(first + bit);
+        bits |= static_cast<uint32_t>(data[index] != 0.0 || data[index + 1] != 0.0) << bit;
+      }
+      bits_[word] = bits;
+    }
+    valid_ = true;
+  }
+
+  int Count() const {
+    int count = 0;
+    for (uint32_t bits : bits_) {
+#if (defined(__GNUC__) || defined(__clang__)) && (defined(__POPCNT__) || defined(__aarch64__))
+      count += __builtin_popcount(bits);
+#else
+      // Generic x86 builds otherwise call a scalar libgcc helper per word.
+      // This equivalent packed-bit count can vectorize without requiring
+      // extra CPU instructions or changing the target architecture.
+      bits -= (bits >> 1) & 0x55555555u;
+      bits = (bits & 0x33333333u) + ((bits >> 2) & 0x33333333u);
+      bits = (bits + (bits >> 4)) & 0x0f0f0f0fu;
+      count += static_cast<int>((bits * 0x01010101u) >> 24);
+#endif
+    }
+    return count;
+  }
+
+  void Union(const HistogramBinMask& other) {
+    for (size_t word = 0; word < bits_.size(); ++word) {
+      bits_[word] |= other.bits_[word];
+    }
+  }
+
+  template <typename Function>
+  void ForEach(const Function& function) const {
+    for (size_t word = 0; word < bits_.size(); ++word) {
+      for (uint32_t bits = bits_[word]; bits != 0; bits &= bits - 1) {
+        function(static_cast<int>(word * 32) + LowestBit(bits));
+      }
+    }
+  }
+
+  int Previous(int bin) const {
+    if (bin < 0 || num_bins_ == 0) { return -1; }
+    bin = std::min(bin, num_bins_ - 1);
+    int word = bin / 32;
+    uint32_t bits = bits_[word] & (~uint32_t{0} >> (31 - bin % 32));
+    while (bits == 0 && word > 0) { bits = bits_[--word]; }
+    return bits == 0 ? -1 : word * 32 + HighestBit(bits);
+  }
+
+  ReverseIterator Reverse(int bin) const {
+    if (!valid_ || bin < 0 || num_bins_ == 0) { return ReverseIterator(); }
+    return ReverseIterator(bits_, std::min(bin, num_bins_ - 1));
+  }
+
+ private:
+  static int LowestBit(uint32_t bits) {
+#if defined(__GNUC__) || defined(__clang__)
+    return __builtin_ctz(bits);
+#else
+    int result = 0;
+    while ((bits & 1) == 0) { bits >>= 1; ++result; }
+    return result;
+#endif
+  }
+  static int HighestBit(uint32_t bits) {
+#if defined(__GNUC__) || defined(__clang__)
+    return 31 - __builtin_clz(bits);
+#else
+    int result = 0;
+    while ((bits >>= 1) != 0) { ++result; }
+    return result;
+#endif
+  }
+  bool valid_ = false;
+  int num_bins_ = 0;
+  std::vector<uint32_t> bits_;
+};
 
 #define GET_GRAD(hist, i) hist[(i) << 1]
 #define GET_HESS(hist, i) hist[((i) << 1) + 1]
@@ -125,6 +263,8 @@ class BinMapper {
   /*! \brief Sparsity of this bin ( num_zero_bins / num_data ) */
   inline double sparse_rate() const { return sparse_rate_; }
 
+  double bin_upper_bound(uint32_t bin) const { return bin_upper_bound_[bin]; }
+
   /*!
   * \brief Save binary data to file
   * \param file File want to write
@@ -172,6 +312,10 @@ class BinMapper {
   * \return bin for this feature value
   */
   inline uint32_t ValueToBin(double value) const;
+  inline uint32_t ValueToBin(double value, uint32_t min_bin, uint32_t max_bin) const;
+  inline uint32_t ValueToBinWithPairwiseRange(double value, uint32_t first_bin, uint32_t second_bin) const;
+  inline uint32_t ValueToBinWithPairwiseRangeUnchecked(double value, uint32_t first_bin, uint32_t second_bin, int original_feature_slot) const;
+  inline std::pair<uint32_t, uint32_t> GetPairwiseBinRange(uint32_t first_bin, uint32_t second_bin) const;
 
   /*!
   * \brief Get the default bin when value is 0
@@ -184,6 +328,25 @@ class BinMapper {
   inline uint32_t GetMostFreqBin() const {
     return most_freq_bin_;
   }
+
+  inline bool HasPairwiseBinRanges() const {
+    return pairwise_bin_num_ > 0 &&
+      pairwise_bin_ranges_.size() ==
+      static_cast<size_t>(pairwise_bin_num_) * pairwise_bin_num_ * 2;
+  }
+
+  bool HasPairwiseBinLookup() const { return !pairwise_bin_lookup_.empty(); }
+
+  uint32_t PairwiseBinToBin(uint32_t first_bin, uint32_t second_bin) const {
+    return pairwise_bin_lookup_[static_cast<size_t>(first_bin) * pairwise_bin_num_ + second_bin];
+  }
+
+  void InitPairwiseBinLookup(uint32_t num_original_bin);
+
+  void InitPairwiseBinRanges(uint32_t num_original_bin, int inner_feature_index);
+
+  void SetPairwiseBinRange(uint32_t first_bin, uint32_t second_bin,
+                           uint32_t min_bin, uint32_t max_bin);
 
   /*!
   * \brief Construct feature value to bin mapper according feature values
@@ -198,9 +361,10 @@ class BinMapper {
   * \param use_missing True to enable missing value handle
   * \param zero_as_missing True to use zero as missing value
   * \param forced_upper_bounds Vector of split points that must be used (if this has size less than max_bin, remaining splits are found by the algorithm)
+  * \param force_ternary_bin enforce ternary bin
   */
   void FindBin(double* values, int num_values, size_t total_sample_cnt, int max_bin, int min_data_in_bin, int min_split_data, bool pre_filter, BinType bin_type,
-               bool use_missing, bool zero_as_missing, const std::vector<double>& forced_upper_bounds);
+               bool use_missing, bool zero_as_missing, const std::vector<double>& forced_upper_bounds, bool force_ternary_bin = false);
 
   /*!
   * \brief Serializing this object to buffer
@@ -257,6 +421,10 @@ class BinMapper {
   uint32_t default_bin_;
 
   uint32_t most_freq_bin_;
+  uint32_t pairwise_bin_num_;
+  std::vector<uint32_t> pairwise_bin_ranges_;
+  std::vector<uint32_t> pairwise_bin_lookup_;
+  int inner_feature_index_;
 };
 
 /*! \brief Iterator for one bin column */
@@ -306,6 +474,10 @@ class Bin {
   * \return Iterator of this bin
   */
   virtual BinIterator* GetIterator(uint32_t min_bin, uint32_t max_bin, uint32_t most_freq_bin) const = 0;
+
+  virtual BinIterator* GetUnpairedIterator(uint32_t /* min_bin */, uint32_t /* max_bin */, uint32_t /* most_freq_bin */) const {
+    return nullptr;
+  }
 
   /*!
   * \brief Save binary data to file
@@ -469,6 +641,64 @@ class Bin {
   static Bin* CreateSparseBin(data_size_t num_data, int num_bin);
 
   /*!
+  * \brief Create object for bin data of the first feature in pair, used for pairwise ranking, for an original dense bin
+  * \param num_data Size of the pairwise dataset
+  * \param num_bin Number of bin
+  * \param paired_ranking_item_index_map Map from data index to the original index for items in the pair
+  * \return The bin data object
+  */
+  static Bin* CreateDensePairwiseRankingFirstBin(data_size_t num_original_data, int num_bin, data_size_t num_pairs, const std::pair<data_size_t, data_size_t>* paired_ranking_item_index_map);
+
+  /*!
+  * \brief Create object for bin data of the first feature in pair, used for pairwise ranking, for an original sparse bin
+  * \param num_data Size of the pairwise dataset
+  * \param num_bin Number of bin
+  * \param paired_ranking_item_index_map Map from data index to the original index for items in the pair
+  * \return The bin data object
+  */
+  static Bin* CreateSparsePairwiseRankingFirstBin(data_size_t num_original_data, int num_bin, data_size_t num_pairs, const std::pair<data_size_t, data_size_t>* paired_ranking_item_index_map);
+
+  /*!
+  * \brief Create object for bin data of the second feature in pair, used for pairwise ranking, for an original dense bin
+  * \param num_data Size of the pairwise dataset
+  * \param num_bin Number of bin
+  * \param paired_ranking_item_index_map Map from data index to the original index for items in the pair
+  * \return The bin data object
+  */
+  static Bin* CreateDensePairwiseRankingSecondBin(data_size_t num_original_data, int num_bin, data_size_t num_pairs, const std::pair<data_size_t, data_size_t>* paired_ranking_item_index_map);
+
+  /*!
+  * \brief Create object for bin data of the second feature in pair, used for pairwise ranking, for an original sparse bin
+  * \param num_data Size of the pairwise dataset
+  * \param num_bin Number of bin
+  * \param paired_ranking_item_index_map Map from data index to the original index for items in the pair
+  * \return The bin data object
+  */
+  static Bin* CreateSparsePairwiseRankingSecondBin(data_size_t num_original_data, int num_bin, data_size_t num_pairs, const std::pair<data_size_t, data_size_t>* paired_ranking_item_index_map);
+
+  /*!
+  * \brief Create object for bin data of the differential feature in pair, used for pairwise ranking, for an original dense bin
+  * \param num_data Size of the pairwise dataset
+  * \param num_bin Number of bin
+  * \param paired_ranking_item_index_map Map from data index to the original index for items in the pair
+  * \param diff_bin_mappers Bin mappers for differential features in this group
+  * \param bin_offsets Bin offsets in feature group
+  * \return The bin data object
+  */
+  static Bin* CreateDensePairwiseRankingDiffBin(data_size_t num_original_data, int num_bin, data_size_t num_pairs, const std::pair<data_size_t, data_size_t>* paired_ranking_item_index_map, const std::vector<std::unique_ptr<const BinMapper>>* diff_bin_mappers, const std::vector<std::unique_ptr<const BinMapper>>* ori_bin_mappers, const std::vector<uint32_t>* bin_offsets, const std::vector<uint32_t>* diff_bin_offsets, const std::vector<float>* raw_values);
+
+  /*!
+  * \brief Create object for bin data of the differential feature in pair, used for pairwise ranking, for an original sparse bin
+  * \param num_data Size of the pairwise dataset
+  * \param num_bin Number of bin
+  * \param paired_ranking_item_index_map Map from data index to the original index for items in the pair
+  * \param diff_bin_mappers Bin mappers for differential features in this group
+  * \param bin_offsets Bin offsets in feature group
+  * \return The bin data object
+  */
+  static Bin* CreateSparsePairwiseRankingDiffBin(data_size_t num_original_data, int num_bin, data_size_t num_pairs, const std::pair<data_size_t, data_size_t>* paired_ranking_item_index_map, const std::vector<std::unique_ptr<const BinMapper>>* diff_bin_mappers, const std::vector<std::unique_ptr<const BinMapper>>* ori_bin_mappers, const std::vector<uint32_t>* bin_offsets, const std::vector<uint32_t>* diff_bin_offsets, const std::vector<float>* raw_values);
+
+  /*!
   * \brief Deep copy the bin
   */
   virtual Bin* Clone() = 0;
@@ -476,6 +706,8 @@ class Bin {
   virtual const void* GetColWiseData(uint8_t* bit_type, bool* is_sparse, std::vector<BinIterator*>* bin_iterator, const int num_threads) const = 0;
 
   virtual const void* GetColWiseData(uint8_t* bit_type, bool* is_sparse, BinIterator** bin_iterator) const = 0;
+
+  int group_index_ = -1;
 };
 
 
@@ -496,6 +728,8 @@ class MultiValBin {
   virtual void CopySubrow(const MultiValBin* full_bin,
                           const data_size_t* used_indices,
                           data_size_t num_used_indices) = 0;
+
+  virtual void DumpContent() const {}
 
   virtual MultiValBin* CreateLike(data_size_t num_data, int num_bin,
                                   int num_feature,
@@ -533,6 +767,14 @@ class MultiValBin {
                                          const score_t* ordered_gradients,
                                          const score_t* ordered_hessians,
                                          hist_t* out) const = 0;
+
+  // Optional feature-wise implementation. Keep the supplied row blocks and
+  // their reduction order, while using feature-local scratch histograms.
+  virtual bool ConstructHistogramsByFeature(const data_size_t* /*data_indices*/,
+      data_size_t /*num_data*/, data_size_t /*num_total_data*/, int /*num_blocks*/, data_size_t /*block_size*/,
+      const score_t* /*gradients*/, const score_t* /*hessians*/, bool /*ordered*/,
+      int /*num_threads*/, hist_t* /*out*/, const int8_t* /*is_feature_used*/ = nullptr,
+      HistogramBinMask* const* /*bin_masks*/ = nullptr) const { return false; }
 
   virtual void ConstructHistogramInt32(const data_size_t* data_indices,
                                        data_size_t start, data_size_t end,
@@ -590,12 +832,24 @@ class MultiValBin {
   virtual bool IsSparse() = 0;
 
   static MultiValBin* CreateMultiValBin(data_size_t num_data, int num_bin,
-                                        int num_feature, double sparse_rate, const std::vector<uint32_t>& offsets);
+                                        int num_feature, double sparse_rate, const std::vector<uint32_t>& offsets, const bool use_pairwise_ranking,
+                                        const std::pair<data_size_t, data_size_t>* paired_ranking_item_global_index_map, const std::vector<const BinMapper*> diff_feature_bin_mappers,
+                                        const std::vector<const BinMapper*> original_feature_bin_mappers, const bool use_pairwise_bin_lookup,
+                                        const std::vector<std::vector<float>>* raw_data,
+                                        const std::vector<uint32_t>& all_offsets, const std::vector<int>& diff_feature_to_original_feature_slot,
+                                        const std::vector<int>& diff_feature_to_raw_feature_index,
+                                        const std::string differential_feature_bin_mode);
 
   static MultiValBin* CreateMultiValDenseBin(data_size_t num_data, int num_bin,
-                                             int num_feature, const std::vector<uint32_t>& offsets);
+                                             int num_feature, const std::vector<uint32_t>& offsets, const bool use_pairwise_ranking,
+                                             const std::pair<data_size_t, data_size_t>* paired_ranking_item_global_index_map, const std::vector<const BinMapper*> diff_feature_bin_mappers,
+                                             const std::vector<const BinMapper*> original_feature_bin_mappers, const bool use_pairwise_bin_lookup,
+                                             const std::vector<std::vector<float>>* raw_data,
+                                             const std::vector<uint32_t>& all_offsets, const std::vector<int>& diff_feature_to_original_feature_slot,
+                                             const std::vector<int>& diff_feature_to_raw_feature_index,
+                                             const std::string differential_feature_bin_mode);
 
-  static MultiValBin* CreateMultiValSparseBin(data_size_t num_data, int num_bin, double estimate_element_per_row);
+  static MultiValBin* CreateMultiValSparseBin(data_size_t num_data, int num_bin, double estimate_element_per_row, const bool use_pairwise_ranking, const std::pair<data_size_t, data_size_t>* paired_ranking_item_global_index_map);
 
   static constexpr double multi_val_bin_sparse_threshold = 0.25f;
 
@@ -609,6 +863,121 @@ class MultiValBin {
     uint8_t* data_ptr_bit_type) const = 0;
   #endif  // USE_CUDA
 };
+
+inline uint32_t BinMapper::ValueToBin(double value, uint32_t min_bin, uint32_t max_bin) const {
+  if (std::isnan(value)) {
+    if (bin_type_ == BinType::CategoricalBin) {
+      return 0;
+    } else if (missing_type_ == MissingType::NaN) {
+      return static_cast<uint32_t>(num_bin_ - 1);
+    } else {
+      value = 0.0f;
+    }
+  }
+  if (bin_type_ == BinType::NumericalBin) {
+    uint32_t lower = min_bin;
+    uint32_t upper = max_bin;
+    if (missing_type_ == MissingType::NaN) {
+      const uint32_t nan_bin = static_cast<uint32_t>(num_bin_ - 1);
+      if (lower >= nan_bin) {
+        return nan_bin;
+      }
+      if (upper >= nan_bin) {
+        upper = nan_bin - 1;
+      }
+    }
+    if (lower > upper) {
+      lower = upper;
+    }
+    constexpr uint32_t kLinearSearchThreshold = 8;
+    if (upper - lower <= kLinearSearchThreshold) {
+      for (uint32_t bin = lower; bin < upper; ++bin) {
+        if (value <= bin_upper_bound_[bin]) {
+          return bin;
+        }
+      }
+      return upper;
+    }
+    int l = static_cast<int>(lower);
+    int r = static_cast<int>(upper);
+    while (l < r) {
+      int m = (r + l - 1) / 2;
+      if (value <= bin_upper_bound_[m]) {
+        r = m;
+      } else {
+        l = m + 1;
+      }
+    }
+    return static_cast<uint32_t>(l);
+  } else {
+    int int_value = static_cast<int>(value);
+    if (int_value < 0) {
+      return 0;
+    }
+    if (categorical_2_bin_.count(int_value)) {
+      return categorical_2_bin_.at(int_value);
+    } else {
+      return 0;
+    }
+  }
+}
+
+inline std::pair<uint32_t, uint32_t> BinMapper::GetPairwiseBinRange(uint32_t first_bin, uint32_t second_bin) const {
+  uint32_t max_bin = static_cast<uint32_t>(num_bin_ - 1);
+  if (missing_type_ == MissingType::NaN && max_bin > 0) {
+    --max_bin;
+  }
+  if (!HasPairwiseBinRanges() || first_bin >= pairwise_bin_num_ || second_bin >= pairwise_bin_num_) {
+    return std::make_pair(0u, max_bin);
+  }
+  const size_t offset = (static_cast<size_t>(first_bin) * pairwise_bin_num_ + second_bin) * 2;
+  return std::make_pair(pairwise_bin_ranges_[offset], pairwise_bin_ranges_[offset + 1]);
+}
+
+inline uint32_t BinMapper::ValueToBinWithPairwiseRange(double value, uint32_t first_bin, uint32_t second_bin) const {
+  if (bin_type_ != BinType::NumericalBin || !HasPairwiseBinRanges() || first_bin >= pairwise_bin_num_ || second_bin >= pairwise_bin_num_) {
+    return ValueToBin(value);
+  }
+  return ValueToBinWithPairwiseRangeUnchecked(value, first_bin, second_bin, -1);
+}
+
+inline uint32_t BinMapper::ValueToBinWithPairwiseRangeUnchecked(double value, uint32_t first_bin, uint32_t second_bin, int original_feature_slot) const {
+  if (std::isnan(value)) {
+    if (missing_type_ == MissingType::NaN) {
+      return static_cast<uint32_t>(num_bin_ - 1);
+    } else {
+      value = 0.0f;
+    }
+  }
+
+  // if (first_bin >= pairwise_bin_num_ || second_bin >= pairwise_bin_num_) {
+  //   Log::Warning("first_bin = %d, second_bin = %d, pairwise_bin_num_ = %d, inner_feature_index_ = %d, original_feature_slot = %d", first_bin, second_bin, pairwise_bin_num_, inner_feature_index_, original_feature_slot);
+  // }
+
+  const size_t range_offset = (static_cast<size_t>(first_bin) * pairwise_bin_num_ + second_bin) * 2;
+  const uint32_t lower = pairwise_bin_ranges_.at(range_offset);
+  const uint32_t upper = pairwise_bin_ranges_.at(range_offset + 1);
+  constexpr uint32_t kLinearSearchThreshold = 8;
+  if (upper - lower <= kLinearSearchThreshold) {
+    for (uint32_t bin = lower; bin < upper; ++bin) {
+      if (value <= bin_upper_bound_[bin]) {
+        return bin;
+      }
+    }
+    return upper;
+  }
+  int l = static_cast<int>(lower);
+  int r = static_cast<int>(upper);
+  while (l < r) {
+    int m = (r + l - 1) / 2;
+    if (value <= bin_upper_bound_[m]) {
+      r = m;
+    } else {
+      l = m + 1;
+    }
+  }
+  return static_cast<uint32_t>(l);
+}
 
 inline uint32_t BinMapper::ValueToBin(double value) const {
   if (std::isnan(value)) {

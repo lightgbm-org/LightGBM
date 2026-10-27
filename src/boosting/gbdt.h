@@ -400,6 +400,10 @@ class GBDT : public GBDTBase {
   */
   inline std::vector<std::string> FeatureNames() const override { return feature_names_; }
 
+  bool HasPairwiseBinLookup() const override { return !pairwise_bin_boundaries_.empty(); }
+
+  double PairwiseFeatureValue(int feature, double first, double second) const override;
+
   /*!
   * \brief Get index of label column
   * \return index of label column
@@ -471,6 +475,7 @@ class GBDT : public GBDTBase {
   inline std::string ParserConfigStr() const override {return parser_config_str_;}
 
  protected:
+  void InitPairwiseBinBoundaries();
   virtual bool GetIsConstHessian(const ObjectiveFunction* objective_function) {
     if (objective_function != nullptr && !data_sample_strategy_->IsHessianChange()) {
       return objective_function->IsConstantHessian();
@@ -608,6 +613,7 @@ class GBDT : public GBDTBase {
   /*! \brief Feature names */
   std::vector<std::string> feature_names_;
   std::vector<std::string> feature_infos_;
+  std::vector<std::vector<double>> pairwise_bin_boundaries_;
   std::vector<bool> class_need_train_;
   bool is_constant_hessian_;
   std::unique_ptr<ObjectiveFunction> loaded_objective_;

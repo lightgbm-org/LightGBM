@@ -343,6 +343,13 @@ std::string GBDT::SaveModelToString(int start_iteration, int num_iteration, int 
   }
 
   ss << "feature_infos=" << CommonC::Join(feature_infos_, " ") << '\n';
+  if (!pairwise_bin_boundaries_.empty()) {
+    std::vector<std::string> boundaries;
+    for (const auto& feature_bounds : pairwise_bin_boundaries_) {
+      boundaries.push_back(feature_bounds.empty() ? "-" : CommonC::Join(feature_bounds, ","));
+    }
+    ss << "pairwise_bin_boundaries=" << CommonC::Join(boundaries, " ") << '\n';
+  }
 
   int num_used_model = static_cast<int>(models_.size());
   int total_iteration = num_used_model / num_tree_per_iteration_;
@@ -522,6 +529,14 @@ bool GBDT::LoadModelFromString(const char* buffer, size_t len) {
   } else {
     Log::Fatal("Model file doesn't contain feature_infos");
     return false;
+  }
+
+  pairwise_bin_boundaries_.clear();
+  if (key_vals.count("pairwise_bin_boundaries")) {
+    for (const auto& bounds : Common::Split(key_vals["pairwise_bin_boundaries"].c_str(), ' ')) {
+      pairwise_bin_boundaries_.push_back(bounds == "-" ? std::vector<double>() :
+          CommonC::StringToArray<double>(bounds, ','));
+    }
   }
 
   if (key_vals.count("objective")) {

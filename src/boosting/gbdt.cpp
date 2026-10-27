@@ -144,6 +144,7 @@ void GBDT::Init(const Config* config, const Dataset* train_data, const Objective
   // get feature names
   feature_names_ = train_data_->feature_names();
   feature_infos_ = train_data_->feature_infos();
+  InitPairwiseBinBoundaries();
   monotone_constraints_ = config->monotone_constraints;
   // get parser config file content
   parser_config_str_ = train_data_->parser_config_str();
@@ -358,6 +359,8 @@ bool GBDT::TrainOneIter(const score_t* gradients, const score_t* hessians) {
     for (int cur_tree_id = 0; cur_tree_id < num_tree_per_iteration_; ++cur_tree_id) {
       init_scores[cur_tree_id] = BoostFromAverage(cur_tree_id, true);
     }
+    data_sample_strategy_->Bagging(iter_, tree_learner_.get(), gradients_.data(), hessians_.data());
+    objective_function_->SetDataIndices(data_sample_strategy_->bag_data_indices().data());
     Boosting();
     gradients = gradients_pointer_;
     hessians = hessians_pointer_;
@@ -412,6 +415,7 @@ bool GBDT::TrainOneIter(const score_t* gradients, const score_t* hessians) {
       new_tree.reset(tree_learner_->Train(grad, hess, is_first_tree));
     }
 
+
     if (new_tree->num_leaves() > 1) {
       should_continue = true;
       auto score_ptr = train_score_updater_->score() + offset;
@@ -445,6 +449,7 @@ bool GBDT::TrainOneIter(const score_t* gradients, const score_t* hessians) {
     // add model
     models_.push_back(std::move(new_tree));
   }
+
 
   if (!should_continue) {
     Log::Warning("Stopped training because there are no more leaves that meet the split requirements");
@@ -798,6 +803,7 @@ void GBDT::ResetTrainingData(const Dataset* train_data, const ObjectiveFunction*
     label_idx_ = train_data_->label_idx();
     feature_names_ = train_data_->feature_names();
     feature_infos_ = train_data_->feature_infos();
+    InitPairwiseBinBoundaries();
     parser_config_str_ = train_data_->parser_config_str();
 
     tree_learner_->ResetTrainingData(train_data, is_constant_hessian_);
@@ -805,6 +811,50 @@ void GBDT::ResetTrainingData(const Dataset* train_data, const ObjectiveFunction*
   } else {
     tree_learner_->ResetIsConstantHessian(is_constant_hessian_);
   }
+}
+
+void GBDT::InitPairwiseBinBoundaries() {
+  pairwise_bin_boundaries_.clear();
+  if (config_->objective != "pairwise_lambdarank" ||
+      !config_->use_differential_feature_in_pairwise_ranking ||
+      config_->differential_feature_bin_mode != "lookup") {
+    return;
+  }
+  const int num_original_features = train_data_->num_total_features() / 3;
+  pairwise_bin_boundaries_.resize(num_original_features);
+  for (int f = 0; f < num_original_features; ++f) {
+    if (train_data_->InnerFeatureIndex(2 * num_original_features + f) < 0) {
+      continue;
+    }
+    const auto* mapper = train_data_->FeatureBinMapper(train_data_->InnerFeatureIndex(f));
+    auto& boundaries = pairwise_bin_boundaries_[f];
+    for (int b = 0; b < mapper->num_bin(); ++b) {
+      boundaries.push_back(mapper->bin_upper_bound(b));
+    }
+    if (mapper->missing_type() == MissingType::NaN) {
+      // BinMapper's NaN-bin upper bound is not a floating-point NaN.
+      boundaries.back() = std::numeric_limits<double>::quiet_NaN();
+    }
+  }
+}
+
+double GBDT::PairwiseFeatureValue(int feature, double first, double second) const {
+  if (pairwise_bin_boundaries_.empty() || pairwise_bin_boundaries_[feature].empty()) {
+    return first - second;
+  }
+  const auto& boundaries = pairwise_bin_boundaries_[feature];
+  const bool has_nan_bin = std::isnan(boundaries.back());
+  const auto to_bin = [&boundaries, has_nan_bin](double value) {
+    if (std::isnan(value)) {
+      if (has_nan_bin) {
+        return boundaries.size() - 1;
+      }
+      value = 0.0;
+    }
+    return static_cast<size_t>(std::lower_bound(boundaries.begin(), boundaries.end() - has_nan_bin, value) -
+                               boundaries.begin());
+  };
+  return static_cast<double>(to_bin(first) * boundaries.size() + to_bin(second));
 }
 
 void GBDT::ResetConfig(const Config* config) {
