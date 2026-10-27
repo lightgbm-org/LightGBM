@@ -254,7 +254,7 @@ jobs:
             produces-artifacts: 'true'
             artifact-name: 'windows-amd64-cli-and-liblightgbm'
             python_version: '3.12'
-          - os: ubuntu-24.04-ppc64le
+          - os: ubuntu-24.04-ppc64le-p10
             container: 'ghcr.io/lightgbm-org/lightgbm-ci:ppc64le-manylinux-2_28'
             os-display-name: 'ppc64le-manylinux_2_28'
             task: bdist
@@ -318,7 +318,7 @@ jobs:
           elif \
             [[ "${{ matrix.os }}" == "ubuntu-latest" ]] \
             || [[ "${{ matrix.os }}" == "github-hosted-linux-gpu-amd64" ]] \
-            || [[ "${{ matrix.os }}" == "ubuntu-24.04-ppc64le" ]];
+            || [[ "${{ matrix.os }}" == "ubuntu-24.04-ppc64le-p10" ]];
           then
               export OS_NAME="linux"
               export PATH="/usr/lib64/openmpi/bin:${PATH}"

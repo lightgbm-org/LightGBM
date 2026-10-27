@@ -48,11 +48,11 @@ jobs:
             task: cpp-tests
             compiler: msvc
             container: null
-          - os: ubuntu-24.04-ppc64le
+          - os: ubuntu-24.04-ppc64le-p10
             task: cpp-tests
             compiler: gcc
             container: 'ghcr.io/lightgbm-org/lightgbm-ci:ppc64le-manylinux-2_28'
-            os-display-name: 'ubuntu24.04-ppc64le'
+            os-display-name: 'ubuntu24.04-ppc64le-p10'
           ###########
           # if-else #
           ###########
@@ -122,7 +122,7 @@ jobs:
           export TASK="${{ matrix.task }}"
           if [[ "${{ matrix.os }}" =~ ^macos ]]; then
               export OS_NAME="macos"
-          elif [[ "${{ matrix.os }}" == "ubuntu-latest" || "${{ matrix.os }}" == "ubuntu-24.04-ppc64le" ]]; then
+          elif [[ "${{ matrix.os }}" == "ubuntu-latest" || "${{ matrix.os }}" == "ubuntu-24.04-ppc64le-p10" ]]; then
               export OS_NAME="linux"
           fi
           if [[ "${{ matrix.container }}" == "ubuntu:22.04" ]]; then
