@@ -17,10 +17,10 @@ And running inside one looks like:
 
 ```shell
 # interactive shell
-pixi shell -e py310
+pixi shell -e py311
 
 # run a task
-pixi run -e py310 python -c "import pandas; print(pandas.__version__)"
+pixi run -e py311 python -c "import pandas; print(pandas.__version__)"
 ```
 
 See https://pixi.prefix.dev/latest/ for more details.

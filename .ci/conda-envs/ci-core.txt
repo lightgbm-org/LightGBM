@@ -13,7 +13,7 @@
 #   conda create \
 #     --name test-env \
 #     --file ./.ci/conda-envs/ci-core.txt \
-#     python=3.10
+#     python=3.11
 #
 
 # direct imports
