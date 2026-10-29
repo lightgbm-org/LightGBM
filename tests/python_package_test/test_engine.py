@@ -3472,6 +3472,47 @@ def test_early_stopping_for_only_first_metric():
     )
 
 
+@pytest.mark.parametrize("seed", [123, None], ids=["fixed_seed", "randomized"])
+def test_reset_feature_fraction_to_one(seed):
+    if seed is None:
+        seed = int(np.random.default_rng().integers(0, 1000000))
+    X, y = make_synthetic_regression(n_samples=1000, n_features=10, n_informative=10, random_state=0)
+    params = {
+        "objective": "regression",
+        "feature_fraction": 0.5,
+        "num_leaves": 127,
+        "min_data_in_leaf": 5,
+        "seed": seed,
+        "num_threads": 1,
+        "verbosity": -1,
+    }
+    actual = lgb.train(params, lgb.Dataset(X, label=y), num_boost_round=1, keep_training_booster=True)
+    feature_importance_before = actual.feature_importance(importance_type="split")
+    assert np.count_nonzero(feature_importance_before) == 5, f"seed={seed}"
+
+    num_extra_rounds = 3
+    expected = lgb.train(
+        dict(params, feature_fraction=1.0),
+        lgb.Dataset(X, label=y),
+        num_boost_round=num_extra_rounds,
+        init_model=actual,
+    )
+    assert np.count_nonzero(expected.feature_importance(importance_type="split")) == 10, f"seed={seed}"
+
+    actual.reset_parameter({"feature_fraction": 1.0})
+    actual.update()
+    first_new_tree_splits = actual.feature_importance(importance_type="split") - feature_importance_before
+    expected_first_new_tree_splits = (
+        expected.feature_importance(importance_type="split", iteration=2) - feature_importance_before
+    )
+    np_assert_array_equal(first_new_tree_splits, expected_first_new_tree_splits, strict=True, err_msg=f"seed={seed}")
+    for _ in range(num_extra_rounds - 1):
+        actual.update()
+    feature_importance_after = actual.feature_importance(importance_type="split")
+    assert np.all(feature_importance_after[feature_importance_before == 0] > 0), f"seed={seed}"
+    np.testing.assert_allclose(actual.predict(X), expected.predict(X), err_msg=f"seed={seed}")
+
+
 def test_node_level_subcol():
     X, y = load_breast_cancer(return_X_y=True)
     X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.1, random_state=42)
