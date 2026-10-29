@@ -1,17 +1,7 @@
 name: Python-package
 
 on:
-  push:
-    branches:
-      - main
-  pull_request:
-    branches:
-      - main
-
-# automatically cancel in-progress builds if another commit is pushed
-concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  workflow_call:
 
 # default to 0 permissions
 # (job-level overrides add the minimal permissions needed)
@@ -35,7 +25,7 @@ env:
 
 jobs:
   test-linux-aarch64:
-    name: bdist wheel (aarch64-manylinux2014, gcc, Python 3.14)
+    name: bdist wheel (aarch64-manylinux2014, gcc, Python 3.12)
     runs-on: ubuntu-24.04-arm
     timeout-minutes: 60
     steps:
@@ -71,7 +61,7 @@ jobs:
             --env METHOD=wheel \
             --env OS_NAME=linux \
             --env PRODUCES_ARTIFACTS=true \
-            --env PYTHON_VERSION="3.14" \
+            --env PYTHON_VERSION="3.12" \
             --env TASK=bdist \
             -v "${PWD}":"${{ env.BUILD_DIRECTORY }}" \
             -w ${{ env.BUILD_DIRECTORY }} \
@@ -96,21 +86,21 @@ jobs:
           - os: windows-2022
             task: sdist
             compiler: MSVC
-            python_version: '3.10'
-            pixi-env: 'py310'
+            python_version: '3.11'
+            pixi-env: 'py311'
           - os: ubuntu-latest
             container: &ubuntu_latest_image ubuntu:22.04
             os-display-name: &ubuntu_latest_display_name 'ubuntu22.04'
             task: regular
             compiler: clang-17
-            python_version: '3.13'
+            python_version: '3.14'
             in-ubuntu-base-container: 'true'
           - os: ubuntu-latest
             container: *ubuntu_latest_image
             os-display-name: *ubuntu_latest_display_name
             task: sdist
             compiler: clang-17
-            python_version: '3.14'
+            python_version: '3.15'
             in-ubuntu-base-container: 'true'
           #########################
           # OpenCL-based GPU jobs #
@@ -128,7 +118,7 @@ jobs:
           #   task: bdist
           #   compiler: clang-17
           #   method: wheel
-          #   python_version: '3.11'
+          #   python_version: '3.12'
           #   in-ubuntu-base-container: 'true'
           # - os: github-hosted-linux-gpu-amd64
           #   container: nvcr.io/nvidia/cuda:12.9.1-devel-ubuntu22.04
@@ -144,7 +134,7 @@ jobs:
             task: gpu
             method: source
             compiler: gcc
-            python_version: '3.14'
+            python_version: '3.15'
             in-ubuntu-base-container: 'false'
             setup-conda: 'false'
           ############
@@ -156,7 +146,7 @@ jobs:
             task: mpi
             compiler: gcc
             method: source
-            python_version: '3.11'
+            python_version: '3.14'
             in-ubuntu-base-container: 'false'
             setup-conda: 'false'
           - os: ubuntu-latest
@@ -165,7 +155,7 @@ jobs:
             task: mpi
             compiler: clang-17
             method: source
-            python_version: '3.13'
+            python_version: '3.14'
             in-ubuntu-base-container: 'true'
           - os: ubuntu-latest
             container: *ubuntu_latest_image
@@ -181,8 +171,8 @@ jobs:
             task: mpi
             compiler: clang-17
             method: wheel
-            python_version: '3.10'
-            pixi-env: 'py310'
+            python_version: '3.11'
+            pixi-env: 'py311'
             in-ubuntu-base-container: 'true'
           #####################
           # jobs that create  #
@@ -194,26 +184,26 @@ jobs:
             method: wheel
             produces-artifacts: 'true'
             artifact-name: 'macosx-amd64-wheel'
-            python_version: '3.13'
+            python_version: '3.12'
           - os: macos-15
             task: bdist
             compiler: clang
             method: wheel
             produces-artifacts: 'true'
             artifact-name: 'macosx-arm64-wheel'
-            python_version: '3.11'
+            python_version: '3.12'
           - os: macos-15-intel
             task: regular
             compiler: clang
             produces-artifacts: 'true'
             artifact-name: 'macosx-amd64-liblightgbm'
-            python_version: '3.11'
+            python_version: '3.12'
           - os: ubuntu-latest
             container: *manylinux_amd64_image
             os-display-name: *manylinux_amd64_display_name
             task: regular
             compiler: gcc
-            python_version: '3.11'
+            python_version: '3.12'
             in-ubuntu-base-container: 'false'
             setup-conda: 'false'
             produces-artifacts: 'true'
@@ -224,8 +214,8 @@ jobs:
             task: bdist
             compiler: gcc
             method: wheel
-            python_version: '3.10'
-            pixi-env: 'py310'
+            python_version: '3.12'
+            pixi-env: 'py311'
             in-ubuntu-base-container: 'false'
             setup-conda: 'false'
             produces-artifacts: 'true'
@@ -235,8 +225,8 @@ jobs:
             os-display-name: *manylinux_amd64_display_name
             task: sdist
             compiler: gcc
-            python_version: '3.10'
-            pixi-env: 'py310'
+            python_version: '3.12'
+            pixi-env: 'py311'
             in-ubuntu-base-container: 'false'
             setup-conda: 'false'
             produces-artifacts: 'true'
@@ -248,7 +238,7 @@ jobs:
             produces-artifacts: 'true'
             artifact-name: 'windows-amd64-wheel'
             wheel-platform-tag: 'win_amd64'
-            python_version: '3.13'
+            python_version: '3.12'
           - os: windows-11-arm
             task: bdist
             compiler: MSVC
@@ -257,14 +247,14 @@ jobs:
             artifact-name: 'windows-arm64-wheel'
             setup-conda: 'false'
             wheel-platform-tag: 'win_arm64'
-            python_version: '3.13'
+            python_version: '3.12'
           - os: windows-2022
             task: regular
             compiler: MSVC
             produces-artifacts: 'true'
             artifact-name: 'windows-amd64-cli-and-liblightgbm'
-            python_version: '3.11'
-          - os: ubuntu-24.04-ppc64le
+            python_version: '3.12'
+          - os: ubuntu-24.04-ppc64le-p10
             container: 'ghcr.io/lightgbm-org/lightgbm-ci:ppc64le-manylinux-2_28'
             os-display-name: 'ppc64le-manylinux_2_28'
             task: bdist
@@ -328,7 +318,7 @@ jobs:
           elif \
             [[ "${{ matrix.os }}" == "ubuntu-latest" ]] \
             || [[ "${{ matrix.os }}" == "github-hosted-linux-gpu-amd64" ]] \
-            || [[ "${{ matrix.os }}" == "ubuntu-24.04-ppc64le" ]];
+            || [[ "${{ matrix.os }}" == "ubuntu-24.04-ppc64le-p10" ]];
           then
               export OS_NAME="linux"
               export PATH="/usr/lib64/openmpi/bin:${PATH}"
@@ -454,7 +444,7 @@ jobs:
             --rm \
             -v $(pwd):/opt/lgb-build \
             -w /opt/lgb-build \
-            python:3.14 \
+            python:3.15 \
             /bin/bash ./.ci/test-python-latest.sh
 
   test-minimal-deps:
@@ -465,7 +455,7 @@ jobs:
       fail-fast: false
       matrix:
         python_version:
-          - '3.14'
+          - '3.15'
     steps:
       - name: Checkout repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
@@ -505,7 +495,7 @@ jobs:
         # This should always include at least the oldest
         # not-yet-end-of-life Python version
         python_version:
-          - '3.10'
+          - '3.11'
     steps:
       - name: Checkout repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
@@ -578,20 +568,3 @@ jobs:
             -t pypi \
             ${BUILD_ARTIFACTSTAGINGDIRECTORY}/lightgbm-*.tar.gz \
             ${BUILD_ARTIFACTSTAGINGDIRECTORY}/*.whl
-
-  all-python-package-jobs-successful:
-    if: always()
-    runs-on: ubuntu-latest
-    needs:
-      - test-latest-versions
-      - test
-      - test-linux-aarch64
-      - test-minimal-deps
-      - test-old-versions
-    permissions:
-      statuses: read
-    steps:
-      - name: Note that all tests succeeded
-        uses: re-actors/alls-green@b5b5b37504aa4183270bd3d855c52a67f212be35  # v1.3.0
-        with:
-          jobs: ${{ toJSON(needs) }}
