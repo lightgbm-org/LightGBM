@@ -3,7 +3,7 @@ version: 4.7.0.99.{build}
 image: Visual Studio 2017
 platform: x64
 configuration:
-  - '3.10'
+  - '3.11'
 
 # only build on 'main' and pull requests targeting it
 branches:

@@ -7,7 +7,7 @@ pip install \
     --prefer-binary \
     --upgrade \
     --constraint ./.ci/pip-envs/requirements-oldest.txt \
-    "$(echo dist/*.whl)[arrow,pandas,scikit-learn]"
+    "$(echo dist/*.whl)[arrow,pandas,polars,scikit-learn]"
 
 echo "installed package versions:"
 pip freeze
