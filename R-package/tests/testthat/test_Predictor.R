@@ -357,6 +357,34 @@ test_that("predict() params should override keyword argument for feature contrib
   }
 })
 
+test_that("feature contributions of a binary classifier sum to the raw score", {
+  data(agaricus.train, package = "lightgbm")
+  data(agaricus.test, package = "lightgbm")
+  bst <- lgb.train(
+    data = lgb.Dataset(agaricus.train$data, label = agaricus.train$label)
+    , params = list(
+      objective = "binary"
+      , num_threads = .LGB_MAX_THREADS
+    )
+    , nrounds = 5L
+    , verbose = .LGB_VERBOSITY
+  )
+  # SHAP contributions sum up to the raw score.
+  # In regression models, this score often equals the prediction value (predict(bst, X)).
+  # In binary classifiers, since the prediction value is the probability (after applying the link function),
+  # the contributions sum up to the raw score (predict(bst, X, type = "raw")) and not to the regular prediction.
+  # The base value (last column) is the mean raw score on the training set.
+  X <- as.matrix(agaricus.test$data)
+  X_train <- as.matrix(agaricus.train$data)
+  preds_contrib <- predict(bst, X, type = "contrib")
+  shap_base_value <- unique(preds_contrib[, ncol(preds_contrib)])
+  expect_true(is.matrix(preds_contrib))
+  expect_equal(dim(preds_contrib), c(nrow(X), ncol(X) + 1L))
+  expect_equal(length(shap_base_value), 1L)
+  expect_equal(mean(predict(bst, X_train, type = "raw")), shap_base_value[1L])
+  expect_equal(predict(bst, X, type = "raw"), rowSums(preds_contrib))
+})
+
 .expect_has_row_names <- function(pred, X) {
     if (is.vector(pred)) {
         rnames <- names(pred)

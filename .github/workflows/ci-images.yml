@@ -38,7 +38,7 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - os: ubuntu-24.04-ppc64le
+          - os: ubuntu-24.04-ppc64le-p10
             dockerfile: .ci/ci-images/ppc64le-manylinux/Dockerfile
             image-tag: ppc64le-manylinux-2_28${{ inputs.tag-suffix }}
     steps:

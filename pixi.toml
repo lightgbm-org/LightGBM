@@ -12,26 +12,26 @@ platforms = ["linux-64", "linux-aarch64", "osx-64", "osx-arm64", "win-64"]
 ca-certificates = ">=2026"
 
 [feature.python-common.dependencies]
-narwhals = ">=1.15"
+narwhals = ">=2.26"
 numpy = ">=1.21.3"
 pip = "*"
-python = ">=3.10"
+python = ">=3.11"
 scipy = "*"
 
-[feature.py310.dependencies]
+[feature.py311.dependencies]
 # direct dependencies
 cffi = "1.15.*"
 joblib = "1.3.*"
 matplotlib-base = "3.7.*"
-narwhals = "1.15.*"
-numpy = "1.22.*"
-pandas = "1.3.*"
+narwhals = "2.26.*"
+numpy = "1.23.*"
+pandas = "1.5.*"
 polars = "1.0.*"
 pyarrow = "16.0.*"
-python = "3.10.*"
+python = "3.11.*"
 python-graphviz = "0.20.*"
-scikit-learn = "1.0.*"
-scipy = "1.7.*"
+scikit-learn = "1.1.*"
+scipy = "1.9.*"
 
 # build-time dependencies
 hatchling = ">=1.27.0"
@@ -49,9 +49,9 @@ pytest = "7.4.*"
 pytest-cov = "6.*"
 
 # dask dependencies are not needed on Windows, so split out separately here
-[feature.py310.target.unix.dependencies]
-dask = "2022.12.*"
-distributed = "2022.12.*"
+[feature.py311.target.unix.dependencies]
+dask-core = "2024.4.*"
+distributed = "2024.4.*"
 
 [feature.r-macos-intel]
 platforms = ["osx-64"]
@@ -77,5 +77,5 @@ r-testthat = "*"
 
 [environments]
 default = []
-py310 = ["python-common", "py310"]
+py311 = ["python-common", "py311"]
 r-macos-intel = ["r-macos-intel"]
