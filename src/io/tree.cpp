@@ -896,9 +896,9 @@ double LegendrePolynomial(int n, double x) {
   return p1;
 }
 
-// P_n'(x), given pn = P_n(x)
-double LegendreDerivative(int n, double x, double pn) {
-  return n * (x * pn - LegendrePolynomial(n - 1, x)) / (x * x - 1.0);
+// P_n'(x), given p_n = P_n(x)
+double LegendreDerivative(int n, double x, double p_n) {
+  return n * (x * p_n - LegendrePolynomial(n - 1, x)) / (x * x - 1.0);
 }
 
 // Gauss-Legendre points (increasing) and weights on [0, 1]
@@ -923,8 +923,8 @@ GaussLegendreRule<kNumPoints> MakeGaussLegendreRule() {
     // initial guess for the i-th largest root
     double x = std::cos(kPi * (i + 0.75) / (kNumPoints + 0.5));
     for (int iter = 0; iter < kMaxNewtonIterations; ++iter) {
-      const double pn = LegendrePolynomial(kNumPoints, x);
-      const double dx = pn / LegendreDerivative(kNumPoints, x, pn);
+      const double p_n = LegendrePolynomial(kNumPoints, x);
+      const double dx = p_n / LegendreDerivative(kNumPoints, x, p_n);
       x -= dx;
       if (std::fabs(dx) < kNewtonTolerance) {
         break;
