@@ -625,6 +625,18 @@ def test_categorical_with_missing_values(tmp_path):
     assert_datasets_equal(tmp_path, ds, ref_ds)
 
 
+def test_categorical_auto_with_manual_feature_name(rng):
+    X = pl.DataFrame(
+        {
+            "x1": rng.uniform(size=100),
+            "x2": pl.Series(rng.choice(a=["a", "b", "c"], size=100), dtype=_UNORDERED_CATEGORICAL),
+        }
+    )
+    ds = lgb.Dataset(X, rng.uniform(size=100), feature_name=["c", "d"]).construct()
+    assert ds.params["categorical_column"] == [1]
+    assert ds.get_feature_name() == ["c", "d"]
+
+
 def test_dataset_construction_with_high_cardinality_categorical_succeeds(rng):
     X = pl.DataFrame({"x1": rng.integers(low=0, high=5_000, size=(10_000,))})
     y = rng.uniform(size=(10_000,))
