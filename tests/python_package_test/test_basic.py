@@ -102,6 +102,22 @@ def test_basic(tmp_path):
     np.testing.assert_raises_regex(lgb.basic.LightGBMError, bad_shape_error_msg, bst.predict, tname)
 
 
+@pytest.mark.parametrize("data_type", [np.asarray, sparse.csr_matrix], ids=["dense", "csr"])
+def test_chunked_prediction_matches_unchunked(monkeypatch, data_type):
+    X = np.arange(60, dtype=np.float64).reshape(-1, 1)
+    model = lgb.train(
+        {"objective": "regression", "num_threads": 1, "verbosity": -1},
+        lgb.Dataset(X, label=X[:, 0]),
+        num_boost_round=1,
+    )
+    data = data_type(X)
+    expected = model.predict(data)
+
+    # Force 25/25/10-row chunks without allocating billions of rows.
+    monkeypatch.setattr(lgb.basic, "_MAX_INT32", 25)
+    np_assert_array_equal(model.predict(data), expected, strict=True)
+
+
 def test_reset_parameter_on_loaded_model(tmp_path):
     X, y = load_breast_cancer(return_X_y=True)
     bst = lgb.train(
