@@ -174,6 +174,13 @@ Thanks `@huanzhang12 <https://github.com/huanzhang12>`__ for contributing this f
 
 - `GPU Tutorial <./GPU-Tutorial.rst>`__
 
+Built-in Feature Contributions
+------------------------------
+
+Shapley values can help us understand how each feature contributed to the model's prediction. LightGBM supports path-dependent Shapley values\ `[12] <#references>`__, which use tree cover statistics to estimate the behavior of missing features. For the computation, we use the efficient and numerically stable QuadratureTreeSHAP algorithm\ `[13] <#references>`__. To get the SHAP attributions in Python, use ``model.predict(X, pred_contrib=True)``. In R, use ``predict(model, X, type = "contrib")``. The resulting matrix will include a column for each feature followed by a column with the expected value.
+
+Due to the efficiency axiom of Shapley values, summing all the columns in the matrix will give you the model's raw score (``model.predict(X, raw_score=True)`` in Python, ``predict(model, X, type = "raw")`` in R). This raw score is equal to the regular prediction in most regressors, but not in classifiers, where a sigmoid (binary) or softmax (multiclass) function is applied on the raw score, or in regressors with poisson, gamma, and tweedie objective functions, where an exponential function (``exp(raw_score)``) is applied. For multiclass models, the contributions and expected value are returned separately for each class.
+
 Applications and Metrics
 ------------------------
 
@@ -287,6 +294,10 @@ References
 
 [11] Huan Zhang, Si Si and Cho-Jui Hsieh. "`GPU Acceleration for Large-scale Tree Boosting`_." SysML Conference, 2018.
 
+[12] Lundberg, S.M., Erion, G., Chen, H. et al. "`From local explanations to global understanding with explainable AI for trees`_." Nat Mach Intell 2, 56-67 (2020).
+
+[13] Ron Wettenstein, Rory Mitchell, and Peng Yu. "`Quadrature-TreeSHAP\: Depth-Independent TreeSHAP and Shapley Interactions`_." arXiv preprint arXiv:2605.04497 (2026).
+
 .. _LightGBM\: A Highly Efficient Gradient Boosting Decision Tree: https://proceedings.neurips.cc/paper/2017/hash/6449f44a102fde848669bdd9eb6b76fa-Abstract.html
 
 .. _On Grouping for Maximum Homogeneity: https://www.jstor.org/stable/2281952
@@ -296,3 +307,7 @@ References
 .. _A Communication-Efficient Parallel Algorithm for Decision Tree: https://proceedings.neurips.cc/paper/2016/hash/10a5ab2db37feedfdeaab192ead4ac0e-Abstract.html
 
 .. _GPU Acceleration for Large-scale Tree Boosting: https://arxiv.org/abs/1706.08359
+
+.. _From local explanations to global understanding with explainable AI for trees: https://doi.org/10.1038/s42256-019-0138-9
+
+.. _Quadrature-TreeSHAP\: Depth-Independent TreeSHAP and Shapley Interactions: https://arxiv.org/abs/2605.04497
