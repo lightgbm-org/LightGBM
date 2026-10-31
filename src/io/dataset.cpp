@@ -924,7 +924,24 @@ void Dataset::CopySubrowToDevice(const Dataset* fullset,
       cuda_column_data_.reset(new CUDAColumnData(num_used_indices, gpu_device_id_));
       metadata_.CreateCUDAMetadata(gpu_device_id_);
     }
-    cuda_column_data_->CopySubrow(fullset->cuda_column_data(), used_indices, num_used_indices);
+    // `fullset`'s CUDA column data was created on a single device (the device
+    // that was current when the full Dataset was finished loading). CUDA
+    // memory allocated with cudaMalloc cannot be accessed from another device,
+    // and LightGBM does not enable peer access, so in NCCL multi-GPU training
+    // (one thread per local GPU is bound to gpu_device_id_ here) copying from
+    // fullset->cuda_column_data() would pass device pointers of another GPU to
+    // the copy kernel and crash with "an illegal memory access was encountered".
+    // Fall back to building this subset's CUDA column data from its own
+    // host-side bins (already filled by CopySubrowHostPart() above), which are
+    // uploaded on the current device.
+    const bool full_set_on_this_device =
+        fullset->cuda_column_data() != nullptr &&
+        fullset->cuda_column_data()->gpu_device_id() == gpu_device_id_;
+    if (full_set_on_this_device) {
+      cuda_column_data_->CopySubrow(fullset->cuda_column_data(), used_indices, num_used_indices);
+    } else {
+      CreateCUDAColumnData();
+    }
   }
   #endif  // USE_CUDA
 }
