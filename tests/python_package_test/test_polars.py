@@ -683,6 +683,8 @@ def test_polars_supported_dtypes(tmp_path, dtype, values):
         (pl.Duration, [1, 2, 3]),
         (pl.Struct, [{"a": 1}, {"a": 2}, {"a": 3}]),
         (pl.List, [[1, 2], [3, 4], [5, 6]]),
+        # numeric types that LightGBM can't read from Arrow (not available in older polars versions)
+        *[(getattr(pl, name), [1, 2, 3]) for name in ("Float16", "Int128", "UInt128") if hasattr(pl, name)],
     ],
 )
 def test_polars_unsupported_dtypes(dtype, values):
