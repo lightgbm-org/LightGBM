@@ -174,6 +174,13 @@ Thanks `@huanzhang12 <https://github.com/huanzhang12>`__ for contributing this f
 
 - `GPU Tutorial <./GPU-Tutorial.rst>`__
 
+Built-in Feature Contributions
+------------------------------
+
+Shapley values can help us understand how each feature contributed to the model's prediction. LightGBM supports path-dependent Shapley values\ `[12] <#references>`__, which use tree cover statistics to estimate the behavior of missing features. For the computation, we use the QuadratureTreeSHAP algorithm which is more efficient and numerically stable than the original TreeSHAP approach\ `[13] <#references>`__. To get the SHAP attributions in Python, use ``model.predict(X, pred_contrib=True)``. In R, use ``predict(model, X, type = "contrib")``. The resulting matrix will include a column for each feature followed by a column with the expected value.
+
+Due to the efficiency axiom of Shapley values, summing all the columns in the matrix will give you the model's raw score (``model.predict(X, raw_score=True)`` in Python, ``predict(model, X, type = "raw")`` in R). This raw score is equal to the regular prediction in most regressors, but not in classifiers, where a sigmoid (binary) or softmax (multiclass) function is applied on the raw score, or in regressors with poisson, gamma, and tweedie objective functions, where an exponential function (``exp(raw_score)``) is applied. For multiclass models, the contributions and expected value are returned separately for each class.
+
 Applications and Metrics
 ------------------------
 
@@ -230,13 +237,6 @@ LightGBM supports the following metrics:
 -  Tweedie
 
 For more details, please refer to `Parameters <./Parameters.rst#metric-parameters>`__.
-
-Built-in Feature Contributions
-------------------------------
-
-Shapley values can help us understand how each feature contributed to the model's prediction. LightGBM supports path-dependent Shapley values\ `[12] <#references>`__, which use tree cover statistics to estimate the behavior of missing features. For the computation, we use the QuadratureTreeSHAP algorithm which is more efficient and numerically stable than the original TreeSHAP approach\ `[13] <#references>`__.
-
-To get the SHAP attributions in Python, use ``model.predict(X, pred_contrib=True)``. In R, use ``predict(model, X, type = "contrib")``. The resulting matrix will include a column for each feature followed by a column with the expected value. Due to the efficiency axiom of Shapley values, summing all the columns in the matrix will give you the model's raw score (``model.predict(X, raw_score=True)`` in Python, ``predict(model, X, type = "raw")`` in R). This raw score is equal to the regular prediction in most regressors, but not in classifiers, where a sigmoid (binary) or softmax (multiclass) function is applied on the raw score, or in regressors with poisson, gamma, and tweedie objective functions, where an exponential function (``exp(raw_score)``) is applied. For multiclass models, the contributions and expected value are returned separately for each class.
 
 Other Features
 --------------
