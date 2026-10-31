@@ -1987,13 +1987,13 @@ def test_estimator_predict_docstrings_are_consistent():
             @@ -5 +5 @@
             -X : numpy array, pandas DataFrame, scipy.sparse, list of lists of int or float of shape = [n_samples, n_features]
             +X : Dask Array or Dask DataFrame of shape = [n_samples, n_features]
-            @@ -38 +38 @@
+            @@ -40 +40 @@
             -predicted_result : array-like of shape = [n_samples] or shape = [n_samples, n_classes]
             +predicted_result : Dask Array of shape = [n_samples] or shape = [n_samples, n_classes]
-            @@ -40 +40 @@
+            @@ -42 +42 @@
             -X_leaves : array-like of shape = [n_samples, n_trees] or shape = [n_samples, n_trees * n_classes]
             +X_leaves : Dask Array of shape = [n_samples, n_trees] or shape = [n_samples, n_trees * n_classes]
-            @@ -42 +42 @@
+            @@ -44 +44 @@
             -X_SHAP_values : array-like of shape = [n_samples, n_features + 1] or shape = [n_samples, (n_features + 1) * n_classes] or list with n_classes length of such objects
             +X_SHAP_values : Dask Array of shape = [n_samples, n_features + 1] or shape = [n_samples, (n_features + 1) * n_classes] or (if multi-class and using sparse inputs) a list of ``n_classes`` Dask Arrays of shape = [n_samples, n_features + 1]
         """),
@@ -2006,13 +2006,13 @@ def test_estimator_predict_docstrings_are_consistent():
         expected_diff=textwrap.dedent("""\
             --- DaskLGBMClassifier.predict
             +++ DaskLGBMRanker.predict
-            @@ -38 +38 @@
+            @@ -40 +40 @@
             -predicted_result : Dask Array of shape = [n_samples] or shape = [n_samples, n_classes]
             +predicted_result : Dask Array of shape = [n_samples]
-            @@ -40 +40 @@
+            @@ -42 +42 @@
             -X_leaves : Dask Array of shape = [n_samples, n_trees] or shape = [n_samples, n_trees * n_classes]
             +X_leaves : Dask Array of shape = [n_samples, n_trees]
-            @@ -42 +42 @@
+            @@ -44 +44 @@
             -X_SHAP_values : Dask Array of shape = [n_samples, n_features + 1] or shape = [n_samples, (n_features + 1) * n_classes] or (if multi-class and using sparse inputs) a list of ``n_classes`` Dask Arrays of shape = [n_samples, n_features + 1]
             +X_SHAP_values : Dask Array of shape = [n_samples, n_features + 1]
         """),
@@ -2032,7 +2032,7 @@ def test_classifier_predict_and_predict_proba_docstrings_are_consistent():
             @@ -1 +1 @@
             -Return the predicted value for each sample.
             +Return the predicted probability for each class for each sample.
-            @@ -38 +38 @@
+            @@ -40 +40 @@
             -predicted_result : Dask Array of shape = [n_samples] or shape = [n_samples, n_classes]
             +predicted_probability : Dask Array of shape = [n_samples] or shape = [n_samples, n_classes]
         """),
