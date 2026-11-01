@@ -478,6 +478,14 @@ void BinMapper::FindBin(double* values, int num_sample_values, size_t total_samp
       }
       // fix count of NaN bin
       cnt_in_bin[0] = static_cast<int>(total_sample_cnt - used_cnt);
+    } else {
+      // all values are missing: keep the mapper consistent for serialization and
+      // remote workers by reusing the same dummy bin for NaN that the normal path above uses
+      bin_2_categorical_.clear();
+      categorical_2_bin_.clear();
+      bin_2_categorical_.push_back(-1);
+      categorical_2_bin_[-1] = 0;
+      num_bin_ = 1;
     }
   }
 
@@ -507,6 +515,9 @@ void BinMapper::FindBin(double* values, int num_sample_values, size_t total_samp
         static_cast<double>(cnt_in_bin[most_freq_bin_]) / total_sample_cnt;
   } else {
     sparse_rate_ = 1.0f;
+    // trivial mappers can also be serialized (e.g. synced between workers,
+    // or written to binary dataset files), so nothing may be left uninitialized here
+    most_freq_bin_ = 0;
   }
 }
 
