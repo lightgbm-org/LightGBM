@@ -6,7 +6,7 @@ on:
       - main
 
 concurrency:
-  group: pr-${{ github.workflow }}-${{ github.ref }}
+  group: main-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 # default to 0 permissions
@@ -19,6 +19,11 @@ jobs:
     uses: ./.github/workflows/build.yml
     permissions:
       contents: write
+  docker:
+    uses: ./.github/workflows/docker.yml
+    permissions:
+      contents: read
+      statuses: read
   static-analysis:
     uses: ./.github/workflows/static_analysis.yml
     permissions:

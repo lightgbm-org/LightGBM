@@ -113,9 +113,9 @@ if [[ $TASK == "if-else" ]]; then
 fi
 
 PYTHON_ENV_MANAGER="conda"
-if [[ "${PYTHON_VERSION}" == "3.10" ]]; then
+if [[ "${PYTHON_VERSION}" == "3.11" ]]; then
     PYTHON_ENV_MANAGER="pixi"
-    CI_PIXI_ENV="py310"
+    CI_PIXI_ENV="py311"
 fi
 
 # 'pixi' is used for end-of-life Python versions
