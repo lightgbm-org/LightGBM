@@ -439,10 +439,11 @@ jobs:
       - name: Setup NuGet CLI
         uses: NuGet/setup-nuget@fd55a6f3b34392fa83fde1454582407d8c714123  # v4.0
       # ref: https://github.com/NuGet/setup-nuget/issues/168
-      - name: Setup mono
+      - name: Setup mono and OpenMP
         run: |
           sudo apt-get update -y
           sudo apt-get install --no-install-recommends -y \
+            libgomp1 \
             mono-devel
       - name: Create NuGet package
         run: |
@@ -452,6 +453,23 @@ jobs:
             -NonInteractive \
             -Verbosity detailed \
             -OutputDirectory "${BUILD_ARTIFACTSTAGINGDIRECTORY}"
+      - name: Setup .NET
+        uses: actions/setup-dotnet@26b0ec14cb23fa6904739307f278c14f94c95bf1  # v5.4.0
+        with:
+          dotnet-version: '10.0.x'
+      - name: Test NuGet package
+        env:
+          NUGET_PACKAGES: '${{ runner.temp }}/nuget-packages'
+        run: |
+          LIGHTGBM_VERSION="$(sed 's/rc/-rc/' VERSION.txt)"
+          dotnet build tests/nuget/Smoke.csproj \
+            --configuration Release \
+            --source "${BUILD_ARTIFACTSTAGINGDIRECTORY}" \
+            -p:LightGBMVersion="${LIGHTGBM_VERSION}" \
+            -p:NuGetAudit=false \
+            --output "${RUNNER_TEMP}/nuget-smoke"
+          cd "${RUNNER_TEMP}/nuget-smoke"
+          dotnet Smoke.dll
       - name: Upload artifacts
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9  # v7.0.2
         with:
