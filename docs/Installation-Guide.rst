@@ -965,6 +965,23 @@ gcc
      cmake -B build -S . -DUSE_SWIG=ON
      cmake --build build -j4
 
+NuGet Package
+~~~~~~~~~~~~~
+
+The ``LightGBM`` NuGet package built from this source supports Linux, macOS, and Windows on
+x64 (Intel/AMD) and ARM64 processors. It includes CPU libraries that use OpenMP to run on multiple threads.
+The supported .NET runtime identifiers are ``linux-x64``, ``linux-arm64``, ``osx-x64``,
+``osx-arm64``, ``win-x64``, and ``win-arm64``.
+Older packages on nuget.org may not support all of these platforms.
+
+Use the same architecture (x64 or ARM64) for your .NET runtime and these required system libraries:
+
+* Linux: a glibc-based distribution with the GCC C++ and OpenMP runtimes
+  (``libstdc++6`` and ``libgomp1`` on Debian/Ubuntu).
+* macOS: the OpenMP runtime (``libomp``), in a version that supports the macOS version where your application will run.
+* Windows: the `Microsoft Visual C++ Redistributable <https://learn.microsoft.com/en-us/cpp/windows/latest-supported-vc-redist>`__
+  for x64 or ARM64, matching your application.
+
 Build Python-package
 ~~~~~~~~~~~~~~~~~~~~
 
