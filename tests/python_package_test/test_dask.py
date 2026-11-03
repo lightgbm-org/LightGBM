@@ -2498,7 +2498,16 @@ def test_estimator_fit_docstrings_are_consistent():
             @@ -91 +83 @@
             -self : LGBMClassifier
             +self : lightgbm.DaskLGBMClassifier
-        """),
+            @@ -121 +113,9 @@
+            -        Are higher values better? e.g. ``True`` for AUC and ``False`` for binary error.+        Are higher values better? e.g. ``True`` for AUC and ``False`` for binary error.
+            +
+            +For all built-in eval metrics, validation scores reported in
+            +``evals_result_`` and ``best_score_`` are aggregated across Dask workers
+            +and reflect the full distributed validation set. Supported metrics
+            +include all built-in binary, regression, multiclass, cross-entropy,
+            +ranking (``ndcg``, ``ndcg@k``, ``map``, ``map@k``), and ordering-dependent
+            +(``auc``, ``average_precision``, ``auc_mu``) metrics. Custom Python eval
+            +functions compute per-worker only."""),
     )
     assert_docstrings_equal(
         lgb.DaskLGBMClassifier,
