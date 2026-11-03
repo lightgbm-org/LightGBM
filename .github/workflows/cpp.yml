@@ -1,17 +1,7 @@
 name: C++
 
 on:
-  push:
-    branches:
-      - main
-  pull_request:
-    branches:
-      - main
-
-# automatically cancel in-progress builds if another commit is pushed
-concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  workflow_call:
 
 # default to 0 permissions
 # (job-level overrides add the minimal permissions needed)
@@ -58,11 +48,11 @@ jobs:
             task: cpp-tests
             compiler: msvc
             container: null
-          - os: ubuntu-24.04-ppc64le
+          - os: ubuntu-24.04-ppc64le-p10
             task: cpp-tests
             compiler: gcc
             container: 'ghcr.io/lightgbm-org/lightgbm-ci:ppc64le-manylinux-2_28'
-            os-display-name: 'ubuntu24.04-ppc64le'
+            os-display-name: 'ubuntu24.04-ppc64le-p10'
           ###########
           # if-else #
           ###########
@@ -80,12 +70,12 @@ jobs:
           - os: macos-15-intel
             task: if-else
             compiler: clang
-            python_version: '3.10'
+            python_version: '3.14'
             container: null
           - os: ubuntu-latest
             task: if-else
             compiler: gcc
-            python_version: '3.11'
+            python_version: '3.14'
             container: 'ghcr.io/lightgbm-org/lightgbm-vsts-agent:manylinux_2_28_x86_64'
             os-display-name: 'manylinux_2_28'
     steps:
@@ -132,7 +122,7 @@ jobs:
           export TASK="${{ matrix.task }}"
           if [[ "${{ matrix.os }}" =~ ^macos ]]; then
               export OS_NAME="macos"
-          elif [[ "${{ matrix.os }}" == "ubuntu-latest" || "${{ matrix.os }}" == "ubuntu-24.04-ppc64le" ]]; then
+          elif [[ "${{ matrix.os }}" == "ubuntu-latest" || "${{ matrix.os }}" == "ubuntu-24.04-ppc64le-p10" ]]; then
               export OS_NAME="linux"
           fi
           if [[ "${{ matrix.container }}" == "ubuntu:22.04" ]]; then
@@ -148,15 +138,3 @@ jobs:
           $env:BUILD_SOURCESDIRECTORY = $env:BUILD_DIRECTORY
           $env:TASK = "${{ matrix.task }}"
           & "$env:GITHUB_WORKSPACE/.ci/test-windows.ps1"
-  all-cpp-jobs-successful:
-    if: always()
-    runs-on: ubuntu-latest
-    needs:
-      - test
-    permissions:
-      statuses: read
-    steps:
-      - name: Note that all tests succeeded
-        uses: re-actors/alls-green@b5b5b37504aa4183270bd3d855c52a67f212be35  # v1.3.0
-        with:
-          jobs: ${{ toJSON(needs) }}

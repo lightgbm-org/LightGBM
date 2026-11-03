@@ -1,6 +1,5 @@
 import copy
 import io
-import socket
 import subprocess
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
@@ -11,25 +10,20 @@ import pytest
 from sklearn.datasets import make_blobs, make_regression
 from sklearn.metrics import accuracy_score
 
-TESTS_DIR = Path(__file__).absolute().parent
+from .utils import find_random_open_port
 
 
 @pytest.fixture(scope="module")
 def executable(pytestconfig) -> str:
     """Returns the path to the lightgbm executable."""
-    return pytestconfig.getoption("execfile")
-
-
-def _find_random_open_port() -> int:
-    """Find a random open port on localhost."""
-    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-        s.bind(("", 0))
-        port = s.getsockname()[1]
-    return port  # noqa: RET504
+    cli_path = pytestconfig.getoption("execfile")
+    if not Path(cli_path).exists():
+        pytest.skip(f"could not find LightGBM CLI at path '{cli_path}'")
+    return cli_path
 
 
 def _generate_n_ports(n: int) -> Generator[int, None, None]:
-    return (_find_random_open_port() for _ in range(n))
+    return (find_random_open_port() for _ in range(n))
 
 
 def _write_dict(d: Dict, file: io.TextIOWrapper) -> None:
@@ -56,7 +50,6 @@ class DistributedMockup:
     default_train_config = {
         "task": "train",
         "pre_partition": True,
-        "machine_list_file": TESTS_DIR / "mlist.txt",
         "tree_learner": "data",
         "force_row_wise": True,
         "verbose": 0,
@@ -65,19 +58,19 @@ class DistributedMockup:
         "num_threads": 2,
     }
 
-    default_predict_config = {
-        "task": "predict",
-        "data": TESTS_DIR / "train.txt",
-        "input_model": TESTS_DIR / "model0.txt",
-        "output_result": TESTS_DIR / "predictions.txt",
-    }
-
-    def __init__(self, executable: str):
+    def __init__(self, executable: str, directory: Path):
         self.executable = executable
+        self.directory = directory
+        self.default_predict_config = {
+            "task": "predict",
+            "data": directory / "train.txt",
+            "input_model": directory / "model0.txt",
+            "output_result": directory / "predictions.txt",
+        }
 
     def worker_train(self, i: int) -> subprocess.CompletedProcess:
         """Start the training process on the `i`-th worker."""
-        config_path = TESTS_DIR / f"train{i}.conf"
+        config_path = self.directory / f"train{i}.conf"
         cmd = [self.executable, f"config={config_path}"]
         return subprocess.run(cmd, check=True)
 
@@ -94,16 +87,16 @@ class DistributedMockup:
         if i == max_tries:
             raise RuntimeError("Unable to find non-colliding ports.")
         self.listen_ports = list(ports)
-        with open(TESTS_DIR / "mlist.txt", "wt") as f:
+        with open(self.directory / "mlist.txt", "wt") as f:
             for port in self.listen_ports:
                 f.write(f"127.0.0.1 {port}\n")
 
     def _write_data(self, partitions: List[np.ndarray]) -> None:
         """Write all training data as train.txt and each training partition as train{i}.txt."""
         all_data = np.vstack(partitions)
-        np.savetxt(str(TESTS_DIR / "train.txt"), all_data, delimiter=",")
+        np.savetxt(str(self.directory / "train.txt"), all_data, delimiter=",")
         for i, partition in enumerate(partitions):
-            np.savetxt(str(TESTS_DIR / f"train{i}.txt"), partition, delimiter=",")
+            np.savetxt(str(self.directory / f"train{i}.txt"), partition, delimiter=",")
 
     def fit(self, partitions: List[np.ndarray], train_config: Dict) -> None:
         """Run the distributed training process on a single machine.
@@ -117,6 +110,7 @@ class DistributedMockup:
         The whole training set is saved as train.txt.
         """
         self.train_config = copy.deepcopy(self.default_train_config)
+        self.train_config["machine_list_file"] = self.directory / "mlist.txt"
         self.train_config.update(train_config)
         self.n_workers = self.train_config["num_machines"]
         self._set_ports()
@@ -141,14 +135,14 @@ class DistributedMockup:
         """
         self.predict_config = copy.deepcopy(self.default_predict_config)
         self.predict_config.update(predict_config)
-        config_path = TESTS_DIR / "predict.conf"
+        config_path = self.directory / "predict.conf"
         with open(config_path, "wt") as file:
             _write_dict(self.predict_config, file)
         cmd = [self.executable, f"config={config_path}"]
         result = subprocess.run(cmd, check=True)
         if result.returncode != 0:
             raise RuntimeError("Error in prediction")
-        return np.loadtxt(str(TESTS_DIR / "predictions.txt"))
+        return np.loadtxt(str(self.directory / "predictions.txt"))
 
     def write_train_config(self, i: int) -> None:
         """Create a file train{i}.conf with the required configuration to train.
@@ -156,16 +150,16 @@ class DistributedMockup:
         Each worker gets a different port and piece of the data, the rest are the
         model parameters contained in `self.config`.
         """
-        with open(TESTS_DIR / f"train{i}.conf", "wt") as file:
-            output_model = TESTS_DIR / f"model{i}.txt"
-            data = TESTS_DIR / f"train{i}.txt"
+        with open(self.directory / f"train{i}.conf", "wt") as file:
+            output_model = self.directory / f"model{i}.txt"
+            data = self.directory / f"train{i}.txt"
             file.write(f"output_model = {output_model}\n")
             file.write(f"local_listen_port = {self.listen_ports[i]}\n")
             file.write(f"data = {data}\n")
             _write_dict(self.train_config, file)
 
 
-def test_classifier(executable):
+def test_classifier(executable, tmp_path):
     """Test the classification task."""
     num_machines = 2
     data = create_data(task="binary-classification")
@@ -174,14 +168,14 @@ def test_classifier(executable):
         "objective": "binary",
         "num_machines": num_machines,
     }
-    clf = DistributedMockup(executable)
+    clf = DistributedMockup(executable, directory=tmp_path)
     clf.fit(partitions, train_params)
     y_probas = clf.predict(predict_config={})
     y_pred = y_probas > 0.5
     assert accuracy_score(clf.label_, y_pred) == 1.0
 
 
-def test_regressor(executable):
+def test_regressor(executable, tmp_path):
     """Test the regression task."""
     num_machines = 2
     data = create_data(task="regression")
@@ -190,7 +184,7 @@ def test_regressor(executable):
         "objective": "regression",
         "num_machines": num_machines,
     }
-    reg = DistributedMockup(executable)
+    reg = DistributedMockup(executable, directory=tmp_path)
     reg.fit(partitions, train_params)
     y_pred = reg.predict(predict_config={})
     np.testing.assert_allclose(y_pred, reg.label_, rtol=0.2, atol=50.0)

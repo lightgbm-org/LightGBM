@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING, Any, Dict, List, Optional, Tuple, Union
 
 import numpy as np
 
-from .basic import Booster, _data_from_pandas, _is_zero, _log_warning, _MissingType
+from .basic import Booster, _data_from_narwhals, _is_zero, _log_warning, _MissingType, _pandas_df_to_numpy
 from .compat import pd_DataFrame
 from .sklearn import LGBMModel
 
@@ -102,7 +102,7 @@ def plot_importance(
     -------
     ax : matplotlib.axes.Axes
         The plot with model's feature importances.
-    """
+    """  # noqa: DOC105
     try:
         import matplotlib.pyplot as plt  # noqa: PLC0415
     except ImportError as err:
@@ -238,7 +238,7 @@ def plot_split_value_histogram(
     -------
     ax : matplotlib.axes.Axes
         The plot with specified model's feature split value histogram.
-    """
+    """  # noqa: DOC105
     try:
         import matplotlib.pyplot as plt  # noqa: PLC0415
         from matplotlib.ticker import MaxNLocator  # noqa: PLC0415
@@ -347,7 +347,7 @@ def plot_metric(
     -------
     ax : matplotlib.axes.Axes
         The plot with metric's history over the training.
-    """
+    """  # noqa: DOC105
     try:
         import matplotlib.pyplot as plt  # noqa: PLC0415
     except ImportError as err:
@@ -700,7 +700,7 @@ def create_tree_digraph(
     -------
     graph : graphviz.Digraph
         The digraph representation of specified tree.
-    """
+    """  # noqa: DOC105
     if isinstance(booster, LGBMModel):
         booster = booster.booster_
     elif not isinstance(booster, Booster):
@@ -725,12 +725,13 @@ def create_tree_digraph(
         if example_case.shape[0] != 1:
             raise ValueError("example_case must have a single row.")
         if isinstance(example_case, pd_DataFrame):
-            example_case = _data_from_pandas(
+            example_case = _data_from_narwhals(
                 data=example_case,
                 feature_name="auto",
                 categorical_feature="auto",
                 pandas_categorical=booster.pandas_categorical,
             )[0]
+            example_case = _pandas_df_to_numpy(example_case)
         example_case = example_case[0]
 
     return _to_graphviz(
@@ -817,7 +818,7 @@ def plot_tree(
     -------
     ax : matplotlib.axes.Axes
         The plot with single tree.
-    """
+    """  # noqa: DOC105
     try:
         import matplotlib.image  # noqa: PLC0415
         import matplotlib.pyplot as plt  # noqa: PLC0415
