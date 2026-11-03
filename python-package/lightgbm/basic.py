@@ -797,9 +797,10 @@ def _data_from_narwhals(
             for col, categories in zip(cat_cols, pandas_categorical, strict=True)
         )
 
-    # use cat cols from DataFrame
+    # use cat cols from DataFrame, by position: integer column labels would otherwise be read as positions,
+    # and column labels don't match the names passed in ``feature_name``
     if categorical_feature == "auto":
-        categorical_feature = cat_cols_not_ordered
+        categorical_feature = [i for i, col in enumerate(data.columns) if col in cat_cols_not_ordered]
 
     return (
         data.to_native(),
