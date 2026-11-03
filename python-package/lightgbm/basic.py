@@ -1303,7 +1303,9 @@ class _InnerPredictor:
             n_preds_sections = np.array([0] + n_preds, dtype=np.intp).cumsum()
             preds = np.empty(sum(n_preds), dtype=np.float64)
             for chunk, (start_idx_pred, end_idx_pred) in zip(
-                np.array_split(mat, sections), zip(n_preds_sections, n_preds_sections[1:], strict=True), strict=True
+                np.array_split(mat, sections),
+                zip(n_preds_sections[:-1], n_preds_sections[1:], strict=True),
+                strict=True,
             ):
                 # avoid memory consumption by arrays concatenation operations
                 self.__inner_predict_np2d(
@@ -1524,8 +1526,8 @@ class _InnerPredictor:
             n_preds_sections = np.array([0] + n_preds, dtype=np.intp).cumsum()
             preds = np.empty(sum(n_preds), dtype=np.float64)
             for (start_idx, end_idx), (start_idx_pred, end_idx_pred) in zip(
-                zip(sections, sections[1:], strict=True),
-                zip(n_preds_sections, n_preds_sections[1:], strict=True),
+                zip(sections[:-1], sections[1:], strict=True),
+                zip(n_preds_sections[:-1], n_preds_sections[1:], strict=True),
                 strict=True,
             ):
                 # avoid memory consumption by arrays concatenation operations
