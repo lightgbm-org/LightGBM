@@ -3159,6 +3159,7 @@ def test_feature_sampling_is_unchanged_by_unrelated_updates(seed, update):
         "seed": seed,
         "deterministic": True,
         "force_row_wise": True,
+        "gpu_use_dp": True,
         "num_threads": 1,
         "verbosity": -1,
     }
