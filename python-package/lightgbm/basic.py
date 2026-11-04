@@ -4893,6 +4893,8 @@ class Booster:
                 you can install the shap package (https://github.com/slundberg/shap).
                 Note that unlike the shap package, with ``pred_contrib`` we return a matrix with an extra
                 column, where the last column is the expected value.
+                Summing each row's Shapley values with its expected value gives you the model's raw score
+                (as returned by ``predict(X, raw_score=True)``).
 
         data_has_header : bool, optional (default=False)
             Whether the data has header.

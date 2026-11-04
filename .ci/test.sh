@@ -302,7 +302,12 @@ else
     cmake -B build -S .
 fi
 
-cmake --build build --target _lightgbm -j4 || exit 1
+# targets:
+#
+#   _lightgbm = lib_lightgbm.{dylib,so}
+#   _ lightgbm = the CLI (for distributed tests)
+#
+cmake --build build --target _lightgbm lightgbm -j4 || exit 1
 
 sh ./build-python.sh install --precompile || exit 1
 
