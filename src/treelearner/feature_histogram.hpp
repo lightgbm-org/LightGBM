@@ -21,6 +21,8 @@
 #include "monotone_constraints.hpp"
 #include "split_info.hpp"
 
+#include <fstream>
+
 namespace LightGBM {
 
 class FeatureMetainfo {
@@ -31,6 +33,7 @@ class FeatureMetainfo {
   uint32_t default_bin;
   int8_t monotone_type = 0;
   double penalty = 1.0;
+  bool track_lookup_bins = false;
   /*! \brief pointer of tree config */
   const Config* config;
   BinType bin_type;
@@ -59,6 +62,7 @@ class FeatureHistogram {
    * \param meta pointer to a FeatureMetaInfo object for this feature, with details like how missing values are handled and a pointer to the Config object with parameters
    */
   void Init(hist_t* data, int16_t* data_int16, const FeatureMetainfo* meta) {
+    bin_mask_.Invalidate();
     meta_ = meta;
     data_ = data;
     data_int16_ = data_int16;
@@ -71,6 +75,7 @@ class FeatureHistogram {
    * \param meta pointer to a FeatureMetaInfo object for this feature, with details like how missing values are handled and a pointer to the Config object with parameters
    */
   void Init(hist_t* data, const FeatureMetainfo* meta) {
+    bin_mask_.Invalidate();
     meta_ = meta;
     data_ = data;
     data_int16_ = nullptr;
@@ -86,6 +91,8 @@ class FeatureHistogram {
   }
 
   hist_t* RawData() { return data_; }
+
+  HistogramBinMask* bin_mask() { return meta_->track_lookup_bins ? &bin_mask_ : nullptr; }
 
   int32_t* RawDataInt32() { return reinterpret_cast<int32_t*>(data_); }
 
@@ -140,6 +147,22 @@ class FeatureHistogram {
         }
       }
     } else {
+      if (meta_->track_lookup_bins && bin_mask_.valid() && other.bin_mask_.valid()) {
+        other.bin_mask_.ForEach([this, &other](int bin) {
+          if (bin >= meta_->offset) {
+            const size_t index = 2 * static_cast<size_t>(bin - meta_->offset);
+            data_[index] -= other.data_[index];
+            data_[index + 1] -= other.data_[index + 1];
+            if (data_[index] != 0.0 || data_[index + 1] != 0.0) {
+              bin_mask_.Mark(bin);
+            } else {
+              bin_mask_.Unmark(bin);
+            }
+          }
+        });
+        return;
+      }
+      bin_mask_.Invalidate();
       for (int i = 0; i < (meta_->num_bin - meta_->offset) * 2; ++i) {
         data_[i] -= other.data_[i];
       }
@@ -686,6 +709,7 @@ class FeatureHistogram {
    * \brief Restore histogram from memory
    */
   void FromMemory(char* memory_data) {
+    bin_mask_.Invalidate();
     std::memcpy(data_, memory_data,
                 (meta_->num_bin - meta_->offset) * kHistEntrySize);
   }
@@ -769,7 +793,18 @@ class FeatureHistogram {
                               data_size_t left_count,
                               data_size_t right_count,
                               double parent_output) {
-    if (!USE_MC) {
+    if (!USE_MC && !USE_L1 && !USE_MAX_OUTPUT && !USE_SMOOTHING) {
+      // The two leaf gains are independent. Vectorize across leaves without
+      // reassociating either formula or the histogram's cumulative sums.
+      const double gradients[2] = {sum_left_gradients, sum_right_gradients};
+      const double hessians[2] = {sum_left_hessians, sum_right_hessians};
+      double gains[2];
+      #pragma omp simd simdlen(2)
+      for (int i = 0; i < 2; ++i) {
+        gains[i] = (gradients[i] * gradients[i]) / (hessians[i] + l2);
+      }
+      return gains[0] + gains[1];
+    } else if (!USE_MC) {
       return GetLeafGain<USE_L1, USE_MAX_OUTPUT, USE_SMOOTHING>(sum_left_gradients,
                                                                 sum_left_hessians, l1, l2,
                                                                 max_delta_step, smoothing,
@@ -854,6 +889,11 @@ class FeatureHistogram {
     }
 
     if (REVERSE) {
+      const bool skip_empty_bins = !USE_RAND && !USE_MC &&
+          meta_->config->differential_feature_bin_mode == "lookup";
+      const bool use_bin_mask = skip_empty_bins && bin_mask_.valid();
+      HistogramBinMask::ReverseIterator bin_iterator;
+      bool first_bin = true;
       double sum_right_gradient = 0.0f;
       double sum_right_hessian = kEpsilon;
       data_size_t right_count = 0;
@@ -863,6 +903,10 @@ class FeatureHistogram {
 
       // from right to left, and we don't need data in bin0
       for (; t >= t_end; --t) {
+        if (use_bin_mask && !first_bin) {
+          t = bin_iterator.Next() - offset;
+          if (t < t_end) { break; }
+        }
         // need to skip default bin
         if (SKIP_DEFAULT_BIN) {
           if ((t + offset) == static_cast<int>(meta_->default_bin)) {
@@ -871,6 +915,25 @@ class FeatureHistogram {
         }
         const auto grad = GET_GRAD(data_, t);
         const auto hess = GET_HESS(data_, t);
+        // An empty bin leaves this candidate identical to the preceding one.
+        // Reverse scanning already selected the highest threshold on a tie.
+        if (skip_empty_bins && !first_bin && grad == 0.0 && hess == 0.0) {
+          if (use_bin_mask) { continue; }
+          // Lookup histograms often contain long runs of unused bin pairs.
+          // Compare several zero entries at once, without adding or otherwise
+          // reassociating any floating-point values. Noncanonical zero
+          // representations simply take the scalar path.
+          static constexpr hist_t zero_bins[8] = {};
+          while (t >= t_end + 4 &&
+                 std::memcmp(data_ + 2 * (t - 4), zero_bins, sizeof(zero_bins)) == 0) {
+            t -= 4;
+          }
+          continue;
+        }
+        if (first_bin && use_bin_mask) {
+          bin_iterator = bin_mask_.Reverse(t - 1 + offset);
+        }
+        first_bin = false;
         data_size_t cnt =
             static_cast<data_size_t>(Common::RoundInt(hess * cnt_factor));
         sum_right_gradient += grad;
@@ -1356,6 +1419,7 @@ class FeatureHistogram {
   hist_t* data_;
   int16_t* data_int16_;
   bool is_splittable_ = true;
+  HistogramBinMask bin_mask_;
 
   std::function<void(double, double, data_size_t, const FeatureConstraint*,
                      double, SplitInfo*)>
@@ -1423,6 +1487,11 @@ class HistogramPool {
 #pragma omp parallel for num_threads(OMP_NUM_THREADS()) schedule(static, 512) if (num_feature >= 1024)
     for (int i = 0; i < num_feature; ++i) {
       if (USE_DATA) {
+        ref_feature_meta[i].track_lookup_bins =
+            train_data->FeatureBinMapper(i)->HasPairwiseBinLookup() &&
+            config->differential_feature_bin_mode == "lookup" &&
+            config->tree_learner == "serial" && config->device_type == "cpu" &&
+            !config->use_quantized_grad;
         ref_feature_meta[i].num_bin = train_data->FeatureNumBin(i);
         ref_feature_meta[i].default_bin =
             train_data->FeatureBinMapper(i)->GetDefaultBin();
@@ -1503,6 +1572,7 @@ class HistogramPool {
       }
       OMP_THROW_EX();
     }
+    offsets_ = offsets;
   }
 
   void ResetConfig(const Dataset* train_data, const Config* config) {
@@ -1521,6 +1591,18 @@ class HistogramPool {
           pool_[i][j].ResetFunc();
         }
       }
+    }
+  }
+
+  void DumpContent() const {
+    std::ofstream fout("historam_wise.txt");
+    int cur_offsets_ptr = 0;
+    for (int i = 0; i < data_[0].size() / 2; ++i) {
+      if (i == offsets_[cur_offsets_ptr]) {
+        fout << "offset " << cur_offsets_ptr << " " << offsets_[cur_offsets_ptr] << " " << feature_metas_[cur_offsets_ptr].num_bin << " " << static_cast<int>(feature_metas_[cur_offsets_ptr].offset) << std::endl;
+        ++cur_offsets_ptr;
+      }
+      fout << i << " " << data_[0][2 * i] << " " << data_[0][2 * i + 1] << std::endl;
     }
   }
 
@@ -1593,6 +1675,7 @@ class HistogramPool {
   std::vector<int> inverse_mapper_;
   std::vector<int> last_used_time_;
   int cur_time_ = 0;
+  std::vector<uint32_t> offsets_;
 };
 
 }  // namespace LightGBM

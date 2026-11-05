@@ -52,7 +52,8 @@ class MultiValBinWrapper {
       const score_t* gradients,
       const score_t* hessians,
       std::vector<hist_t, Common::AlignmentAllocator<hist_t, kAlignedSize>>* hist_buf,
-      hist_t* origin_hist_data) {
+      hist_t* origin_hist_data, const int8_t* is_feature_used = nullptr,
+      const std::vector<HistogramBinMask*>* bin_masks = nullptr) {
     const auto cur_multi_val_bin = (is_use_subcol_ || is_use_subrow_)
           ? multi_val_bin_subset_.get()
           : multi_val_bin_.get();
@@ -62,6 +63,19 @@ class MultiValBinWrapper {
       data_block_size_ = num_data;
       Threading::BlockInfo<data_size_t>(num_threads_, num_data, min_block_size_,
                                         &n_data_block_, &data_block_size_);
+      if (!USE_QUANT_GRAD && !is_use_subcol_ && !is_use_subrow_ &&
+          cur_multi_val_bin->ConstructHistogramsByFeature(USE_INDICES ? data_indices : nullptr,
+              num_data, num_data_, n_data_block_, data_block_size_, gradients, hessians, ORDERED,
+              num_threads_, origin_hist_data, is_feature_used,
+              bin_masks != nullptr && !bin_masks->empty() ? bin_masks->data() : nullptr)) {
+        global_timer.Stop("Dataset::sparse_bin_histogram");
+        return;
+      }
+      if (bin_masks != nullptr) {
+        for (auto* mask : *bin_masks) {
+          if (mask != nullptr) { mask->Invalidate(); }
+        }
+      }
       ResizeHistBuf(hist_buf, cur_multi_val_bin, origin_hist_data);
       const int inner_hist_bits = (data_block_size_ * num_grad_quant_bins_ < 256 && HIST_BITS == 16) ? 8 : HIST_BITS;
       OMP_INIT_EX();
@@ -267,6 +281,7 @@ class MultiValBinWrapper {
 };
 
 struct TrainingShareStates {
+  std::vector<HistogramBinMask*> histogram_bin_masks;
   int num_threads = 0;
   bool is_col_wise = true;
   bool is_constant_hessian = true;
@@ -315,10 +330,11 @@ struct TrainingShareStates {
                           data_size_t num_data,
                           const score_t* gradients,
                           const score_t* hessians,
-                          hist_t* hist_data) {
+                          hist_t* hist_data, const int8_t* is_feature_used = nullptr) {
     if (multi_val_bin_wrapper_ != nullptr) {
       multi_val_bin_wrapper_->ConstructHistograms<USE_INDICES, ORDERED, USE_QUANT_GRAD, HIST_BITS>(
-        data_indices, num_data, gradients, hessians, &hist_buf_, hist_data);
+        data_indices, num_data, gradients, hessians, &hist_buf_, hist_data, is_feature_used,
+        &histogram_bin_masks);
     }
   }
 
