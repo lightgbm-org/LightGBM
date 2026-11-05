@@ -941,6 +941,8 @@ bool Dataset::SetFieldFromArrow(const char* field_name, struct ArrowArrayStream*
     metadata_.SetInitScore(stream);
   } else if (name == std::string("query") || name == std::string("group")) {
     metadata_.SetQuery(stream);
+  } else if (name == std::string("position")) {
+    metadata_.SetPosition(stream);
   } else {
     return false;
   }
@@ -959,6 +961,8 @@ bool Dataset::SetFieldFromArrow(const char* field_name, int64_t n_chunks,
     metadata_.SetInitScore(n_chunks, chunks, schema);
   } else if (name == std::string("query") || name == std::string("group")) {
     metadata_.SetQuery(n_chunks, chunks, schema);
+  } else if (name == std::string("position")) {
+    metadata_.SetPosition(n_chunks, chunks, schema);
   } else {
     return false;
   }

@@ -118,7 +118,7 @@ class CUDARowData {
   std::vector<int> feature_partition_column_index_offsets_;
   /*! \brief histogram offset of each column */
   std::vector<uint32_t> column_hist_offsets_;
-  /*! \brief hisotgram offset of each partition */
+  /*! \brief histogram offset of each partition */
   std::vector<uint32_t> partition_hist_offsets_;
   /*! \brief maximum number of columns among all feature partitions */
   int max_num_column_per_partition_;
@@ -165,7 +165,7 @@ class CUDARowData {
   CUDAVector<int> cuda_feature_partition_column_index_offsets_;
   /*! \brief histogram offset of each column */
   CUDAVector<uint32_t> cuda_column_hist_offsets_;
-  /*! \brief hisotgram offset of each partition */
+  /*! \brief histogram offset of each partition */
   CUDAVector<uint32_t> cuda_partition_hist_offsets_;
   /*! \brief block buffer when calculating prefix sum */
   CUDAVector<uint16_t> cuda_block_buffer_uint16_t_;

@@ -4,6 +4,8 @@
 import inspect
 import re
 import socket
+import textwrap
+import warnings
 from itertools import groupby
 from sys import platform
 from urllib.parse import urlparse
@@ -15,6 +17,7 @@ import lightgbm as lgb
 
 from .utils import (
     BuildInfo,
+    assert_docstrings_equal,
     np_assert_array_equal,
     sklearn_multiclass_custom_objective,
 )
@@ -1198,6 +1201,55 @@ def test_model_and_local_version_are_picklable_whether_or_not_client_set_explici
             assert_eq(preds_orig_local, preds_loaded_model_local)
 
 
+def test_thread_parameter_warnings(cluster):
+    with Client(cluster) as client:
+        X = da.from_array(np.arange(40).reshape(20, 2), chunks=(10, 2))
+        y = da.from_array(np.arange(20), chunks=10)
+        common_params = {
+            "client": client,
+            "n_estimators": 1,
+            "num_leaves": 2,
+            "min_child_samples": 2,
+            "verbosity": -1,
+        }
+
+        # Default parameters.
+        model = lgb.DaskLGBMRegressor(**common_params)
+        with warnings.catch_warnings(record=True) as recorded:
+            warnings.simplefilter("always")
+            model.fit(X, y)
+        assert [str(w.message) for w in recorded] == []
+        assert model.booster_.params["num_threads"] == 2
+
+        # Explicitly passing n_jobs=None.
+        model = lgb.DaskLGBMRegressor(**common_params, n_jobs=None)
+        with warnings.catch_warnings(record=True) as recorded:
+            warnings.simplefilter("always")
+            model.fit(X, y)
+        assert [str(w.message) for w in recorded] == []
+        assert model.booster_.params["num_threads"] == 2
+
+        # Explicitly passing n_jobs=-1.
+        model = lgb.DaskLGBMRegressor(**common_params, n_jobs=-1)
+        with warnings.catch_warnings(record=True) as recorded:
+            warnings.simplefilter("always")
+            model.fit(X, y)
+        assert [str(w.message) for w in recorded] == []
+        assert model.booster_.params["num_threads"] == 2
+
+        # Explicit thread and machine counts.
+        model = lgb.DaskLGBMRegressor(**common_params, n_jobs=3, num_machines=2)
+        with warnings.catch_warnings(record=True) as recorded:
+            warnings.simplefilter("always")
+            model.fit(X, y)
+        assert [str(w.message) for w in recorded] == [
+            "Parameter 'num_machines' will be ignored (determined from the Dask cluster).",
+            "Parameter 'n_jobs=3' will be ignored. The number of threads is set by the Dask worker. "
+            "To avoid this warning, omit 'n_jobs' or set it to None or -1.",
+        ]
+        assert model.booster_.params["num_threads"] == 2
+
+
 def test_warns_and_continues_on_unrecognized_tree_learner(cluster):
     with Client(cluster) as client:
         X = da.random.random((1e3, 10))
@@ -1453,8 +1505,13 @@ def test_dask_methods_and_sklearn_equivalents_have_similar_signatures(methods):
     assert dask_spec.varargs == sklearn_spec.varargs
     if sklearn_spec.varkw:
         assert dask_spec.varkw == sklearn_spec.varkw[: len(dask_spec.varkw)]
-    assert dask_spec.kwonlyargs == sklearn_spec.kwonlyargs
-    assert dask_spec.kwonlydefaults == sklearn_spec.kwonlydefaults
+    # Dask estimators require that 'categorical_feature' and 'feature_name' are keyword-only,
+    # otherwise should have identical keywordarguments
+    kwonly_diff = set(dask_spec.kwonlyargs).difference(set(sklearn_spec.kwonlyargs))
+    if kwonly_diff:
+        assert kwonly_diff == {"categorical_feature", "feature_name"}
+        shared_keys = list(set(dask_spec.kwonlyargs).intersection(set(sklearn_spec.kwonlyargs)))
+        assert dask_spec.kwonlydefaults.fromkeys(shared_keys) == sklearn_spec.kwonlydefaults.fromkeys(shared_keys)
     for param in dask_spec.args:
         error_msg = f"param '{param}' has different default values in the methods"
         assert dask_params[param].default == sklearn_params[param].default, error_msg
@@ -1520,34 +1577,27 @@ def test_init_score(task, output, cluster, rng):
             assert_eq(pred, pred_init_score)
 
 
-def sklearn_checks_to_run():
-    check_names = ["check_estimator_get_tags_default_keys", "check_get_params_invariance", "check_set_params"]
-    for check_name in check_names:
-        check_func = getattr(sklearn_checks, check_name, None)
-        if check_func:
-            yield check_func
-
-
-def _tested_estimators():
-    for Estimator in [lgb.DaskLGBMClassifier, lgb.DaskLGBMRegressor]:
-        yield Estimator()
-
-
-@pytest.mark.parametrize("estimator", _tested_estimators())
-@pytest.mark.parametrize("check", sklearn_checks_to_run())
+@pytest.mark.parametrize(
+    "estimator",
+    [
+        lgb.DaskLGBMClassifier(),
+        lgb.DaskLGBMRanker(),
+        lgb.DaskLGBMRegressor(),
+    ],
+)
+@pytest.mark.parametrize(
+    "check",
+    [
+        sklearn_checks.check_get_params_invariance,
+        sklearn_checks.check_parameters_default_constructible,
+        sklearn_checks.check_set_params,
+    ],
+)
 def test_sklearn_integration(estimator, check, cluster):
     with Client(cluster):
         estimator.set_params(local_listen_port=18000, time_out=5)
         name = type(estimator).__name__
         check(name, estimator)
-
-
-# this test is separate because it takes a not-yet-constructed estimator
-@pytest.mark.parametrize("estimator", list(_tested_estimators()))
-def test_parameters_default_constructible(estimator):
-    name = estimator.__class__.__name__
-    Estimator = estimator
-    sklearn_checks.check_parameters_default_constructible(name, Estimator)
 
 
 @pytest.mark.parametrize("task", tasks)
@@ -1639,6 +1689,57 @@ def test_predict_returns_expected_dtypes(task, output, cluster):
         assert preds_leaves.dtype == np.int32
 
 
+@pytest.mark.parametrize("task", tasks)
+@pytest.mark.parametrize("all_empty", [False, True])
+def test_predict_dataframe_modes_together(task, all_empty, cluster):
+    with Client(cluster) as client:
+        _, _, _, _, dX, dy, _, dg = _create_data(objective=task, output="dataframe-with-categorical", group=None)
+        model = task_to_dask_factory[task](
+            client=client, n_estimators=3, num_leaves=3, random_state=0, time_out=5, verbose=-1
+        )
+        model.fit(dX, dy, group=dg)
+
+        sample = dX.head(5)
+        empty = sample.iloc[:0]
+        parts = [empty, empty if all_empty else sample, empty]
+        prediction_data = dd.from_delayed([dask.delayed(part) for part in parts], meta=empty)
+        local_model = model.to_local()
+        prediction_options = [
+            {},
+            {"raw_score": True},
+            {"pred_leaf": True},
+            {"pred_contrib": True},
+            {"pred_leaf": True, "start_iteration": 1, "num_iteration": 1},
+            {"pred_contrib": True, "start_iteration": 1, "num_iteration": 1},
+            {"pred_leaf": True, "start_iteration": 1, "num_iteration": 2},
+            {"pred_leaf": True, "start_iteration": 2, "num_iteration": 1},
+        ]
+        predictions = []
+        expected_results = []
+        for options in prediction_options:
+            # predict()
+            expected = local_model.predict(sample, **options)
+            if all_empty:
+                expected = expected[:0]
+            predictions.append(model.predict(prediction_data, **options))
+            expected_results.append(expected)
+
+            # predict_proba() (classification-only)
+            if task.endswith("classification"):
+                expected = local_model.predict_proba(sample, **options)
+                if all_empty:
+                    expected = expected[:0]
+                predictions.append(model.predict_proba(prediction_data, **options))
+                expected_results.append(expected)
+        actual_results = dask.compute(*predictions)
+        for prediction, actual, expected in zip(predictions, actual_results, expected_results, strict=True):
+            assert prediction.ndim == expected.ndim
+            assert prediction.dtype == expected.dtype
+            assert actual.shape == expected.shape
+            assert actual.dtype == expected.dtype
+            np_assert_array_equal(actual, expected, strict=True)
+
+
 @pytest.mark.parametrize("output", data_output)
 @pytest.mark.parametrize("use_init_score", [False, True])
 def test_predict_stump(output, use_init_score, cluster, rng):
@@ -1699,3 +1800,240 @@ def test_distributed_quantized_training(tmp_path, cluster):
         p1 = dask_classifier.predict(dX)
         rmse = np.sqrt(np.mean((p1.compute() - y) ** 2))
         assert quant_rmse < rmse + 7.0
+
+
+@pytest.mark.parametrize(
+    "method",
+    [
+        "get_params",
+        "set_params",
+    ],
+)
+def test_estimator_docstrings_that_should_be_identical(method):
+    assert_docstrings_equal(lgb.LGBMClassifier, method, lgb.DaskLGBMClassifier, method)
+    assert_docstrings_equal(lgb.DaskLGBMClassifier, method, lgb.DaskLGBMRanker, method)
+    assert_docstrings_equal(lgb.DaskLGBMRanker, method, lgb.DaskLGBMRegressor, method)
+
+
+def test_estimator_constructor_docstrings_are_consistent():
+    assert_docstrings_equal(
+        lgb.LGBMClassifier,
+        "__init__",
+        lgb.DaskLGBMClassifier,
+        "__init__",
+        expected_diff=textwrap.dedent("""\
+            --- LGBMClassifier.__init__
+            +++ DaskLGBMClassifier.__init__
+            @@ -78,0 +79,4 @@
+            +client : distributed.Client or None, optional (default=None)
+            +    Dask client.
+            +    If ``None``, ``distributed.default_client()`` will be used at runtime.
+            +    The Dask client used by this class will not be saved if the model object is pickled.
+        """),
+    )
+    assert_docstrings_equal(lgb.DaskLGBMClassifier, "__init__", lgb.DaskLGBMRanker, "__init__")
+    assert_docstrings_equal(lgb.DaskLGBMRanker, "__init__", lgb.DaskLGBMRegressor, "__init__")
+
+
+def test_estimator_fit_docstrings_are_consistent():
+    assert_docstrings_equal(
+        lgb.LGBMClassifier,
+        "fit",
+        lgb.DaskLGBMClassifier,
+        "fit",
+        expected_diff=textwrap.dedent("""\
+            --- LGBMClassifier.fit
+            +++ DaskLGBMClassifier.fit
+            @@ -5 +5 @@
+            -X : numpy array, pandas DataFrame, pyarrow Table, polars DataFrame, scipy.sparse, list of lists of int or float of shape = [n_samples, n_features]
+            +X : Dask Array or Dask DataFrame of shape = [n_samples, n_features]
+            @@ -14 +14 @@
+            -y : numpy array, pandas DataFrame, pandas Series, list of int or float, pyarrow ChunkedArray or polars Series of shape = [n_samples]
+            +y : Dask Array, Dask DataFrame or Dask Series of shape = [n_samples]
+            @@ -23 +23 @@
+            -sample_weight : numpy array, pandas Series, list of int or float, pyarrow ChunkedArray, polars Series of shape = [n_samples] or None, optional (default=None)
+            +sample_weight : Dask Array or Dask Series of shape = [n_samples] or None, optional (default=None)
+            @@ -32 +32 @@
+            -init_score : numpy array, pandas DataFrame, pandas Series, list of int or float, list of lists, pyarrow ChunkedArray, pyarrow Table, polars Series, polars DataFrame of shape = [n_samples] or shape = [n_samples * n_classes] (for multi-class task) or shape = [n_samples, n_classes] (for multi-class task) or None, optional (default=None)
+            +init_score : Dask Array or Dask Series of shape = [n_samples] or shape = [n_samples * n_classes] (for multi-class task), or Dask Array or Dask DataFrame of shape = [n_samples, n_classes] (for multi-class task), or None, optional (default=None)
+            @@ -49 +49 @@
+            -eval_sample_weight : list of array (same types as ``sample_weight`` supports), or None, optional (default=None)
+            +eval_sample_weight : list of Dask Array or Dask Series, or None, optional (default=None)
+            @@ -53 +53 @@
+            -eval_init_score : list of array (same types as ``init_score`` supports), or None, optional (default=None)
+            +eval_init_score : list of Dask Array, Dask Series or Dask DataFrame (for multi-class task), or None, optional (default=None)
+            @@ -61,3 +60,0 @@
+            -feature_name : list of str, or 'auto', optional (default='auto')
+            -    Feature names.
+            -    If 'auto' and data is pandas DataFrame, data columns names are used.
+            @@ -74,6 +71 @@
+            -callbacks : list of callable, or None, optional (default=None)
+            -    List of callback functions that are applied at each iteration.
+            -    See Callbacks in Python API for more information.
+            -init_model : str, pathlib.Path, Booster, LGBMModel or None, optional (default=None)
+            -    Filename of LightGBM model, Booster instance or LGBMModel instance used for continue training.
+            -eval_X : numpy array, pandas DataFrame, pyarrow Table, polars DataFrame, scipy.sparse, list of lists of int or float of shape = [n_samples, n_features], or tuple of such inputs, or None, optional (default=None)
+            +eval_X : Dask Array or Dask DataFrame, tuple thereof or None, optional (default=None)
+            @@ -81,4 +73 @@
+            -
+            -    .. versionadded:: 4.7.0
+            -
+            -eval_y : numpy array, pandas DataFrame, pandas Series, list of int or float, pyarrow ChunkedArray or polars Series of shape = [n_samples], or tuple of such inputs, or None, optional (default=None)
+            +eval_y : Dask Array or Dask DataFrame or Dask Series, tuple thereof or None, optional (default=None)
+            @@ -86,2 +75,5 @@
+            -
+            -    .. versionadded:: 4.7.0
+            +feature_name : list of str, or 'auto', optional (default='auto')
+            +    Feature names.
+            +    If 'auto' and data is pandas DataFrame, data columns names are used.
+            +**kwargs
+            +    Other parameters passed through to ``LGBMClassifier.fit()``.
+            @@ -91 +83 @@
+            -self : LGBMClassifier
+            +self : lightgbm.DaskLGBMClassifier
+        """),
+    )
+    assert_docstrings_equal(
+        lgb.DaskLGBMClassifier,
+        "fit",
+        lgb.DaskLGBMRanker,
+        "fit",
+        expected_diff=textwrap.dedent("""\
+            --- DaskLGBMClassifier.fit
+            +++ DaskLGBMRanker.fit
+            @@ -32 +32 @@
+            -init_score : Dask Array or Dask Series of shape = [n_samples] or shape = [n_samples * n_classes] (for multi-class task), or Dask Array or Dask DataFrame of shape = [n_samples, n_classes] (for multi-class task), or None, optional (default=None)
+            +init_score : Dask Array or Dask Series of shape = [n_samples] or None, optional (default=None)
+            @@ -33,0 +34,13 @@
+            +
+            +    .. versionadded:: 4.2.0
+            +        Support for ``pyarrow`` inputs
+            +
+            +    .. versionadded:: 4.7.0
+            +        Support for ``polars`` inputs
+            +
+            +group : Dask Array or Dask Series or None, optional (default=None)
+            +    Group/query data.
+            +    Only used in the learning-to-rank task.
+            +    sum(group) = n_samples.
+            +    For example, if you have a 100-document dataset with ``group = [10, 20, 40, 10, 10, 10]``, that means that you have 6 groups,
+            +    where the first 10 records are in the first group, records 11-30 are in the second group, records 31-70 are in the third group, etc.
+            @@ -51,3 +64 @@
+            -eval_class_weight : list or None, optional (default=None)
+            -    Class weights of eval data.
+            -eval_init_score : list of Dask Array, Dask Series or Dask DataFrame (for multi-class task), or None, optional (default=None)
+            +eval_init_score : list of Dask Array or Dask Series, or None, optional (default=None)
+            @@ -54,0 +66,2 @@
+            +eval_group : list of Dask Array or Dask Series, or None, optional (default=None)
+            +    Group data of eval data.
+            @@ -60,0 +74,2 @@
+            +eval_at : list or tuple of int, optional (default=(1, 2, 3, 4, 5))
+            +    The evaluation positions of the specified metric.
+            @@ -79 +94 @@
+            -    Other parameters passed through to ``LGBMClassifier.fit()``.
+            +    Other parameters passed through to ``LGBMRanker.fit()``.
+            @@ -83 +98 @@
+            -self : lightgbm.DaskLGBMClassifier
+            +self : lightgbm.DaskLGBMRanker
+        """),
+    )
+    assert_docstrings_equal(
+        lgb.DaskLGBMRanker,
+        "fit",
+        lgb.DaskLGBMRegressor,
+        "fit",
+        expected_diff=textwrap.dedent("""\
+            --- DaskLGBMRanker.fit
+            +++ DaskLGBMRegressor.fit
+            @@ -41,13 +40,0 @@
+            -group : Dask Array or Dask Series or None, optional (default=None)
+            -    Group/query data.
+            -    Only used in the learning-to-rank task.
+            -    sum(group) = n_samples.
+            -    For example, if you have a 100-document dataset with ``group = [10, 20, 40, 10, 10, 10]``, that means that you have 6 groups,
+            -    where the first 10 records are in the first group, records 11-30 are in the second group, records 31-70 are in the third group, etc.
+            -
+            -    .. versionadded:: 4.2.0
+            -        Support for ``pyarrow`` inputs
+            -
+            -    .. versionadded:: 4.7.0
+            -        Support for ``polars`` inputs
+            -
+            @@ -66,2 +52,0 @@
+            -eval_group : list of Dask Array or Dask Series, or None, optional (default=None)
+            -    Group data of eval data.
+            @@ -74,2 +58,0 @@
+            -eval_at : list or tuple of int, optional (default=(1, 2, 3, 4, 5))
+            -    The evaluation positions of the specified metric.
+            @@ -94 +77 @@
+            -    Other parameters passed through to ``LGBMRanker.fit()``.
+            +    Other parameters passed through to ``LGBMRegressor.fit()``.
+            @@ -98 +81 @@
+            -self : lightgbm.DaskLGBMRanker
+            +self : lightgbm.DaskLGBMRegressor
+        """),
+    )
+
+
+def test_estimator_predict_docstrings_are_consistent():
+    assert_docstrings_equal(
+        lgb.LGBMClassifier,
+        "predict",
+        lgb.DaskLGBMClassifier,
+        "predict",
+        expected_diff=textwrap.dedent("""\
+            --- LGBMClassifier.predict
+            +++ DaskLGBMClassifier.predict
+            @@ -5 +5 @@
+            -X : numpy array, pandas DataFrame, scipy.sparse, list of lists of int or float of shape = [n_samples, n_features]
+            +X : Dask Array or Dask DataFrame of shape = [n_samples, n_features]
+            @@ -40 +40 @@
+            -predicted_result : array-like of shape = [n_samples] or shape = [n_samples, n_classes]
+            +predicted_result : Dask Array of shape = [n_samples] or shape = [n_samples, n_classes]
+            @@ -42 +42 @@
+            -X_leaves : array-like of shape = [n_samples, n_trees] or shape = [n_samples, n_trees * n_classes]
+            +X_leaves : Dask Array of shape = [n_samples, n_trees] or shape = [n_samples, n_trees * n_classes]
+            @@ -44 +44 @@
+            -X_SHAP_values : array-like of shape = [n_samples, n_features + 1] or shape = [n_samples, (n_features + 1) * n_classes] or list with n_classes length of such objects
+            +X_SHAP_values : Dask Array of shape = [n_samples, n_features + 1] or shape = [n_samples, (n_features + 1) * n_classes] or (if multi-class and using sparse inputs) a list of ``n_classes`` Dask Arrays of shape = [n_samples, n_features + 1]
+        """),
+    )
+    assert_docstrings_equal(
+        lgb.DaskLGBMClassifier,
+        "predict",
+        lgb.DaskLGBMRanker,
+        "predict",
+        expected_diff=textwrap.dedent("""\
+            --- DaskLGBMClassifier.predict
+            +++ DaskLGBMRanker.predict
+            @@ -40 +40 @@
+            -predicted_result : Dask Array of shape = [n_samples] or shape = [n_samples, n_classes]
+            +predicted_result : Dask Array of shape = [n_samples]
+            @@ -42 +42 @@
+            -X_leaves : Dask Array of shape = [n_samples, n_trees] or shape = [n_samples, n_trees * n_classes]
+            +X_leaves : Dask Array of shape = [n_samples, n_trees]
+            @@ -44 +44 @@
+            -X_SHAP_values : Dask Array of shape = [n_samples, n_features + 1] or shape = [n_samples, (n_features + 1) * n_classes] or (if multi-class and using sparse inputs) a list of ``n_classes`` Dask Arrays of shape = [n_samples, n_features + 1]
+            +X_SHAP_values : Dask Array of shape = [n_samples, n_features + 1]
+        """),
+    )
+    assert_docstrings_equal(lgb.DaskLGBMRanker, "predict", lgb.DaskLGBMRegressor, "predict")
+
+
+def test_classifier_predict_and_predict_proba_docstrings_are_consistent():
+    assert_docstrings_equal(
+        lgb.DaskLGBMClassifier,
+        "predict",
+        lgb.DaskLGBMClassifier,
+        "predict_proba",
+        expected_diff=textwrap.dedent("""\
+            --- DaskLGBMClassifier.predict
+            +++ DaskLGBMClassifier.predict_proba
+            @@ -1 +1 @@
+            -Return the predicted value for each sample.
+            +Return the predicted probability for each class for each sample.
+            @@ -40 +40 @@
+            -predicted_result : Dask Array of shape = [n_samples] or shape = [n_samples, n_classes]
+            +predicted_probability : Dask Array of shape = [n_samples] or shape = [n_samples, n_classes]
+        """),
+    )

@@ -1,5 +1,26 @@
 # CRAN Submission History
 
+## v4.7.0 - Submission 1 - (July 18, 2026)
+
+### CRAN response
+
+Accepted to CRAN
+
+### Maintainer Notes
+
+This fixed the following issue reported by CRAN for several check flavors.
+
+```text
+Version: 4.6.0
+Check: whether package can be installed
+Result: WARN
+  Found the following significant warnings:
+    Warning: src/Makevars.win: Unknown C++ standard '@CXX_STD@' was ignored
+  See 'd:/Rcompile/CRANpkg/local/4.6/lightgbm.Rcheck/00install.out' for details.
+  * used C++ compiler: 'g++.exe (GCC) 14.3.0'
+Flavor: r-release-windows-x86_64
+```
+
 ## v4.6.0 - Submission 1 - (February 13, 2025)
 
 ### CRAN response
@@ -106,7 +127,7 @@ v4.1.0 was not submitted to CRAN, because https://github.com/lightgbm-org/LightG
 > Dear maintainer,
 > package lightgbm_4.0.0.tar.gz does not pass the incoming checks automatically.
 
-The logs linked from those messagges showed one issue remaining on Debian (0 on Windows).
+The logs linked from those messages showed one issue remaining on Debian (0 on Windows).
 
 ```text
 * checking examples ... [7s/4s] NOTE
@@ -702,7 +723,7 @@ Responded to CRAN with the following:
 
 The paper citation has been adjusted as requested. We were using 'glmnet' as a  guide on how to include the URL but maybe they are no longer in compliance with CRAN policies: https://github.com/cran/glmnet/blob/b1a4b50de01e0cd24343959d7cf86452bac17b26/DESCRIPTION
 
-All authors from the original LightGBM paper have been added to Authors@R as `"aut"`. We have also added Microsoft and DropBox, Inc. as `"cph"` (copyright holders). These roles were chosen based on the guidance in https://journal.r-project.org/archive/2012/RJ-2012-009/index.html.
+All authors from the original LightGBM paper have been added to Authors@R as `"aut"`. We have also added Microsoft and DropBox, Inc. as `"cph"` (copyright holders). These roles were chosen based on the guidance in https://journal.r-project.org/articles/RJ-2012-009/index.html.
 
 lightgbm's code does use `<<-`, but it does not modify the global environment. The uses of `<<-` in R/lgb.interprete.R and R/callback.R are in functions which are called in an environment created by the lightgbm functions that call them, and this operator is used to reach one level up into the calling function's environment.
 

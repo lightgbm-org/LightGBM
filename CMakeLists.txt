@@ -1,3 +1,7 @@
+# Copyright (c) 2016-2026 Microsoft Corporation. All rights reserved.
+# Copyright (c) 2016-2026 The LightGBM developers. All rights reserved.
+# Licensed under the MIT License. See LICENSE file in the project root for license information.
+
 cmake_minimum_required(VERSION 3.28)
 
 option(USE_MPI "Enable MPI-based distributed learning" OFF)
@@ -35,6 +39,8 @@ if(CMAKE_GENERATOR MATCHES "Visual Studio")
 endif()
 
 project(lightgbm LANGUAGES C CXX)
+
+include(cmake/Utils.cmake)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -169,6 +175,10 @@ endif()
 
 if(USE_CUDA)
     set(CMAKE_CUDA_HOST_COMPILER "${CMAKE_CXX_COMPILER}")
+    find_package(CUDAToolkit 11.8 REQUIRED)
+    if(NOT DEFINED CMAKE_CUDA_ARCHITECTURES)
+      compute_cmake_cuda_archs("${CUDAToolkit_VERSION}")
+    endif()
     enable_language(CUDA)
     set(USE_OPENMP ON CACHE BOOL "CUDA requires OpenMP" FORCE)
 endif()
@@ -230,36 +240,9 @@ if(__INTEGRATE_OPENCL)
 endif()
 
 if(USE_CUDA)
-    find_package(CUDAToolkit 11.0 REQUIRED)
     find_package(NCCL REQUIRED)
     include_directories(${CUDAToolkit_INCLUDE_DIRS})
     set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -Xcompiler=${OpenMP_CXX_FLAGS} -Xcompiler=-fPIC -Xcompiler=-Wall")
-
-    # reference for mapping of CUDA toolkit component versions to supported architectures ("compute capabilities"):
-    # https://en.wikipedia.org/wiki/CUDA#GPUs_supported
-    set(CUDA_ARCHS "60" "61" "62" "70" "75")
-    if(CUDAToolkit_VERSION VERSION_GREATER_EQUAL "11.0")
-        list(APPEND CUDA_ARCHS "80")
-    endif()
-    if(CUDAToolkit_VERSION VERSION_GREATER_EQUAL "11.1")
-        list(APPEND CUDA_ARCHS "86")
-    endif()
-    if(CUDAToolkit_VERSION VERSION_GREATER_EQUAL "11.5")
-        list(APPEND CUDA_ARCHS "87")
-    endif()
-    if(CUDAToolkit_VERSION VERSION_GREATER_EQUAL "11.8")
-        list(APPEND CUDA_ARCHS "89")
-        list(APPEND CUDA_ARCHS "90")
-    endif()
-    if(CUDAToolkit_VERSION VERSION_GREATER_EQUAL "12.8")
-        list(APPEND CUDA_ARCHS "100")
-        list(APPEND CUDA_ARCHS "120")
-    endif()
-    # Generate PTX for the most recent architecture for forwards compatibility
-    list(POP_BACK CUDA_ARCHS CUDA_LAST_SUPPORTED_ARCH)
-    list(TRANSFORM CUDA_ARCHS APPEND "-real")
-    list(APPEND CUDA_ARCHS "${CUDA_LAST_SUPPORTED_ARCH}-real" "${CUDA_LAST_SUPPORTED_ARCH}-virtual")
-    message(STATUS "CUDA_ARCHITECTURES: ${CUDA_ARCHS}")
     if(USE_DEBUG)
       set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -g")
     else()
@@ -551,6 +534,45 @@ if(MSVC AND NOT __BUILD_FOR_R)
   set_target_properties(_lightgbm PROPERTIES OUTPUT_NAME "lib_lightgbm")
 endif()
 
+# Only the C API (functions / types with names prefixed 'LGBM_*') is considered part of LightGBM's
+# public API.
+#
+# Hiding other symbols makes library loading faster and reduce the risk of LightGBM
+# conflicting with others libraries.
+if(NOT BUILD_STATIC_LIB)
+  # hide any LightGBM symbols not explicitly marked for export
+  set_target_properties(
+    lightgbm_objs lightgbm_capi_objs _lightgbm
+    PROPERTIES
+      C_VISIBILITY_PRESET hidden
+      CXX_VISIBILITY_PRESET hidden
+      CUDA_VISIBILITY_PRESET hidden
+      VISIBILITY_INLINES_HIDDEN TRUE
+  )
+  # Some symbols ignore -fvisibility (e.g. compiler-generated OpenMP locks) or come from
+  # statically-linked dependencies, so also restrict exports at link time.
+  if(APPLE)
+    if(__BUILD_FOR_R)
+      # The R package registers its routines with R, so it only needs to export R_init_lightgbm().
+      target_link_options(_lightgbm PRIVATE "LINKER:-exported_symbol,_R_init_lightgbm")
+    else()
+      # In non-R builds, the list of symbols to export from lightgbm.exports.
+      target_link_options(
+        _lightgbm
+        PRIVATE
+          "LINKER:-exported_symbols_list,${PROJECT_SOURCE_DIR}/cmake/lightgbm.exports"
+      )
+    endif()
+  elseif(UNIX AND NOT CYGWIN)
+    if(__BUILD_FOR_R)
+      set(LGBM_VERSION_SCRIPT "${PROJECT_SOURCE_DIR}/../inst/lightgbm.map")
+    else()
+      set(LGBM_VERSION_SCRIPT "${PROJECT_SOURCE_DIR}/cmake/lightgbm.map")
+    endif()
+    target_link_options(_lightgbm PRIVATE "LINKER:--version-script=${LGBM_VERSION_SCRIPT}")
+  endif()
+endif()
+
 if(USE_SWIG)
   set_property(SOURCE swig/lightgbmlib.i PROPERTY CPLUSPLUS ON)
   list(APPEND swig_options -package com.microsoft.ml.lightgbm)
@@ -625,7 +647,7 @@ if(USE_GPU)
 endif()
 
 if(USE_CUDA)
-  target_link_libraries(lightgbm_objs PUBLIC ${NCCL_LIBRARY})
+  target_link_libraries(lightgbm_objs PUBLIC NCCL::NCCL)
 endif()
 
 if(USE_ROCM)
@@ -647,14 +669,12 @@ if(USE_CUDA)
   set_target_properties(
     lightgbm_objs
     PROPERTIES
-      CUDA_ARCHITECTURES "${CUDA_ARCHS}"
       CUDA_SEPARABLE_COMPILATION ON
   )
 
   set_target_properties(
     _lightgbm
     PROPERTIES
-      CUDA_ARCHITECTURES "${CUDA_ARCHS}"
       CUDA_RESOLVE_DEVICE_SYMBOLS ON
   )
 
@@ -662,7 +682,6 @@ if(USE_CUDA)
     set_target_properties(
       lightgbm
       PROPERTIES
-        CUDA_ARCHITECTURES "${CUDA_ARCHS}"
         CUDA_RESOLVE_DEVICE_SYMBOLS ON
     )
   endif()
@@ -723,6 +742,7 @@ if(BUILD_CPP_TEST)
       tests/cpp_tests/test_main.cpp
       tests/cpp_tests/test_serialize.cpp
       tests/cpp_tests/test_single_row.cpp
+      tests/cpp_tests/test_split_info.cpp
       tests/cpp_tests/test_stream.cpp
       tests/cpp_tests/testutils.cpp
     )

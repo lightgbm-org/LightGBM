@@ -125,38 +125,40 @@ single.tree.interpret <- function(tree_dt,
   node_dt <- single_tree_dt[!is.na(split_index), .(split_index, split_feature, node_parent, internal_value)]
 
   # Prepare sequences
-  feature_seq <- character(0L)
-  value_seq <- numeric(0L)
+  tree_data <- new.env()
+  tree_data[["feature_seq"]] <- character(0L)
+  tree_data[["value_seq"]] <- numeric(0L)
 
   # Get to root from leaf
-  leaf_to_root <- function(parent_id, current_value) {
+  .leaf_to_root <- function(parent_id, current_value) {
 
-    value_seq <<- c(current_value, value_seq)
+    # put value at the beginning
+    tree_data[["value_seq"]] <- c(current_value, tree_data[["value_seq"]])
 
     if (!is.na(parent_id)) {
 
       # Not null means existing node
       this_node <- node_dt[split_index == parent_id, ]
-      feature_seq <<- c(this_node[["split_feature"]], feature_seq)
-      leaf_to_root(
+      tree_data[["feature_seq"]] <- c(this_node[["split_feature"]], tree_data[["feature_seq"]])
+      .leaf_to_root(
         parent_id = this_node[["node_parent"]]
         , current_value = this_node[["internal_value"]]
       )
 
     }
-
+    return(invisible(NULL))
   }
 
   # Perform leaf to root conversion
-  leaf_to_root(
+  .leaf_to_root(
     parent_id = leaf_dt[["leaf_parent"]]
     , current_value = leaf_dt[["leaf_value"]]
   )
 
   return(
     data.table::data.table(
-      Feature = feature_seq
-      , Contribution = diff.default(value_seq)
+      Feature = tree_data[["feature_seq"]]
+      , Contribution = diff.default(tree_data[["value_seq"]])
     )
   )
 

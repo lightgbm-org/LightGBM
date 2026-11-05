@@ -691,6 +691,33 @@ void Metadata::SetPosition(const data_size_t* positions, data_size_t len) {
   }
 }
 
+#ifndef LGB_R_BUILD
+void Metadata::SetPosition(struct ArrowArrayStream* stream) {
+  ArrowChunkedArray chunked_array(stream);
+  chunked_array.view().visit<data_size_t>([&](auto&& visitor) {
+    std::vector<data_size_t> positions;
+    positions.reserve(visitor.end() - visitor.begin());
+    for (auto it = visitor.begin(); it != visitor.end(); ++it) {
+      positions.push_back(*it);
+    }
+    SetPosition(positions.data(), static_cast<data_size_t>(positions.size()));
+  });
+}
+
+void Metadata::SetPosition(int64_t n_chunks, struct ArrowArray* chunks,
+                           struct ArrowSchema* schema) {
+  ArrowChunkedArray chunked_array(n_chunks, chunks, schema);
+  chunked_array.view().visit<data_size_t>([&](auto&& visitor) {
+    std::vector<data_size_t> positions;
+    positions.reserve(visitor.end() - visitor.begin());
+    for (auto it = visitor.begin(); it != visitor.end(); ++it) {
+      positions.push_back(*it);
+    }
+    SetPosition(positions.data(), static_cast<data_size_t>(positions.size()));
+  });
+}
+#endif  // LGB_R_BUILD
+
 void Metadata::InsertQueries(const data_size_t* queries, data_size_t start_index, data_size_t len) {
   if (!queries) {
     Log::Fatal("Passed null queries");

@@ -185,7 +185,15 @@ while [ $# -gt 0 ]; do
   shift
 done
 
-python -m pip install --prefer-binary 'build>=0.10.0'
+# ref: https://cmake.org/cmake/help/latest/variable/CMAKE_CUDA_ARCHITECTURES.html
+if [ -n "${CUDAARCHS:-}" ]; then
+    BUILD_ARGS="${BUILD_ARGS} --config-setting=cmake.define.CMAKE_CUDA_ARCHITECTURES=${CUDAARCHS}"
+fi
+
+if ! python -m build --version >/dev/null; then
+    echo "'build' is required to build 'lightgbm'. Install it with 'pip install build' or similar."
+    exit 1
+fi
 
 # create a new directory that just contains the files needed
 # to build the Python-package
@@ -329,7 +337,6 @@ if test "${INSTALL}" = true; then
     if test "${PRECOMPILE}" = true; then
         BUILD_SDIST=false
         BUILD_WHEEL=true
-        BUILD_ARGS=""
         rm -rf \
             ./cmake \
             ./CMakeLists.txt \

@@ -19,7 +19,15 @@ from urllib.parse import urlparse
 import numpy as np
 import scipy.sparse as ss
 
-from .basic import LightGBMError, _choose_param_value, _ConfigAliases, _log_info, _log_warning
+from .basic import (
+    LightGBMError,
+    _choose_param_value,
+    _ConfigAliases,
+    _LGBM_CategoricalFeatureConfiguration,
+    _LGBM_FeatureNameConfiguration,
+    _log_info,
+    _log_warning,
+)
 from .compat import (
     PANDAS_INSTALLED,
     SKLEARN_INSTALLED,
@@ -35,9 +43,6 @@ from .sklearn import (
     LGBMRegressor,
     _LGBM_ScikitCustomObjectiveFunction,
     _LGBM_ScikitEvalMetricType,
-    _lgbmmodel_doc_custom_eval_note,
-    _lgbmmodel_doc_fit,
-    _lgbmmodel_doc_predict,
     _validate_eval_set_Xy,
 )
 
@@ -112,7 +117,7 @@ def _get_dask_client(client: Optional["distributed.Client"]) -> "distributed.Cli
     -------
     client : distributed.Client
         A Dask client.
-    """
+    """  # noqa: DOC105
     from dask.distributed import default_client  # noqa: PLC0415
 
     if client is None:
@@ -128,13 +133,20 @@ def _assign_open_ports_to_workers(
 ) -> Tuple[Dict[str, "distributed.client.Future"], Dict[str, int]]:
     """Assign an open port to each worker.
 
+    Parameters
+    ----------
+    client : distributed.Client
+        Dask client.
+    workers : list of str
+        List of worker IPs.
+
     Returns
     -------
     worker_to_socket_future: dict
-        mapping from worker address to a future pointing to the remote socket.
+        Mapping from worker address to a future pointing to the remote socket.
     worker_to_port: dict
-        mapping from worker address to an open port in the worker's host.
-    """
+        Mapping from worker address to an open port in the worker's host.
+    """  # noqa: DOC105
     # Acquire port in worker
     worker_to_future = {}
     for worker in workers:
@@ -416,7 +428,7 @@ def _machines_to_worker_map(
     -------
     result : Dict[str, int]
         Dictionary where keys are work addresses in the form expected by Dask and values are a port for LightGBM to use.
-    """
+    """  # noqa: DOC105
     machine_addresses = machines.split(",")
 
     if len(set(machine_addresses)) != len(machine_addresses):
@@ -449,6 +461,8 @@ def _train(
     sample_weight: Optional[_DaskVectorLike] = None,
     init_score: Optional[_DaskCollection] = None,
     group: Optional[_DaskVectorLike] = None,
+    categorical_feature: _LGBM_CategoricalFeatureConfiguration = "auto",
+    feature_name: _LGBM_FeatureNameConfiguration = "auto",
     eval_set: Optional[List[Tuple[_DaskMatrixLike, _DaskCollection]]] = None,
     eval_names: Optional[List[str]] = None,
     eval_X: Optional[Union[_DaskMatrixLike, Tuple[_DaskMatrixLike]]] = None,
@@ -485,6 +499,19 @@ def _train(
         sum(group) = n_samples.
         For example, if you have a 100-document dataset with ``group = [10, 20, 40, 10, 10, 10]``, that means that you have 6 groups,
         where the first 10 records are in the first group, records 11-30 are in the second group, records 31-70 are in the third group, etc.
+    categorical_feature : list of str or int, or 'auto', optional (default='auto')
+        Categorical features.
+        If list of int, interpreted as indices.
+        If list of str, interpreted as feature names (need to specify ``feature_name`` as well).
+        If 'auto' and data is pandas DataFrame, pandas unordered categorical columns are used.
+        All values in categorical features will be cast to int32 and thus should be less than int32 max value (2147483647).
+        Large values could be memory consuming. Consider using consecutive integers starting from zero.
+        All negative values in categorical features will be treated as missing values.
+        The output cannot be monotonically constrained with respect to a categorical feature.
+        Floating point numbers in categorical features will be rounded towards 0.
+    feature_name : list of str, or 'auto', optional (default='auto')
+        Feature names.
+        If 'auto' and data is pandas DataFrame, data columns names are used.
     eval_set : list of (X, y) tuples of Dask data collections, or None, optional (default=None)
         List of (X, y) tuple pairs to use as validation sets.
         Note, that not all workers may receive chunks of every eval set within ``eval_set``. When the returned
@@ -523,7 +550,6 @@ def _train(
 
     Note
     ----
-
     This method handles setting up the following network parameters based on information
     about the Dask cluster referenced by ``client``.
 
@@ -549,7 +575,7 @@ def _train(
     If ``local_listen_port`` is provided in ``params`` and ``machines`` is not, this function
     constructs ``machines`` from the list of Dask workers which hold some piece of the
     training data, assuming that each one will use the same ``local_listen_port``.
-    """
+    """  # noqa: DOC105
     try:
         from dask import delayed  # noqa: PLC0415
         from dask.distributed import wait  # noqa: PLC0415
@@ -586,10 +612,18 @@ def _train(
     # Some passed-in parameters can be removed:
     #   * 'num_machines': set automatically from Dask worker list
     #   * 'num_threads': overridden to match nthreads on each Dask process
-    for param_alias in _ConfigAliases.get("num_machines", "num_threads"):
-        if param_alias in params:
-            _log_warning(f"Parameter {param_alias} will be ignored.")
-            params.pop(param_alias)
+    for param in ("num_machines", "num_threads"):
+        for param_alias in _ConfigAliases.get(param):
+            if param_alias in params:
+                value = params.pop(param_alias)
+                if param == "num_machines":
+                    _log_warning(f"Parameter '{param_alias}' will be ignored (determined from the Dask cluster).")
+                elif value not in (None, -1):
+                    _log_warning(
+                        f"Parameter '{param_alias}={value}' will be ignored. "
+                        "The number of threads is set by the Dask worker. "
+                        f"To avoid this warning, omit '{param_alias}' or set it to None or -1."
+                    )
 
     # Split arrays/dataframes into parts. Arrange parts into dicts to enforce co-locality
     data_parts = _split_to_parts(data=data, is_matrix=True)
@@ -942,6 +976,8 @@ def _predict(
         Fitted underlying model.
     data : Dask Array or Dask DataFrame of shape = [n_samples, n_features]
         Input feature matrix.
+    client : distributed.Client
+        Dask client.
     raw_score : bool, optional (default=False)
         Whether to predict raw scores.
     pred_proba : bool, optional (default=False)
@@ -961,7 +997,7 @@ def _predict(
         If ``pred_leaf=True``, the predicted leaf of every tree for each sample.
     X_SHAP_values : Dask Array of shape = [n_samples, n_features + 1] or shape = [n_samples, (n_features + 1) * n_classes] or (if multi-class and using sparse inputs) a list of ``n_classes`` Dask Arrays of shape = [n_samples, n_features + 1]
         If ``pred_contrib=True``, the feature contributions for each sample.
-    """
+    """  # noqa: DOC105
     if not all((PANDAS_INSTALLED, SKLEARN_INSTALLED)):
         raise LightGBMError("pandas and scikit-learn are required for lightgbm.dask")
 
@@ -974,7 +1010,9 @@ def _predict(
         raise LightGBMError("dask is required for lightgbm.dask") from err
 
     if isinstance(data, dask.dataframe.DataFrame):
-        return data.map_partitions(
+        # Bind prediction options into the callable to give each mode distinct task keys.
+        # ref: https://github.com/dask/dask/pull/12603
+        predict_fn = partial(
             _predict_part,
             model=model,
             raw_score=raw_score,
@@ -982,7 +1020,8 @@ def _predict(
             pred_leaf=pred_leaf,
             pred_contrib=pred_contrib,
             **kwargs,
-        ).values
+        )
+        return data.map_partitions(predict_fn).values
     elif isinstance(data, dask.array.Array):
         # for multi-class classification with sparse matrices, pred_contrib predictions
         # are returned as a list of sparse matrices (one per class)
@@ -1202,7 +1241,128 @@ class DaskLGBMClassifier(LGBMClassifier, _DaskLGBMModel):
         client: Optional["distributed.Client"] = None,
         **kwargs: Any,
     ):
-        """Docstring is inherited from the lightgbm.LGBMClassifier.__init__."""
+        r"""Construct a gradient boosting model.
+
+        Parameters
+        ----------
+        boosting_type : str, optional (default='gbdt')
+            'gbdt', traditional Gradient Boosting Decision Tree.
+            'dart', Dropouts meet Multiple Additive Regression Trees.
+            'rf', Random Forest.
+        num_leaves : int, optional (default=31)
+            Maximum tree leaves for base learners.
+        max_depth : int, optional (default=-1)
+            Maximum tree depth for base learners, <=0 means no limit.
+            If setting this to a positive value, consider also changing ``num_leaves`` to ``<= 2^max_depth``.
+        learning_rate : float, optional (default=0.1)
+            Boosting learning rate.
+            You can use ``callbacks`` parameter of ``fit`` method to shrink/adapt learning rate
+            in training using ``reset_parameter`` callback.
+            Note, that this will ignore the ``learning_rate`` argument in training.
+        n_estimators : int, optional (default=100)
+            Number of boosted trees to fit.
+        subsample_for_bin : int, optional (default=200000)
+            Number of samples for constructing bins.
+        objective : str, callable or None, optional (default=None)
+            Specify the learning task and the corresponding learning objective or
+            a custom objective function to be used (see note below).
+            Default: 'regression' for LGBMRegressor, 'binary' or 'multiclass' for LGBMClassifier, 'lambdarank' for LGBMRanker.
+        class_weight : dict, 'balanced' or None, optional (default=None)
+            Weights associated with classes in the form ``{class_label: weight}``.
+            Use this parameter only for multi-class classification task;
+            for binary classification task you may use ``is_unbalance`` or ``scale_pos_weight`` parameters.
+            Note, that the usage of all these parameters will result in poor estimates of the individual class probabilities.
+            You may want to consider performing probability calibration
+            (https://scikit-learn.org/stable/modules/calibration.html) of your model.
+            The 'balanced' mode uses the values of y to automatically adjust weights
+            inversely proportional to class frequencies in the input data as ``n_samples / (n_classes * np.bincount(y))``.
+            If None, all classes are supposed to have weight one.
+            Note, that these weights will be multiplied with ``sample_weight`` (passed through the ``fit`` method)
+            if ``sample_weight`` is specified.
+        min_split_gain : float, optional (default=0.)
+            Minimum loss reduction required to make a further partition on a leaf node of the tree.
+        min_child_weight : float, optional (default=1e-3)
+            Minimum sum of instance weight (Hessian) needed in a child (leaf).
+        min_child_samples : int, optional (default=20)
+            Minimum number of data needed in a child (leaf).
+        subsample : float, optional (default=1.)
+            Subsample ratio of the training instance.
+        subsample_freq : int, optional (default=0)
+            Frequency of subsample, <=0 means no enable.
+        colsample_bytree : float, optional (default=1.)
+            Subsample ratio of columns when constructing each tree.
+        reg_alpha : float, optional (default=0.)
+            L1 regularization term on weights.
+        reg_lambda : float, optional (default=0.)
+            L2 regularization term on weights.
+        random_state : int, RandomState object or None, optional (default=None)
+            Random number seed.
+            If int, this number is used to seed the C++ code.
+            If RandomState or Generator object (numpy), a random integer is picked based on its state to seed the C++ code.
+            If None, default seeds in C++ code are used.
+        n_jobs : int or None, optional (default=None)
+            Number of parallel threads to use for training (can be changed at prediction time by
+            passing it as an extra keyword argument).
+
+            For better performance, it is recommended to set this to the number of physical cores
+            in the CPU.
+
+            Negative integers are interpreted as following joblib's formula (n_cpus + 1 + n_jobs), just like
+            scikit-learn (so e.g. -1 means using all threads). A value of zero corresponds the default number of
+            threads configured for OpenMP in the system. A value of ``None`` (the default) corresponds
+            to using the number of physical cores in the system (its correct detection requires
+            either the ``joblib`` or the ``psutil`` util libraries to be installed).
+
+            .. versionchanged:: 4.0.0
+
+        importance_type : str, optional (default='split')
+            The type of feature importance to be filled into ``feature_importances_``.
+            If 'split', result contains numbers of times the feature is used in a model.
+            If 'gain', result contains total gains of splits which use the feature.
+        client : distributed.Client or None, optional (default=None)
+            Dask client.
+            If ``None``, ``distributed.default_client()`` will be used at runtime.
+            The Dask client used by this class will not be saved if the model object is pickled.
+        **kwargs
+            Other parameters for the model.
+            Check http://lightgbm.readthedocs.io/en/latest/Parameters.html for more parameters.
+
+            .. warning::
+
+                \*\*kwargs is not supported in sklearn, it may cause unexpected issues.
+
+        Note
+        ----
+        A custom objective function can be provided for the ``objective`` parameter.
+        In this case, it should have the signature
+        ``objective(y_true, y_pred) -> grad, hess``,
+        ``objective(y_true, y_pred, weight) -> grad, hess``
+        or ``objective(y_true, y_pred, weight, group) -> grad, hess``:
+
+            y_true : numpy 1-D array of shape = [n_samples]
+                The target values.
+            y_pred : numpy 1-D array of shape = [n_samples] or numpy 2-D array of shape = [n_samples, n_classes] (for multi-class task)
+                The predicted values.
+                Predicted values are returned before any transformation,
+                e.g. they are raw margin instead of probability of positive class for binary task.
+            weight : numpy 1-D array of shape = [n_samples]
+                The weight of samples. Weights should be non-negative.
+            group : numpy 1-D array
+                Group/query data.
+                Only used in the learning-to-rank task.
+                sum(group) = n_samples.
+                For example, if you have a 100-document dataset with ``group = [10, 20, 40, 10, 10, 10]``, that means that you have 6 groups,
+                where the first 10 records are in the first group, records 11-30 are in the second group, records 31-70 are in the third group, etc.
+            grad : numpy 1-D array of shape = [n_samples] or numpy 2-D array of shape = [n_samples, n_classes] (for multi-class task)
+                The value of the first order derivative (gradient) of the loss
+                with respect to the elements of y_pred for each sample point.
+            hess : numpy 1-D array of shape = [n_samples] or numpy 2-D array of shape = [n_samples, n_classes] (for multi-class task)
+                The value of the second order derivative (Hessian) of the loss
+                with respect to the elements of y_pred for each sample point.
+
+        For multi-class task, y_pred is a numpy 2-D array of shape = [n_samples, n_classes],
+        and grad and hess should be returned in the same format.
+        """  # noqa: DOC105
         self.client = client
         super().__init__(
             boosting_type=boosting_type,
@@ -1227,18 +1387,6 @@ class DaskLGBMClassifier(LGBMClassifier, _DaskLGBMModel):
             **kwargs,
         )
 
-    _base_doc = LGBMClassifier.__init__.__doc__
-    _before_kwargs, _, _after_kwargs = _base_doc.partition("**kwargs")  # type: ignore
-    __init__.__doc__ = (
-        _before_kwargs
-        + "client : distributed.Client or None, optional (default=None)\n"
-        + "    Dask client. \n"
-        + "    If ``None``, ``distributed.default_client()`` will be used at runtime.\n"
-        + "    The Dask client used by this class will not be saved if the model object is pickled.\n"
-        + "**kwargs\n"
-        + _after_kwargs
-    )
-
     def __getstate__(self) -> Dict[Any, Any]:
         return self._lgb_dask_getstate()
 
@@ -1255,17 +1403,135 @@ class DaskLGBMClassifier(LGBMClassifier, _DaskLGBMModel):
         eval_init_score: Optional[List[_DaskCollection]] = None,
         eval_metric: Optional[_LGBM_ScikitEvalMetricType] = None,
         *,
+        categorical_feature: _LGBM_CategoricalFeatureConfiguration = "auto",
         eval_X: Optional[Union[_DaskMatrixLike, Tuple[_DaskMatrixLike]]] = None,
         eval_y: Optional[Union[_DaskCollection, Tuple[_DaskCollection]]] = None,
+        feature_name: _LGBM_FeatureNameConfiguration = "auto",
         **kwargs: Any,
     ) -> "DaskLGBMClassifier":
-        """Docstring is inherited from the lightgbm.LGBMClassifier.fit."""
+        """
+        Build a gradient boosting model from the training set (X, y).
+
+        Parameters
+        ----------
+        X : Dask Array or Dask DataFrame of shape = [n_samples, n_features]
+            Input feature matrix.
+
+            .. versionadded:: 4.2.0
+                Support for ``pyarrow`` inputs
+
+            .. versionadded:: 4.7.0
+                Support for ``polars`` inputs
+
+        y : Dask Array, Dask DataFrame or Dask Series of shape = [n_samples]
+            The target values (class labels in classification, real numbers in regression).
+
+            .. versionadded:: 4.2.0
+                Support for ``pyarrow`` inputs
+
+            .. versionadded:: 4.7.0
+                Support for ``polars`` inputs
+
+        sample_weight : Dask Array or Dask Series of shape = [n_samples] or None, optional (default=None)
+            Weights of training data. Weights should be non-negative.
+
+            .. versionadded:: 4.2.0
+                Support for ``pyarrow`` inputs
+
+            .. versionadded:: 4.7.0
+                Support for ``polars`` inputs
+
+        init_score : Dask Array or Dask Series of shape = [n_samples] or shape = [n_samples * n_classes] (for multi-class task), or Dask Array or Dask DataFrame of shape = [n_samples, n_classes] (for multi-class task), or None, optional (default=None)
+            Init score of training data.
+
+            .. versionadded:: 4.2.0
+                Support for ``pyarrow`` inputs
+
+            .. versionadded:: 4.7.0
+                Support for ``polars`` inputs
+
+        eval_set : list or None, optional (default=None)
+            A list of (X, y) tuple pairs to use as validation sets.
+
+            .. deprecated:: 4.7.0
+                Use ``eval_X`` and ``eval_y`` instead.
+        eval_names : list of str, or None, optional (default=None)
+            Unique identifiers for each evaluation dataset.
+            Should be the same length as ``eval_set`` / ``eval_X``.
+        eval_sample_weight : list of Dask Array or Dask Series, or None, optional (default=None)
+            Weights of eval data. Weights should be non-negative.
+        eval_class_weight : list or None, optional (default=None)
+            Class weights of eval data.
+        eval_init_score : list of Dask Array, Dask Series or Dask DataFrame (for multi-class task), or None, optional (default=None)
+            Init score of eval data.
+        eval_metric : str, callable, list or None, optional (default=None)
+            If str, it should be a built-in evaluation metric to use.
+            If callable, it should be a custom evaluation metric, see note below for more details.
+            If list, it can be a list of built-in metrics, a list of custom evaluation metrics, or a mix of both.
+            In either case, the ``metric`` from the model parameters will be evaluated and used as well.
+            Default: 'l2' for LGBMRegressor, 'logloss' for LGBMClassifier, 'ndcg' for LGBMRanker.
+        categorical_feature : list of str or int, or 'auto', optional (default='auto')
+            Categorical features.
+            If list of int, interpreted as indices.
+            If list of str, interpreted as feature names (need to specify ``feature_name`` as well).
+            If 'auto' and data is pandas DataFrame, pandas unordered categorical columns are used.
+            All values in categorical features will be cast to int32 and thus should be less than int32 max value (2147483647).
+            Large values could be memory consuming. Consider using consecutive integers starting from zero.
+            All negative values in categorical features will be treated as missing values.
+            The output cannot be monotonically constrained with respect to a categorical feature.
+            Floating point numbers in categorical features will be rounded towards 0.
+        eval_X : Dask Array or Dask DataFrame, tuple thereof or None, optional (default=None)
+            Feature matrix or tuple thereof, e.g. ``(X_val0, X_val1)``, to use as validation sets.
+        eval_y : Dask Array or Dask DataFrame or Dask Series, tuple thereof or None, optional (default=None)
+            Target values or tuple thereof, e.g. ``(y_val0, y_val1)``, to use as validation sets.
+        feature_name : list of str, or 'auto', optional (default='auto')
+            Feature names.
+            If 'auto' and data is pandas DataFrame, data columns names are used.
+        **kwargs
+            Other parameters passed through to ``LGBMClassifier.fit()``.
+
+        Returns
+        -------
+        self : lightgbm.DaskLGBMClassifier
+            Returns self.
+
+        Note
+        ----
+        Custom eval function expects a callable with following signatures:
+        ``func(y_true, y_pred)``, ``func(y_true, y_pred, weight)`` or
+        ``func(y_true, y_pred, weight, group)``
+        and returns (metric_name, metric_value, maximize) or
+        list of (metric_name, metric_value, maximize):
+
+            y_true : numpy 1-D array of shape = [n_samples]
+                The target values.
+            y_pred : numpy 1-D array of shape = [n_samples] or numpy 2-D array of shape = [n_samples, n_classes] (for multi-class task)
+                The predicted values.
+                In case of custom ``objective``, predicted values are returned before any transformation,
+                e.g. they are raw margin instead of probability of positive class for binary task in this case.
+            weight : numpy 1-D array of shape = [n_samples]
+                The weight of samples. Weights should be non-negative.
+            group : numpy 1-D array
+                Group/query data.
+                Only used in the learning-to-rank task.
+                sum(group) = n_samples.
+                For example, if you have a 100-document dataset with ``group = [10, 20, 40, 10, 10, 10]``, that means that you have 6 groups,
+                where the first 10 records are in the first group, records 11-30 are in the second group, records 31-70 are in the third group, etc.
+            metric_name : str
+                Unique identifier for the metric (e.g. "custom_adjusted_mse").
+            metric_value : float
+                Value of the evaluation metric.
+            maximize : bool
+                Are higher values better? e.g. ``True`` for AUC and ``False`` for binary error.
+        """  # noqa: DOC105
         self._lgb_dask_fit(
             model_factory=LGBMClassifier,
             X=X,
             y=y,
             sample_weight=sample_weight,
             init_score=init_score,
+            categorical_feature=categorical_feature,
+            feature_name=feature_name,
             eval_set=eval_set,
             eval_names=eval_names,
             eval_X=eval_X,
@@ -1278,34 +1544,6 @@ class DaskLGBMClassifier(LGBMClassifier, _DaskLGBMModel):
         )
         return self
 
-    _base_doc = _lgbmmodel_doc_fit.format(
-        X_shape="Dask Array or Dask DataFrame of shape = [n_samples, n_features]",
-        y_shape="Dask Array, Dask DataFrame or Dask Series of shape = [n_samples]",
-        sample_weight_shape="Dask Array or Dask Series of shape = [n_samples] or None, optional (default=None)",
-        init_score_shape="Dask Array or Dask Series of shape = [n_samples] or shape = [n_samples * n_classes] (for multi-class task), or Dask Array or Dask DataFrame of shape = [n_samples, n_classes] (for multi-class task), or None, optional (default=None)",
-        group_shape="Dask Array or Dask Series or None, optional (default=None)",
-        eval_sample_weight_shape="list of Dask Array or Dask Series, or None, optional (default=None)",
-        eval_init_score_shape="list of Dask Array, Dask Series or Dask DataFrame (for multi-class task), or None, optional (default=None)",
-        eval_group_shape="list of Dask Array or Dask Series, or None, optional (default=None)",
-    )
-
-    # DaskLGBMClassifier does not support group, eval_group.
-    _base_doc = _base_doc[: _base_doc.find("group :")] + _base_doc[_base_doc.find("eval_set :") :]
-
-    _base_doc = _base_doc[: _base_doc.find("eval_group :")] + _base_doc[_base_doc.find("eval_metric :") :]
-
-    # DaskLGBMClassifier support for callbacks and init_model is not tested
-    fit.__doc__ = f"""{_base_doc[: _base_doc.find("callbacks :")]}**kwargs
-        Other parameters passed through to ``LGBMClassifier.fit()``.
-
-    Returns
-    -------
-    self : lightgbm.DaskLGBMClassifier
-        Returns self.
-
-    {_lgbmmodel_doc_custom_eval_note}
-        """
-
     def predict(
         self,
         X: _DaskMatrixLike,  # type: ignore[override]
@@ -1317,7 +1555,53 @@ class DaskLGBMClassifier(LGBMClassifier, _DaskLGBMModel):
         validate_features: bool = False,
         **kwargs: Any,
     ) -> "dask.array.Array":
-        """Docstring is inherited from the lightgbm.LGBMClassifier.predict."""
+        """
+        Return the predicted value for each sample.
+
+        Parameters
+        ----------
+        X : Dask Array or Dask DataFrame of shape = [n_samples, n_features]
+            Input features matrix.
+        raw_score : bool, optional (default=False)
+            Whether to predict raw scores.
+        start_iteration : int, optional (default=0)
+            Start index of the iteration to predict.
+            If <= 0, starts from the first iteration.
+        num_iteration : int or None, optional (default=None)
+            Total number of iterations used in the prediction.
+            If None, if the best iteration exists and start_iteration <= 0, the best iteration is used;
+            otherwise, all iterations from ``start_iteration`` are used (no limits).
+            If <= 0, all iterations from ``start_iteration`` are used (no limits).
+        pred_leaf : bool, optional (default=False)
+            Whether to predict leaf index.
+        pred_contrib : bool, optional (default=False)
+            Whether to predict feature contributions.
+
+            .. note::
+
+                If you want to get more explanations for your model's predictions using SHAP values,
+                like SHAP interaction values,
+                you can install the shap package (https://github.com/slundberg/shap).
+                Note that unlike the shap package, with ``pred_contrib`` we return a matrix with an extra
+                column, where the last column is the expected value.
+                Summing each row's Shapley values with its expected value gives you the model's raw score
+                (as returned by ``predict(X, raw_score=True)``).
+
+        validate_features : bool, optional (default=False)
+            If True, ensure that the features used to predict match the ones used to train.
+            Used only if data is pandas DataFrame.
+        **kwargs
+            Other parameters for the prediction.
+
+        Returns
+        -------
+        predicted_result : Dask Array of shape = [n_samples] or shape = [n_samples, n_classes]
+            The predicted values.
+        X_leaves : Dask Array of shape = [n_samples, n_trees] or shape = [n_samples, n_trees * n_classes]
+            If ``pred_leaf=True``, the predicted leaf of every tree for each sample.
+        X_SHAP_values : Dask Array of shape = [n_samples, n_features + 1] or shape = [n_samples, (n_features + 1) * n_classes] or (if multi-class and using sparse inputs) a list of ``n_classes`` Dask Arrays of shape = [n_samples, n_features + 1]
+            If ``pred_contrib=True``, the feature contributions for each sample.
+        """  # noqa: DOC105
         return _predict(
             model=self.to_local(),
             data=X,
@@ -1331,15 +1615,6 @@ class DaskLGBMClassifier(LGBMClassifier, _DaskLGBMModel):
             **kwargs,
         )
 
-    predict.__doc__ = _lgbmmodel_doc_predict.format(
-        description="Return the predicted value for each sample.",
-        X_shape="Dask Array or Dask DataFrame of shape = [n_samples, n_features]",
-        output_name="predicted_result",
-        predicted_result_shape="Dask Array of shape = [n_samples] or shape = [n_samples, n_classes]",
-        X_leaves_shape="Dask Array of shape = [n_samples, n_trees] or shape = [n_samples, n_trees * n_classes]",
-        X_SHAP_values_shape="Dask Array of shape = [n_samples, n_features + 1] or shape = [n_samples, (n_features + 1) * n_classes] or (if multi-class and using sparse inputs) a list of ``n_classes`` Dask Arrays of shape = [n_samples, n_features + 1]",
-    )
-
     def predict_proba(
         self,
         X: _DaskMatrixLike,  # type: ignore[override]
@@ -1351,7 +1626,53 @@ class DaskLGBMClassifier(LGBMClassifier, _DaskLGBMModel):
         validate_features: bool = False,
         **kwargs: Any,
     ) -> "dask.array.Array":
-        """Docstring is inherited from the lightgbm.LGBMClassifier.predict_proba."""
+        """
+        Return the predicted probability for each class for each sample.
+
+        Parameters
+        ----------
+        X : Dask Array or Dask DataFrame of shape = [n_samples, n_features]
+            Input features matrix.
+        raw_score : bool, optional (default=False)
+            Whether to predict raw scores.
+        start_iteration : int, optional (default=0)
+            Start index of the iteration to predict.
+            If <= 0, starts from the first iteration.
+        num_iteration : int or None, optional (default=None)
+            Total number of iterations used in the prediction.
+            If None, if the best iteration exists and start_iteration <= 0, the best iteration is used;
+            otherwise, all iterations from ``start_iteration`` are used (no limits).
+            If <= 0, all iterations from ``start_iteration`` are used (no limits).
+        pred_leaf : bool, optional (default=False)
+            Whether to predict leaf index.
+        pred_contrib : bool, optional (default=False)
+            Whether to predict feature contributions.
+
+            .. note::
+
+                If you want to get more explanations for your model's predictions using SHAP values,
+                like SHAP interaction values,
+                you can install the shap package (https://github.com/slundberg/shap).
+                Note that unlike the shap package, with ``pred_contrib`` we return a matrix with an extra
+                column, where the last column is the expected value.
+                Summing each row's Shapley values with its expected value gives you the model's raw score
+                (as returned by ``predict(X, raw_score=True)``).
+
+        validate_features : bool, optional (default=False)
+            If True, ensure that the features used to predict match the ones used to train.
+            Used only if data is pandas DataFrame.
+        **kwargs
+            Other parameters for the prediction.
+
+        Returns
+        -------
+        predicted_probability : Dask Array of shape = [n_samples] or shape = [n_samples, n_classes]
+            The predicted values.
+        X_leaves : Dask Array of shape = [n_samples, n_trees] or shape = [n_samples, n_trees * n_classes]
+            If ``pred_leaf=True``, the predicted leaf of every tree for each sample.
+        X_SHAP_values : Dask Array of shape = [n_samples, n_features + 1] or shape = [n_samples, (n_features + 1) * n_classes] or (if multi-class and using sparse inputs) a list of ``n_classes`` Dask Arrays of shape = [n_samples, n_features + 1]
+            If ``pred_contrib=True``, the feature contributions for each sample.
+        """  # noqa: DOC105
         return _predict(
             model=self.to_local(),
             data=X,
@@ -1365,15 +1686,6 @@ class DaskLGBMClassifier(LGBMClassifier, _DaskLGBMModel):
             validate_features=validate_features,
             **kwargs,
         )
-
-    predict_proba.__doc__ = _lgbmmodel_doc_predict.format(
-        description="Return the predicted probability for each class for each sample.",
-        X_shape="Dask Array or Dask DataFrame of shape = [n_samples, n_features]",
-        output_name="predicted_probability",
-        predicted_result_shape="Dask Array of shape = [n_samples] or shape = [n_samples, n_classes]",
-        X_leaves_shape="Dask Array of shape = [n_samples, n_trees] or shape = [n_samples, n_trees * n_classes]",
-        X_SHAP_values_shape="Dask Array of shape = [n_samples, n_features + 1] or shape = [n_samples, (n_features + 1) * n_classes] or (if multi-class and using sparse inputs) a list of ``n_classes`` Dask Arrays of shape = [n_samples, n_features + 1]",
-    )
 
     def to_local(self) -> LGBMClassifier:
         """Create regular version of lightgbm.LGBMClassifier from the distributed version.
@@ -1414,7 +1726,128 @@ class DaskLGBMRegressor(LGBMRegressor, _DaskLGBMModel):
         client: Optional["distributed.Client"] = None,
         **kwargs: Any,
     ):
-        """Docstring is inherited from the lightgbm.LGBMRegressor.__init__."""
+        r"""Construct a gradient boosting model.
+
+        Parameters
+        ----------
+        boosting_type : str, optional (default='gbdt')
+            'gbdt', traditional Gradient Boosting Decision Tree.
+            'dart', Dropouts meet Multiple Additive Regression Trees.
+            'rf', Random Forest.
+        num_leaves : int, optional (default=31)
+            Maximum tree leaves for base learners.
+        max_depth : int, optional (default=-1)
+            Maximum tree depth for base learners, <=0 means no limit.
+            If setting this to a positive value, consider also changing ``num_leaves`` to ``<= 2^max_depth``.
+        learning_rate : float, optional (default=0.1)
+            Boosting learning rate.
+            You can use ``callbacks`` parameter of ``fit`` method to shrink/adapt learning rate
+            in training using ``reset_parameter`` callback.
+            Note, that this will ignore the ``learning_rate`` argument in training.
+        n_estimators : int, optional (default=100)
+            Number of boosted trees to fit.
+        subsample_for_bin : int, optional (default=200000)
+            Number of samples for constructing bins.
+        objective : str, callable or None, optional (default=None)
+            Specify the learning task and the corresponding learning objective or
+            a custom objective function to be used (see note below).
+            Default: 'regression' for LGBMRegressor, 'binary' or 'multiclass' for LGBMClassifier, 'lambdarank' for LGBMRanker.
+        class_weight : dict, 'balanced' or None, optional (default=None)
+            Weights associated with classes in the form ``{class_label: weight}``.
+            Use this parameter only for multi-class classification task;
+            for binary classification task you may use ``is_unbalance`` or ``scale_pos_weight`` parameters.
+            Note, that the usage of all these parameters will result in poor estimates of the individual class probabilities.
+            You may want to consider performing probability calibration
+            (https://scikit-learn.org/stable/modules/calibration.html) of your model.
+            The 'balanced' mode uses the values of y to automatically adjust weights
+            inversely proportional to class frequencies in the input data as ``n_samples / (n_classes * np.bincount(y))``.
+            If None, all classes are supposed to have weight one.
+            Note, that these weights will be multiplied with ``sample_weight`` (passed through the ``fit`` method)
+            if ``sample_weight`` is specified.
+        min_split_gain : float, optional (default=0.)
+            Minimum loss reduction required to make a further partition on a leaf node of the tree.
+        min_child_weight : float, optional (default=1e-3)
+            Minimum sum of instance weight (Hessian) needed in a child (leaf).
+        min_child_samples : int, optional (default=20)
+            Minimum number of data needed in a child (leaf).
+        subsample : float, optional (default=1.)
+            Subsample ratio of the training instance.
+        subsample_freq : int, optional (default=0)
+            Frequency of subsample, <=0 means no enable.
+        colsample_bytree : float, optional (default=1.)
+            Subsample ratio of columns when constructing each tree.
+        reg_alpha : float, optional (default=0.)
+            L1 regularization term on weights.
+        reg_lambda : float, optional (default=0.)
+            L2 regularization term on weights.
+        random_state : int, RandomState object or None, optional (default=None)
+            Random number seed.
+            If int, this number is used to seed the C++ code.
+            If RandomState or Generator object (numpy), a random integer is picked based on its state to seed the C++ code.
+            If None, default seeds in C++ code are used.
+        n_jobs : int or None, optional (default=None)
+            Number of parallel threads to use for training (can be changed at prediction time by
+            passing it as an extra keyword argument).
+
+            For better performance, it is recommended to set this to the number of physical cores
+            in the CPU.
+
+            Negative integers are interpreted as following joblib's formula (n_cpus + 1 + n_jobs), just like
+            scikit-learn (so e.g. -1 means using all threads). A value of zero corresponds the default number of
+            threads configured for OpenMP in the system. A value of ``None`` (the default) corresponds
+            to using the number of physical cores in the system (its correct detection requires
+            either the ``joblib`` or the ``psutil`` util libraries to be installed).
+
+            .. versionchanged:: 4.0.0
+
+        importance_type : str, optional (default='split')
+            The type of feature importance to be filled into ``feature_importances_``.
+            If 'split', result contains numbers of times the feature is used in a model.
+            If 'gain', result contains total gains of splits which use the feature.
+        client : distributed.Client or None, optional (default=None)
+            Dask client.
+            If ``None``, ``distributed.default_client()`` will be used at runtime.
+            The Dask client used by this class will not be saved if the model object is pickled.
+        **kwargs
+            Other parameters for the model.
+            Check http://lightgbm.readthedocs.io/en/latest/Parameters.html for more parameters.
+
+            .. warning::
+
+                \*\*kwargs is not supported in sklearn, it may cause unexpected issues.
+
+        Note
+        ----
+        A custom objective function can be provided for the ``objective`` parameter.
+        In this case, it should have the signature
+        ``objective(y_true, y_pred) -> grad, hess``,
+        ``objective(y_true, y_pred, weight) -> grad, hess``
+        or ``objective(y_true, y_pred, weight, group) -> grad, hess``:
+
+            y_true : numpy 1-D array of shape = [n_samples]
+                The target values.
+            y_pred : numpy 1-D array of shape = [n_samples] or numpy 2-D array of shape = [n_samples, n_classes] (for multi-class task)
+                The predicted values.
+                Predicted values are returned before any transformation,
+                e.g. they are raw margin instead of probability of positive class for binary task.
+            weight : numpy 1-D array of shape = [n_samples]
+                The weight of samples. Weights should be non-negative.
+            group : numpy 1-D array
+                Group/query data.
+                Only used in the learning-to-rank task.
+                sum(group) = n_samples.
+                For example, if you have a 100-document dataset with ``group = [10, 20, 40, 10, 10, 10]``, that means that you have 6 groups,
+                where the first 10 records are in the first group, records 11-30 are in the second group, records 31-70 are in the third group, etc.
+            grad : numpy 1-D array of shape = [n_samples] or numpy 2-D array of shape = [n_samples, n_classes] (for multi-class task)
+                The value of the first order derivative (gradient) of the loss
+                with respect to the elements of y_pred for each sample point.
+            hess : numpy 1-D array of shape = [n_samples] or numpy 2-D array of shape = [n_samples, n_classes] (for multi-class task)
+                The value of the second order derivative (Hessian) of the loss
+                with respect to the elements of y_pred for each sample point.
+
+        For multi-class task, y_pred is a numpy 2-D array of shape = [n_samples, n_classes],
+        and grad and hess should be returned in the same format.
+        """  # noqa: DOC105
         self.client = client
         super().__init__(
             boosting_type=boosting_type,
@@ -1439,18 +1872,6 @@ class DaskLGBMRegressor(LGBMRegressor, _DaskLGBMModel):
             **kwargs,
         )
 
-    _base_doc = LGBMRegressor.__init__.__doc__
-    _before_kwargs, _kwargs, _after_kwargs = _base_doc.partition("**kwargs")  # type: ignore
-    __init__.__doc__ = (
-        _before_kwargs
-        + "client : distributed.Client or None, optional (default=None)\n"
-        + "    Dask client. \n"
-        + "    If ``None``, ``distributed.default_client()`` will be used at runtime.\n"
-        + "    The Dask client used by this class will not be saved if the model object is pickled.\n"
-        + "**kwargs\n"
-        + _after_kwargs
-    )
-
     def __getstate__(self) -> Dict[Any, Any]:
         return self._lgb_dask_getstate()
 
@@ -1466,17 +1887,133 @@ class DaskLGBMRegressor(LGBMRegressor, _DaskLGBMModel):
         eval_init_score: Optional[List[_DaskVectorLike]] = None,
         eval_metric: Optional[_LGBM_ScikitEvalMetricType] = None,
         *,
+        categorical_feature: _LGBM_CategoricalFeatureConfiguration = "auto",
         eval_X: Optional[Union[_DaskMatrixLike, Tuple[_DaskMatrixLike]]] = None,
         eval_y: Optional[Union[_DaskCollection, Tuple[_DaskCollection]]] = None,
+        feature_name: _LGBM_FeatureNameConfiguration = "auto",
         **kwargs: Any,
     ) -> "DaskLGBMRegressor":
-        """Docstring is inherited from the lightgbm.LGBMRegressor.fit."""
+        """
+        Build a gradient boosting model from the training set (X, y).
+
+        Parameters
+        ----------
+        X : Dask Array or Dask DataFrame of shape = [n_samples, n_features]
+            Input feature matrix.
+
+            .. versionadded:: 4.2.0
+                Support for ``pyarrow`` inputs
+
+            .. versionadded:: 4.7.0
+                Support for ``polars`` inputs
+
+        y : Dask Array, Dask DataFrame or Dask Series of shape = [n_samples]
+            The target values (class labels in classification, real numbers in regression).
+
+            .. versionadded:: 4.2.0
+                Support for ``pyarrow`` inputs
+
+            .. versionadded:: 4.7.0
+                Support for ``polars`` inputs
+
+        sample_weight : Dask Array or Dask Series of shape = [n_samples] or None, optional (default=None)
+            Weights of training data. Weights should be non-negative.
+
+            .. versionadded:: 4.2.0
+                Support for ``pyarrow`` inputs
+
+            .. versionadded:: 4.7.0
+                Support for ``polars`` inputs
+
+        init_score : Dask Array or Dask Series of shape = [n_samples] or None, optional (default=None)
+            Init score of training data.
+
+            .. versionadded:: 4.2.0
+                Support for ``pyarrow`` inputs
+
+            .. versionadded:: 4.7.0
+                Support for ``polars`` inputs
+
+        eval_set : list or None, optional (default=None)
+            A list of (X, y) tuple pairs to use as validation sets.
+
+            .. deprecated:: 4.7.0
+                Use ``eval_X`` and ``eval_y`` instead.
+        eval_names : list of str, or None, optional (default=None)
+            Unique identifiers for each evaluation dataset.
+            Should be the same length as ``eval_set`` / ``eval_X``.
+        eval_sample_weight : list of Dask Array or Dask Series, or None, optional (default=None)
+            Weights of eval data. Weights should be non-negative.
+        eval_init_score : list of Dask Array or Dask Series, or None, optional (default=None)
+            Init score of eval data.
+        eval_metric : str, callable, list or None, optional (default=None)
+            If str, it should be a built-in evaluation metric to use.
+            If callable, it should be a custom evaluation metric, see note below for more details.
+            If list, it can be a list of built-in metrics, a list of custom evaluation metrics, or a mix of both.
+            In either case, the ``metric`` from the model parameters will be evaluated and used as well.
+            Default: 'l2' for LGBMRegressor, 'logloss' for LGBMClassifier, 'ndcg' for LGBMRanker.
+        categorical_feature : list of str or int, or 'auto', optional (default='auto')
+            Categorical features.
+            If list of int, interpreted as indices.
+            If list of str, interpreted as feature names (need to specify ``feature_name`` as well).
+            If 'auto' and data is pandas DataFrame, pandas unordered categorical columns are used.
+            All values in categorical features will be cast to int32 and thus should be less than int32 max value (2147483647).
+            Large values could be memory consuming. Consider using consecutive integers starting from zero.
+            All negative values in categorical features will be treated as missing values.
+            The output cannot be monotonically constrained with respect to a categorical feature.
+            Floating point numbers in categorical features will be rounded towards 0.
+        eval_X : Dask Array or Dask DataFrame, tuple thereof or None, optional (default=None)
+            Feature matrix or tuple thereof, e.g. ``(X_val0, X_val1)``, to use as validation sets.
+        eval_y : Dask Array or Dask DataFrame or Dask Series, tuple thereof or None, optional (default=None)
+            Target values or tuple thereof, e.g. ``(y_val0, y_val1)``, to use as validation sets.
+        feature_name : list of str, or 'auto', optional (default='auto')
+            Feature names.
+            If 'auto' and data is pandas DataFrame, data columns names are used.
+        **kwargs
+            Other parameters passed through to ``LGBMRegressor.fit()``.
+
+        Returns
+        -------
+        self : lightgbm.DaskLGBMRegressor
+            Returns self.
+
+        Note
+        ----
+        Custom eval function expects a callable with following signatures:
+        ``func(y_true, y_pred)``, ``func(y_true, y_pred, weight)`` or
+        ``func(y_true, y_pred, weight, group)``
+        and returns (metric_name, metric_value, maximize) or
+        list of (metric_name, metric_value, maximize):
+
+            y_true : numpy 1-D array of shape = [n_samples]
+                The target values.
+            y_pred : numpy 1-D array of shape = [n_samples] or numpy 2-D array of shape = [n_samples, n_classes] (for multi-class task)
+                The predicted values.
+                In case of custom ``objective``, predicted values are returned before any transformation,
+                e.g. they are raw margin instead of probability of positive class for binary task in this case.
+            weight : numpy 1-D array of shape = [n_samples]
+                The weight of samples. Weights should be non-negative.
+            group : numpy 1-D array
+                Group/query data.
+                Only used in the learning-to-rank task.
+                sum(group) = n_samples.
+                For example, if you have a 100-document dataset with ``group = [10, 20, 40, 10, 10, 10]``, that means that you have 6 groups,
+                where the first 10 records are in the first group, records 11-30 are in the second group, records 31-70 are in the third group, etc.
+            metric_name : str
+                Unique identifier for the metric (e.g. "custom_adjusted_mse").
+            metric_value : float
+                Value of the evaluation metric.
+            maximize : bool
+                Are higher values better? e.g. ``True`` for AUC and ``False`` for binary error.
+        """  # noqa: DOC105
         self._lgb_dask_fit(
             model_factory=LGBMRegressor,
             X=X,
             y=y,
             sample_weight=sample_weight,
             init_score=init_score,
+            categorical_feature=categorical_feature,
+            feature_name=feature_name,
             eval_set=eval_set,
             eval_names=eval_names,
             eval_X=eval_X,
@@ -1487,36 +2024,6 @@ class DaskLGBMRegressor(LGBMRegressor, _DaskLGBMModel):
             **kwargs,
         )
         return self
-
-    _base_doc = _lgbmmodel_doc_fit.format(
-        X_shape="Dask Array or Dask DataFrame of shape = [n_samples, n_features]",
-        y_shape="Dask Array, Dask DataFrame or Dask Series of shape = [n_samples]",
-        sample_weight_shape="Dask Array or Dask Series of shape = [n_samples] or None, optional (default=None)",
-        init_score_shape="Dask Array or Dask Series of shape = [n_samples] or None, optional (default=None)",
-        group_shape="Dask Array or Dask Series or None, optional (default=None)",
-        eval_sample_weight_shape="list of Dask Array or Dask Series, or None, optional (default=None)",
-        eval_init_score_shape="list of Dask Array or Dask Series, or None, optional (default=None)",
-        eval_group_shape="list of Dask Array or Dask Series, or None, optional (default=None)",
-    )
-
-    # DaskLGBMRegressor does not support group, eval_class_weight, eval_group.
-    _base_doc = _base_doc[: _base_doc.find("group :")] + _base_doc[_base_doc.find("eval_set :") :]
-
-    _base_doc = _base_doc[: _base_doc.find("eval_class_weight :")] + _base_doc[_base_doc.find("eval_init_score :") :]
-
-    _base_doc = _base_doc[: _base_doc.find("eval_group :")] + _base_doc[_base_doc.find("eval_metric :") :]
-
-    # DaskLGBMRegressor support for callbacks and init_model is not tested
-    fit.__doc__ = f"""{_base_doc[: _base_doc.find("callbacks :")]}**kwargs
-        Other parameters passed through to ``LGBMRegressor.fit()``.
-
-    Returns
-    -------
-    self : lightgbm.DaskLGBMRegressor
-        Returns self.
-
-    {_lgbmmodel_doc_custom_eval_note}
-        """
 
     def predict(
         self,
@@ -1529,7 +2036,53 @@ class DaskLGBMRegressor(LGBMRegressor, _DaskLGBMModel):
         validate_features: bool = False,
         **kwargs: Any,
     ) -> "dask.array.Array":
-        """Docstring is inherited from the lightgbm.LGBMRegressor.predict."""
+        """
+        Return the predicted value for each sample.
+
+        Parameters
+        ----------
+        X : Dask Array or Dask DataFrame of shape = [n_samples, n_features]
+            Input features matrix.
+        raw_score : bool, optional (default=False)
+            Whether to predict raw scores.
+        start_iteration : int, optional (default=0)
+            Start index of the iteration to predict.
+            If <= 0, starts from the first iteration.
+        num_iteration : int or None, optional (default=None)
+            Total number of iterations used in the prediction.
+            If None, if the best iteration exists and start_iteration <= 0, the best iteration is used;
+            otherwise, all iterations from ``start_iteration`` are used (no limits).
+            If <= 0, all iterations from ``start_iteration`` are used (no limits).
+        pred_leaf : bool, optional (default=False)
+            Whether to predict leaf index.
+        pred_contrib : bool, optional (default=False)
+            Whether to predict feature contributions.
+
+            .. note::
+
+                If you want to get more explanations for your model's predictions using SHAP values,
+                like SHAP interaction values,
+                you can install the shap package (https://github.com/slundberg/shap).
+                Note that unlike the shap package, with ``pred_contrib`` we return a matrix with an extra
+                column, where the last column is the expected value.
+                Summing each row's Shapley values with its expected value gives you the model's raw score
+                (as returned by ``predict(X, raw_score=True)``).
+
+        validate_features : bool, optional (default=False)
+            If True, ensure that the features used to predict match the ones used to train.
+            Used only if data is pandas DataFrame.
+        **kwargs
+            Other parameters for the prediction.
+
+        Returns
+        -------
+        predicted_result : Dask Array of shape = [n_samples]
+            The predicted values.
+        X_leaves : Dask Array of shape = [n_samples, n_trees]
+            If ``pred_leaf=True``, the predicted leaf of every tree for each sample.
+        X_SHAP_values : Dask Array of shape = [n_samples, n_features + 1]
+            If ``pred_contrib=True``, the feature contributions for each sample.
+        """  # noqa: DOC105
         return _predict(
             model=self.to_local(),
             data=X,
@@ -1542,15 +2095,6 @@ class DaskLGBMRegressor(LGBMRegressor, _DaskLGBMModel):
             validate_features=validate_features,
             **kwargs,
         )
-
-    predict.__doc__ = _lgbmmodel_doc_predict.format(
-        description="Return the predicted value for each sample.",
-        X_shape="Dask Array or Dask DataFrame of shape = [n_samples, n_features]",
-        output_name="predicted_result",
-        predicted_result_shape="Dask Array of shape = [n_samples]",
-        X_leaves_shape="Dask Array of shape = [n_samples, n_trees]",
-        X_SHAP_values_shape="Dask Array of shape = [n_samples, n_features + 1]",
-    )
 
     def to_local(self) -> LGBMRegressor:
         """Create regular version of lightgbm.LGBMRegressor from the distributed version.
@@ -1591,7 +2135,128 @@ class DaskLGBMRanker(LGBMRanker, _DaskLGBMModel):
         client: Optional["distributed.Client"] = None,
         **kwargs: Any,
     ):
-        """Docstring is inherited from the lightgbm.LGBMRanker.__init__."""
+        r"""Construct a gradient boosting model.
+
+        Parameters
+        ----------
+        boosting_type : str, optional (default='gbdt')
+            'gbdt', traditional Gradient Boosting Decision Tree.
+            'dart', Dropouts meet Multiple Additive Regression Trees.
+            'rf', Random Forest.
+        num_leaves : int, optional (default=31)
+            Maximum tree leaves for base learners.
+        max_depth : int, optional (default=-1)
+            Maximum tree depth for base learners, <=0 means no limit.
+            If setting this to a positive value, consider also changing ``num_leaves`` to ``<= 2^max_depth``.
+        learning_rate : float, optional (default=0.1)
+            Boosting learning rate.
+            You can use ``callbacks`` parameter of ``fit`` method to shrink/adapt learning rate
+            in training using ``reset_parameter`` callback.
+            Note, that this will ignore the ``learning_rate`` argument in training.
+        n_estimators : int, optional (default=100)
+            Number of boosted trees to fit.
+        subsample_for_bin : int, optional (default=200000)
+            Number of samples for constructing bins.
+        objective : str, callable or None, optional (default=None)
+            Specify the learning task and the corresponding learning objective or
+            a custom objective function to be used (see note below).
+            Default: 'regression' for LGBMRegressor, 'binary' or 'multiclass' for LGBMClassifier, 'lambdarank' for LGBMRanker.
+        class_weight : dict, 'balanced' or None, optional (default=None)
+            Weights associated with classes in the form ``{class_label: weight}``.
+            Use this parameter only for multi-class classification task;
+            for binary classification task you may use ``is_unbalance`` or ``scale_pos_weight`` parameters.
+            Note, that the usage of all these parameters will result in poor estimates of the individual class probabilities.
+            You may want to consider performing probability calibration
+            (https://scikit-learn.org/stable/modules/calibration.html) of your model.
+            The 'balanced' mode uses the values of y to automatically adjust weights
+            inversely proportional to class frequencies in the input data as ``n_samples / (n_classes * np.bincount(y))``.
+            If None, all classes are supposed to have weight one.
+            Note, that these weights will be multiplied with ``sample_weight`` (passed through the ``fit`` method)
+            if ``sample_weight`` is specified.
+        min_split_gain : float, optional (default=0.)
+            Minimum loss reduction required to make a further partition on a leaf node of the tree.
+        min_child_weight : float, optional (default=1e-3)
+            Minimum sum of instance weight (Hessian) needed in a child (leaf).
+        min_child_samples : int, optional (default=20)
+            Minimum number of data needed in a child (leaf).
+        subsample : float, optional (default=1.)
+            Subsample ratio of the training instance.
+        subsample_freq : int, optional (default=0)
+            Frequency of subsample, <=0 means no enable.
+        colsample_bytree : float, optional (default=1.)
+            Subsample ratio of columns when constructing each tree.
+        reg_alpha : float, optional (default=0.)
+            L1 regularization term on weights.
+        reg_lambda : float, optional (default=0.)
+            L2 regularization term on weights.
+        random_state : int, RandomState object or None, optional (default=None)
+            Random number seed.
+            If int, this number is used to seed the C++ code.
+            If RandomState or Generator object (numpy), a random integer is picked based on its state to seed the C++ code.
+            If None, default seeds in C++ code are used.
+        n_jobs : int or None, optional (default=None)
+            Number of parallel threads to use for training (can be changed at prediction time by
+            passing it as an extra keyword argument).
+
+            For better performance, it is recommended to set this to the number of physical cores
+            in the CPU.
+
+            Negative integers are interpreted as following joblib's formula (n_cpus + 1 + n_jobs), just like
+            scikit-learn (so e.g. -1 means using all threads). A value of zero corresponds the default number of
+            threads configured for OpenMP in the system. A value of ``None`` (the default) corresponds
+            to using the number of physical cores in the system (its correct detection requires
+            either the ``joblib`` or the ``psutil`` util libraries to be installed).
+
+            .. versionchanged:: 4.0.0
+
+        importance_type : str, optional (default='split')
+            The type of feature importance to be filled into ``feature_importances_``.
+            If 'split', result contains numbers of times the feature is used in a model.
+            If 'gain', result contains total gains of splits which use the feature.
+        client : distributed.Client or None, optional (default=None)
+            Dask client.
+            If ``None``, ``distributed.default_client()`` will be used at runtime.
+            The Dask client used by this class will not be saved if the model object is pickled.
+        **kwargs
+            Other parameters for the model.
+            Check http://lightgbm.readthedocs.io/en/latest/Parameters.html for more parameters.
+
+            .. warning::
+
+                \*\*kwargs is not supported in sklearn, it may cause unexpected issues.
+
+        Note
+        ----
+        A custom objective function can be provided for the ``objective`` parameter.
+        In this case, it should have the signature
+        ``objective(y_true, y_pred) -> grad, hess``,
+        ``objective(y_true, y_pred, weight) -> grad, hess``
+        or ``objective(y_true, y_pred, weight, group) -> grad, hess``:
+
+            y_true : numpy 1-D array of shape = [n_samples]
+                The target values.
+            y_pred : numpy 1-D array of shape = [n_samples] or numpy 2-D array of shape = [n_samples, n_classes] (for multi-class task)
+                The predicted values.
+                Predicted values are returned before any transformation,
+                e.g. they are raw margin instead of probability of positive class for binary task.
+            weight : numpy 1-D array of shape = [n_samples]
+                The weight of samples. Weights should be non-negative.
+            group : numpy 1-D array
+                Group/query data.
+                Only used in the learning-to-rank task.
+                sum(group) = n_samples.
+                For example, if you have a 100-document dataset with ``group = [10, 20, 40, 10, 10, 10]``, that means that you have 6 groups,
+                where the first 10 records are in the first group, records 11-30 are in the second group, records 31-70 are in the third group, etc.
+            grad : numpy 1-D array of shape = [n_samples] or numpy 2-D array of shape = [n_samples, n_classes] (for multi-class task)
+                The value of the first order derivative (gradient) of the loss
+                with respect to the elements of y_pred for each sample point.
+            hess : numpy 1-D array of shape = [n_samples] or numpy 2-D array of shape = [n_samples, n_classes] (for multi-class task)
+                The value of the second order derivative (Hessian) of the loss
+                with respect to the elements of y_pred for each sample point.
+
+        For multi-class task, y_pred is a numpy 2-D array of shape = [n_samples, n_classes],
+        and grad and hess should be returned in the same format.
+        """  # noqa: DOC105
         self.client = client
         super().__init__(
             boosting_type=boosting_type,
@@ -1616,18 +2281,6 @@ class DaskLGBMRanker(LGBMRanker, _DaskLGBMModel):
             **kwargs,
         )
 
-    _base_doc = LGBMRanker.__init__.__doc__
-    _before_kwargs, _kwargs, _after_kwargs = _base_doc.partition("**kwargs")  # type: ignore
-    __init__.__doc__ = (
-        _before_kwargs
-        + "client : distributed.Client or None, optional (default=None)\n"
-        + "    Dask client. \n"
-        + "    If ``None``, ``distributed.default_client()`` will be used at runtime.\n"
-        + "    The Dask client used by this class will not be saved if the model object is pickled.\n"
-        + "**kwargs\n"
-        + _after_kwargs
-    )
-
     def __getstate__(self) -> Dict[Any, Any]:
         return self._lgb_dask_getstate()
 
@@ -1646,11 +2299,142 @@ class DaskLGBMRanker(LGBMRanker, _DaskLGBMModel):
         eval_metric: Optional[_LGBM_ScikitEvalMetricType] = None,
         eval_at: Union[List[int], Tuple[int, ...]] = (1, 2, 3, 4, 5),
         *,
+        categorical_feature: _LGBM_CategoricalFeatureConfiguration = "auto",
         eval_X: Optional[Union[_DaskMatrixLike, Tuple[_DaskMatrixLike]]] = None,
         eval_y: Optional[Union[_DaskCollection, Tuple[_DaskCollection]]] = None,
+        feature_name: _LGBM_FeatureNameConfiguration = "auto",
         **kwargs: Any,
     ) -> "DaskLGBMRanker":
-        """Docstring is inherited from the lightgbm.LGBMRanker.fit."""
+        """
+        Build a gradient boosting model from the training set (X, y).
+
+        Parameters
+        ----------
+        X : Dask Array or Dask DataFrame of shape = [n_samples, n_features]
+            Input feature matrix.
+
+            .. versionadded:: 4.2.0
+                Support for ``pyarrow`` inputs
+
+            .. versionadded:: 4.7.0
+                Support for ``polars`` inputs
+
+        y : Dask Array, Dask DataFrame or Dask Series of shape = [n_samples]
+            The target values (class labels in classification, real numbers in regression).
+
+            .. versionadded:: 4.2.0
+                Support for ``pyarrow`` inputs
+
+            .. versionadded:: 4.7.0
+                Support for ``polars`` inputs
+
+        sample_weight : Dask Array or Dask Series of shape = [n_samples] or None, optional (default=None)
+            Weights of training data. Weights should be non-negative.
+
+            .. versionadded:: 4.2.0
+                Support for ``pyarrow`` inputs
+
+            .. versionadded:: 4.7.0
+                Support for ``polars`` inputs
+
+        init_score : Dask Array or Dask Series of shape = [n_samples] or None, optional (default=None)
+            Init score of training data.
+
+            .. versionadded:: 4.2.0
+                Support for ``pyarrow`` inputs
+
+            .. versionadded:: 4.7.0
+                Support for ``polars`` inputs
+
+        group : Dask Array or Dask Series or None, optional (default=None)
+            Group/query data.
+            Only used in the learning-to-rank task.
+            sum(group) = n_samples.
+            For example, if you have a 100-document dataset with ``group = [10, 20, 40, 10, 10, 10]``, that means that you have 6 groups,
+            where the first 10 records are in the first group, records 11-30 are in the second group, records 31-70 are in the third group, etc.
+
+            .. versionadded:: 4.2.0
+                Support for ``pyarrow`` inputs
+
+            .. versionadded:: 4.7.0
+                Support for ``polars`` inputs
+
+        eval_set : list or None, optional (default=None)
+            A list of (X, y) tuple pairs to use as validation sets.
+
+            .. deprecated:: 4.7.0
+                Use ``eval_X`` and ``eval_y`` instead.
+        eval_names : list of str, or None, optional (default=None)
+            Unique identifiers for each evaluation dataset.
+            Should be the same length as ``eval_set`` / ``eval_X``.
+        eval_sample_weight : list of Dask Array or Dask Series, or None, optional (default=None)
+            Weights of eval data. Weights should be non-negative.
+        eval_init_score : list of Dask Array or Dask Series, or None, optional (default=None)
+            Init score of eval data.
+        eval_group : list of Dask Array or Dask Series, or None, optional (default=None)
+            Group data of eval data.
+        eval_metric : str, callable, list or None, optional (default=None)
+            If str, it should be a built-in evaluation metric to use.
+            If callable, it should be a custom evaluation metric, see note below for more details.
+            If list, it can be a list of built-in metrics, a list of custom evaluation metrics, or a mix of both.
+            In either case, the ``metric`` from the model parameters will be evaluated and used as well.
+            Default: 'l2' for LGBMRegressor, 'logloss' for LGBMClassifier, 'ndcg' for LGBMRanker.
+        eval_at : list or tuple of int, optional (default=(1, 2, 3, 4, 5))
+            The evaluation positions of the specified metric.
+        categorical_feature : list of str or int, or 'auto', optional (default='auto')
+            Categorical features.
+            If list of int, interpreted as indices.
+            If list of str, interpreted as feature names (need to specify ``feature_name`` as well).
+            If 'auto' and data is pandas DataFrame, pandas unordered categorical columns are used.
+            All values in categorical features will be cast to int32 and thus should be less than int32 max value (2147483647).
+            Large values could be memory consuming. Consider using consecutive integers starting from zero.
+            All negative values in categorical features will be treated as missing values.
+            The output cannot be monotonically constrained with respect to a categorical feature.
+            Floating point numbers in categorical features will be rounded towards 0.
+        eval_X : Dask Array or Dask DataFrame, tuple thereof or None, optional (default=None)
+            Feature matrix or tuple thereof, e.g. ``(X_val0, X_val1)``, to use as validation sets.
+        eval_y : Dask Array or Dask DataFrame or Dask Series, tuple thereof or None, optional (default=None)
+            Target values or tuple thereof, e.g. ``(y_val0, y_val1)``, to use as validation sets.
+        feature_name : list of str, or 'auto', optional (default='auto')
+            Feature names.
+            If 'auto' and data is pandas DataFrame, data columns names are used.
+        **kwargs
+            Other parameters passed through to ``LGBMRanker.fit()``.
+
+        Returns
+        -------
+        self : lightgbm.DaskLGBMRanker
+            Returns self.
+
+        Note
+        ----
+        Custom eval function expects a callable with following signatures:
+        ``func(y_true, y_pred)``, ``func(y_true, y_pred, weight)`` or
+        ``func(y_true, y_pred, weight, group)``
+        and returns (metric_name, metric_value, maximize) or
+        list of (metric_name, metric_value, maximize):
+
+            y_true : numpy 1-D array of shape = [n_samples]
+                The target values.
+            y_pred : numpy 1-D array of shape = [n_samples] or numpy 2-D array of shape = [n_samples, n_classes] (for multi-class task)
+                The predicted values.
+                In case of custom ``objective``, predicted values are returned before any transformation,
+                e.g. they are raw margin instead of probability of positive class for binary task in this case.
+            weight : numpy 1-D array of shape = [n_samples]
+                The weight of samples. Weights should be non-negative.
+            group : numpy 1-D array
+                Group/query data.
+                Only used in the learning-to-rank task.
+                sum(group) = n_samples.
+                For example, if you have a 100-document dataset with ``group = [10, 20, 40, 10, 10, 10]``, that means that you have 6 groups,
+                where the first 10 records are in the first group, records 11-30 are in the second group, records 31-70 are in the third group, etc.
+            metric_name : str
+                Unique identifier for the metric (e.g. "custom_adjusted_mse").
+            metric_value : float
+                Value of the evaluation metric.
+            maximize : bool
+                Are higher values better? e.g. ``True`` for AUC and ``False`` for binary error.
+        """  # noqa: DOC105
         self._lgb_dask_fit(
             model_factory=LGBMRanker,
             X=X,
@@ -1658,6 +2442,8 @@ class DaskLGBMRanker(LGBMRanker, _DaskLGBMModel):
             sample_weight=sample_weight,
             init_score=init_score,
             group=group,
+            categorical_feature=categorical_feature,
+            feature_name=feature_name,
             eval_set=eval_set,
             eval_names=eval_names,
             eval_X=eval_X,
@@ -1671,39 +2457,6 @@ class DaskLGBMRanker(LGBMRanker, _DaskLGBMModel):
         )
         return self
 
-    _base_doc = _lgbmmodel_doc_fit.format(
-        X_shape="Dask Array or Dask DataFrame of shape = [n_samples, n_features]",
-        y_shape="Dask Array, Dask DataFrame or Dask Series of shape = [n_samples]",
-        sample_weight_shape="Dask Array or Dask Series of shape = [n_samples] or None, optional (default=None)",
-        init_score_shape="Dask Array or Dask Series of shape = [n_samples] or None, optional (default=None)",
-        group_shape="Dask Array or Dask Series or None, optional (default=None)",
-        eval_sample_weight_shape="list of Dask Array or Dask Series, or None, optional (default=None)",
-        eval_init_score_shape="list of Dask Array or Dask Series, or None, optional (default=None)",
-        eval_group_shape="list of Dask Array or Dask Series, or None, optional (default=None)",
-    )
-
-    # DaskLGBMRanker does not support eval_class_weight or early stopping
-    _base_doc = _base_doc[: _base_doc.find("eval_class_weight :")] + _base_doc[_base_doc.find("eval_init_score :") :]
-
-    _base_doc = (
-        _base_doc[: _base_doc.find("feature_name :")]
-        + "eval_at : list or tuple of int, optional (default=(1, 2, 3, 4, 5))\n"
-        + f"{' ':8}The evaluation positions of the specified metric.\n"
-        + f"{' ':4}{_base_doc[_base_doc.find('feature_name :') :]}"
-    )
-
-    # DaskLGBMRanker support for callbacks and init_model is not tested
-    fit.__doc__ = f"""{_base_doc[: _base_doc.find("callbacks :")]}**kwargs
-        Other parameters passed through to ``LGBMRanker.fit()``.
-
-    Returns
-    -------
-    self : lightgbm.DaskLGBMRanker
-        Returns self.
-
-    {_lgbmmodel_doc_custom_eval_note}
-        """
-
     def predict(
         self,
         X: _DaskMatrixLike,  # type: ignore[override]
@@ -1715,7 +2468,53 @@ class DaskLGBMRanker(LGBMRanker, _DaskLGBMModel):
         validate_features: bool = False,
         **kwargs: Any,
     ) -> "dask.array.Array":
-        """Docstring is inherited from the lightgbm.LGBMRanker.predict."""
+        """
+        Return the predicted value for each sample.
+
+        Parameters
+        ----------
+        X : Dask Array or Dask DataFrame of shape = [n_samples, n_features]
+            Input features matrix.
+        raw_score : bool, optional (default=False)
+            Whether to predict raw scores.
+        start_iteration : int, optional (default=0)
+            Start index of the iteration to predict.
+            If <= 0, starts from the first iteration.
+        num_iteration : int or None, optional (default=None)
+            Total number of iterations used in the prediction.
+            If None, if the best iteration exists and start_iteration <= 0, the best iteration is used;
+            otherwise, all iterations from ``start_iteration`` are used (no limits).
+            If <= 0, all iterations from ``start_iteration`` are used (no limits).
+        pred_leaf : bool, optional (default=False)
+            Whether to predict leaf index.
+        pred_contrib : bool, optional (default=False)
+            Whether to predict feature contributions.
+
+            .. note::
+
+                If you want to get more explanations for your model's predictions using SHAP values,
+                like SHAP interaction values,
+                you can install the shap package (https://github.com/slundberg/shap).
+                Note that unlike the shap package, with ``pred_contrib`` we return a matrix with an extra
+                column, where the last column is the expected value.
+                Summing each row's Shapley values with its expected value gives you the model's raw score
+                (as returned by ``predict(X, raw_score=True)``).
+
+        validate_features : bool, optional (default=False)
+            If True, ensure that the features used to predict match the ones used to train.
+            Used only if data is pandas DataFrame.
+        **kwargs
+            Other parameters for the prediction.
+
+        Returns
+        -------
+        predicted_result : Dask Array of shape = [n_samples]
+            The predicted values.
+        X_leaves : Dask Array of shape = [n_samples, n_trees]
+            If ``pred_leaf=True``, the predicted leaf of every tree for each sample.
+        X_SHAP_values : Dask Array of shape = [n_samples, n_features + 1]
+            If ``pred_contrib=True``, the feature contributions for each sample.
+        """  # noqa: DOC105
         return _predict(
             model=self.to_local(),
             data=X,
@@ -1728,15 +2527,6 @@ class DaskLGBMRanker(LGBMRanker, _DaskLGBMModel):
             validate_features=validate_features,
             **kwargs,
         )
-
-    predict.__doc__ = _lgbmmodel_doc_predict.format(
-        description="Return the predicted value for each sample.",
-        X_shape="Dask Array or Dask DataFrame of shape = [n_samples, n_features]",
-        output_name="predicted_result",
-        predicted_result_shape="Dask Array of shape = [n_samples]",
-        X_leaves_shape="Dask Array of shape = [n_samples, n_trees]",
-        X_SHAP_values_shape="Dask Array of shape = [n_samples, n_features + 1]",
-    )
 
     def to_local(self) -> LGBMRanker:
         """Create regular version of lightgbm.LGBMRanker from the distributed version.

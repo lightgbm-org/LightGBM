@@ -1,14 +1,16 @@
 # coding: utf-8
+import difflib
+import filecmp
 import os
 import pickle
 from functools import lru_cache
-from inspect import getfullargspec
+from inspect import cleandoc, getfullargspec
+from pathlib import Path
 
 import cloudpickle
 import joblib
 import numpy as np
-import sklearn.datasets
-from sklearn.utils import check_random_state
+import pytest
 
 import lightgbm as lgb
 
@@ -17,22 +19,32 @@ SERIALIZERS = ["pickle", "joblib", "cloudpickle"]
 
 @lru_cache(maxsize=None)
 def load_breast_cancer(**kwargs):
+    sklearn = pytest.importorskip("sklearn")
     return sklearn.datasets.load_breast_cancer(**kwargs)
 
 
 @lru_cache(maxsize=None)
 def load_digits(**kwargs):
+    sklearn = pytest.importorskip("sklearn")
     return sklearn.datasets.load_digits(**kwargs)
 
 
 @lru_cache(maxsize=None)
 def load_iris(**kwargs):
+    sklearn = pytest.importorskip("sklearn")
     return sklearn.datasets.load_iris(**kwargs)
 
 
 @lru_cache(maxsize=None)
 def load_linnerud(**kwargs):
+    sklearn = pytest.importorskip("sklearn")
     return sklearn.datasets.load_linnerud(**kwargs)
+
+
+@lru_cache(maxsize=None)
+def make_blobs(**kwargs):
+    sklearn = pytest.importorskip("sklearn")
+    return sklearn.datasets.make_blobs(**kwargs)
 
 
 def make_ranking(
@@ -74,7 +86,8 @@ def make_ranking(
     group_ids : 1-d np.array of shape = [n_samples (or np.sum(group))]
         Array of group ids, each value indicates to which group each record belongs.
     """
-    rnd_generator = check_random_state(random_state)
+    sklearn = pytest.importorskip("sklearn")
+    rnd_generator = sklearn.utils.check_random_state(random_state)
 
     y_vec, group_id_vec = np.empty((0,), dtype=int), np.empty((0,), dtype=int)
     gid = 0
@@ -118,6 +131,7 @@ def make_ranking(
 
 @lru_cache(maxsize=None)
 def make_synthetic_regression(*, n_samples=100, n_features=4, n_informative=2, random_state=42):
+    sklearn = pytest.importorskip("sklearn")
     return sklearn.datasets.make_regression(
         n_samples=n_samples, n_features=n_features, n_informative=n_informative, random_state=random_state
     )
@@ -157,6 +171,11 @@ def sklearn_multiclass_custom_objective(y_true, y_pred, weight=None):
         grad *= weight2d
         hess *= weight2d
     return grad, hess
+
+
+def train_test_split(*args, **kwargs):
+    sklearn = pytest.importorskip("sklearn")
+    return sklearn.model_selection.train_test_split(*args, **kwargs)
 
 
 def pickle_obj(obj, filepath, serializer):
@@ -277,3 +296,34 @@ class BuildInfo:
     has_cuda = os.getenv("TASK", "") == "cuda"
     has_gpu = os.getenv("TASK", "") == "gpu"
     has_mpi = os.getenv("TASK", "") == "mpi"
+
+
+def assert_datasets_equal(tmp_path: Path, lhs: lgb.Dataset, rhs: lgb.Dataset) -> None:
+    lhs._dump_text(tmp_path / "lhs.txt")
+    rhs._dump_text(tmp_path / "rhs.txt")
+    assert filecmp.cmp(tmp_path / "lhs.txt", tmp_path / "rhs.txt")
+
+
+def assert_docstrings_equal(
+    class1: type,
+    method1: str,
+    class2: type,
+    method2: str,
+    *,
+    expected_diff: str = "",
+) -> None:
+
+    # this will fail (intentionally) if either class doesn't have the method
+    doc1_docstring = cleandoc(getattr(class1, method1).__doc__)
+    doc2_docstring = cleandoc(getattr(class2, method2).__doc__)
+
+    # if they do, compare them
+    diff = difflib.unified_diff(
+        doc1_docstring.splitlines(keepends=True),
+        doc2_docstring.splitlines(keepends=True),
+        fromfile=f"{class1.__name__}.{method1}",
+        tofile=f"{class2.__name__}.{method2}",
+        n=0,
+    )
+    stringified_diff = "".join(line for line in diff)
+    assert stringified_diff == expected_diff, f"docs differ:\n\n{stringified_diff}"

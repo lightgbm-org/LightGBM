@@ -1,6 +1,5 @@
 # coding: utf-8
-import filecmp
-from pathlib import Path
+from datetime import date, datetime
 from typing import Any, Dict, Optional
 
 import numpy as np
@@ -8,7 +7,7 @@ import pytest
 
 import lightgbm as lgb
 
-from .utils import np_assert_array_equal
+from .utils import assert_datasets_equal, np_assert_array_equal
 
 pl = pytest.importorskip("polars")
 
@@ -19,6 +18,8 @@ pl = pytest.importorskip("polars")
 
 _INTEGER_TYPES = [pl.Int8, pl.Int16, pl.Int32, pl.Int64, pl.UInt8, pl.UInt16, pl.UInt32, pl.UInt64]
 _FLOAT_TYPES = [pl.Float32, pl.Float64]
+_POLARS_VERSION = tuple(map(int, pl.__version__.split(".")[:2]))
+_UNORDERED_CATEGORICAL = pl.Categorical(ordering="lexical") if _POLARS_VERSION < (1, 32) else pl.Categorical()
 
 
 def generate_simple_polars_frame() -> pl.DataFrame:
@@ -50,6 +51,7 @@ def generate_dummy_polars_frame() -> pl.DataFrame:
 
 
 def generate_random_polars_frame(
+    *,
     num_columns: int,
     num_datapoints: int,
     seed: int,
@@ -59,7 +61,7 @@ def generate_random_polars_frame(
     return pl.DataFrame(
         {
             f"col_{i}": generate_random_polars_series(
-                num_datapoints, seed + i, generate_nulls=generate_nulls, values=values
+                num_datapoints=num_datapoints, seed=seed + i, generate_nulls=generate_nulls, values=values
             )
             for i in range(num_columns)
         }
@@ -67,6 +69,7 @@ def generate_random_polars_frame(
 
 
 def generate_random_polars_series(
+    *,
     num_datapoints: int,
     seed: int,
     generate_nulls: bool = True,
@@ -89,6 +92,7 @@ def dummy_dataset_params() -> Dict[str, Any]:
     return {
         "min_data_in_bin": 1,
         "min_data_in_leaf": 1,
+        "force_row_wise": True,
     }
 
 
@@ -99,21 +103,15 @@ def dummy_dataset_params() -> Dict[str, Any]:
 # ------------------------------------------- DATASET ------------------------------------------- #
 
 
-def assert_datasets_equal(tmp_path: Path, lhs: lgb.Dataset, rhs: lgb.Dataset):
-    lhs._dump_text(tmp_path / "polars.txt")
-    rhs._dump_text(tmp_path / "pandas.txt")
-    assert filecmp.cmp(tmp_path / "polars.txt", tmp_path / "pandas.txt")
-
-
 @pytest.mark.parametrize(
     ("polars_frame_fn", "dataset_params"),
     [  # Use lambda functions here to minimize memory consumption
-        (lambda: generate_simple_polars_frame(), dummy_dataset_params()),
-        (lambda: generate_dummy_polars_frame(), dummy_dataset_params()),
+        (generate_simple_polars_frame, dummy_dataset_params()),
+        (generate_dummy_polars_frame, dummy_dataset_params()),
         (lambda: generate_nullable_polars_frame(pl.Float32), dummy_dataset_params()),
         (lambda: generate_nullable_polars_frame(pl.Int32), dummy_dataset_params()),
-        (lambda: generate_random_polars_frame(3, 1000, 42), {}),
-        (lambda: generate_random_polars_frame(100, 10000, 43), {}),
+        (lambda: generate_random_polars_frame(num_columns=3, num_datapoints=1000, seed=42), {}),
+        (lambda: generate_random_polars_frame(num_columns=100, num_datapoints=10000, seed=43), {}),
     ],
 )
 def test_dataset_construct_fuzzy(tmp_path, polars_frame_fn, dataset_params):
@@ -129,7 +127,9 @@ def test_dataset_construct_fuzzy(tmp_path, polars_frame_fn, dataset_params):
 
 
 def test_dataset_construct_fuzzy_boolean(tmp_path):
-    boolean_data = generate_random_polars_frame(10, 10000, 42, generate_nulls=False, values=np.array([True, False]))
+    boolean_data = generate_random_polars_frame(
+        num_columns=10, num_datapoints=10000, seed=42, generate_nulls=False, values=np.array([True, False])
+    )
     float_data = boolean_data.cast(pl.Float32)
 
     polars_dataset = lgb.Dataset(boolean_data)
@@ -145,12 +145,21 @@ def test_dataset_construct_fuzzy_boolean(tmp_path):
 
 
 def test_dataset_construct_fields_fuzzy():
-    polars_frame = generate_random_polars_frame(3, 1000, 42)
-    polars_labels = generate_random_polars_series(1000, 42, generate_nulls=False)
-    polars_weights = generate_random_polars_series(1000, 42, generate_nulls=False)
+    polars_frame = generate_random_polars_frame(num_columns=3, num_datapoints=1000, seed=42)
+    polars_labels = generate_random_polars_series(num_datapoints=1000, seed=42, generate_nulls=False)
+    polars_weights = generate_random_polars_series(num_datapoints=1000, seed=42, generate_nulls=False)
+    polars_init_scores = generate_random_polars_series(num_datapoints=1000, seed=44, generate_nulls=False)
     polars_groups = pl.Series("group", [300, 400, 50, 250], dtype=pl.Int32)
+    polars_positions = pl.Series("position", np.random.default_rng(45).integers(0, 10, size=1000), dtype=pl.Int32)
 
-    polars_dataset = lgb.Dataset(polars_frame, label=polars_labels, weight=polars_weights, group=polars_groups)
+    polars_dataset = lgb.Dataset(
+        polars_frame,
+        label=polars_labels,
+        weight=polars_weights,
+        group=polars_groups,
+        init_score=polars_init_scores,
+        position=polars_positions,
+    )
     polars_dataset.construct()
 
     pandas_dataset = lgb.Dataset(
@@ -158,14 +167,13 @@ def test_dataset_construct_fields_fuzzy():
         label=polars_labels.to_numpy(),
         weight=polars_weights.to_numpy(),
         group=polars_groups.to_numpy(),
+        init_score=polars_init_scores.to_numpy(),
+        position=polars_positions.to_numpy(),
     )
     pandas_dataset.construct()
 
-    # Check for equality
-    for field in ("label", "weight", "group"):
+    for field in ("label", "weight", "group", "init_score", "position"):
         np_assert_array_equal(polars_dataset.get_field(field), pandas_dataset.get_field(field), strict=True)
-    np_assert_array_equal(polars_dataset.get_label(), pandas_dataset.get_label(), strict=True)
-    np_assert_array_equal(polars_dataset.get_weight(), pandas_dataset.get_weight(), strict=True)
 
 
 # -------------------------------------------- LABELS ------------------------------------------- #
@@ -180,6 +188,7 @@ def test_dataset_construct_labels(polars_type):
 
     expected = np.array([0, 1, 0, 0, 1], dtype=np.float32)
     np_assert_array_equal(expected, dataset.get_label(), strict=True)
+    np_assert_array_equal(expected, dataset.get_field("label"), strict=True)
 
 
 def test_dataset_construct_labels_boolean():
@@ -190,6 +199,7 @@ def test_dataset_construct_labels_boolean():
 
     expected = np.array([0, 1, 0, 0, 1], dtype=np.float32)
     np_assert_array_equal(expected, dataset.get_label(), strict=True)
+    np_assert_array_equal(expected, dataset.get_field("label"), strict=True)
 
 
 # ------------------------------------------- WEIGHTS ------------------------------------------- #
@@ -213,6 +223,7 @@ def test_dataset_construct_weights(polars_type):
 
     expected = np.array([3, 0.7, 1.5, 0.5, 0.1], dtype=np.float32)
     np_assert_array_equal(expected, dataset.get_weight(), strict=True)
+    np_assert_array_equal(expected, dataset.get_field("weight"), strict=True)
 
 
 # -------------------------------------------- GROUPS ------------------------------------------- #
@@ -225,8 +236,39 @@ def test_dataset_construct_groups(polars_type):
     dataset = lgb.Dataset(data, group=groups, params=dummy_dataset_params())
     dataset.construct()
 
-    expected = np.array([0, 2, 5], dtype=np.int32)
-    np_assert_array_equal(expected, dataset.get_field("group"), strict=True)
+    expected_boundaries = np.array([0, 2, 5], dtype=np.int32)
+    expected_group_sizes = np.array([2, 3], dtype=np.int32)
+    np_assert_array_equal(expected_group_sizes, dataset.get_group(), strict=True)
+    np_assert_array_equal(expected_boundaries, dataset.get_field("group"), strict=True)
+
+
+# ------------------------------------------ POSITION ------------------------------------------- #
+
+
+@pytest.mark.parametrize("polars_type", _INTEGER_TYPES)
+def test_dataset_construct_position(polars_type):
+    data = generate_dummy_polars_frame()
+    positions = pl.Series("position", [0, 1, 2, 3, 4], dtype=polars_type)
+    dataset = lgb.Dataset(data, label=[0, 1, 0, 1, 0], position=positions, params=dummy_dataset_params())
+    dataset.construct()
+
+    expected = np.array([0, 1, 2, 3, 4], dtype=np.int32)
+    np_assert_array_equal(expected, dataset.get_position(), strict=True)
+    np_assert_array_equal(expected, dataset.get_field("position"), strict=True)
+
+
+@pytest.mark.parametrize("polars_type", _INTEGER_TYPES)
+def test_dataset_construct_position_with_duplicates_and_out_of_order(polars_type):
+    data = generate_dummy_polars_frame()
+    positions = pl.Series("position", [15, 15, 8, 27, 15], dtype=polars_type)
+    dataset = lgb.Dataset(data, label=[0, 1, 0, 1, 0], position=positions, params=dummy_dataset_params())
+    dataset.construct()
+
+    # positions are remapped on the C++ side to dense indices in first-seen order:
+    # 15 -> 0, 8 -> 1, 27 -> 2
+    expected = np.array([0, 0, 1, 2, 0], dtype=np.int32)
+    np_assert_array_equal(expected, dataset.get_position(), strict=True)
+    np_assert_array_equal(expected, dataset.get_field("position"), strict=True)
 
 
 # ----------------------------------------- INIT SCORES ----------------------------------------- #
@@ -241,15 +283,16 @@ def test_dataset_construct_init_scores_array(polars_type):
 
     expected = np.array([0, 1, 2, 3, 3], dtype=np.float64)
     np_assert_array_equal(expected, dataset.get_init_score(), strict=True)
+    np_assert_array_equal(expected, dataset.get_field("init_score"), strict=True)
 
 
 def test_dataset_construct_init_scores_table():
     data = generate_dummy_polars_frame()
     init_scores = pl.DataFrame(
         {
-            "a": generate_random_polars_series(5, seed=1, generate_nulls=False),
-            "b": generate_random_polars_series(5, seed=2, generate_nulls=False),
-            "c": generate_random_polars_series(5, seed=3, generate_nulls=False),
+            "a": generate_random_polars_series(num_datapoints=5, seed=1, generate_nulls=False),
+            "b": generate_random_polars_series(num_datapoints=5, seed=2, generate_nulls=False),
+            "c": generate_random_polars_series(num_datapoints=5, seed=3, generate_nulls=False),
         }
     )
     dataset = lgb.Dataset(data, init_score=init_scores, params=dummy_dataset_params())
@@ -288,13 +331,15 @@ def assert_equal_predict_polars_pandas(booster: lgb.Booster, data: pl.DataFrame)
 
 
 def test_predict_regression():
-    data_float = generate_random_polars_frame(10, 10000, 42)
-    data_bool = generate_random_polars_frame(1, 10000, 42, generate_nulls=False, values=np.array([True, False]))
+    data_float = generate_random_polars_frame(num_columns=10, num_datapoints=10000, seed=42)
+    data_bool = generate_random_polars_frame(
+        num_columns=1, num_datapoints=10000, seed=42, generate_nulls=False, values=np.array([True, False])
+    )
     data = data_float.with_columns(data_bool["col_0"].alias("col_bool"))
 
     dataset = lgb.Dataset(
         data,
-        label=generate_random_polars_series(10000, 43, generate_nulls=False),
+        label=generate_random_polars_series(num_datapoints=10000, seed=43, generate_nulls=False),
         params=dummy_dataset_params(),
     )
     booster = lgb.train(
@@ -306,10 +351,10 @@ def test_predict_regression():
 
 
 def test_predict_binary_classification():
-    data = generate_random_polars_frame(10, 10000, 42)
+    data = generate_random_polars_frame(num_columns=10, num_datapoints=10000, seed=42)
     dataset = lgb.Dataset(
         data,
-        label=generate_random_polars_series(10000, 43, generate_nulls=False, values=np.arange(2)),
+        label=generate_random_polars_series(num_datapoints=10000, seed=43, generate_nulls=False, values=np.arange(2)),
         params=dummy_dataset_params(),
     )
     booster = lgb.train(
@@ -321,10 +366,10 @@ def test_predict_binary_classification():
 
 
 def test_predict_multiclass_classification():
-    data = generate_random_polars_frame(10, 10000, 42)
+    data = generate_random_polars_frame(num_columns=10, num_datapoints=10000, seed=42)
     dataset = lgb.Dataset(
         data,
-        label=generate_random_polars_series(10000, 43, generate_nulls=False, values=np.arange(5)),
+        label=generate_random_polars_series(num_datapoints=10000, seed=43, generate_nulls=False, values=np.arange(5)),
         params=dummy_dataset_params(),
     )
     booster = lgb.train(
@@ -336,10 +381,10 @@ def test_predict_multiclass_classification():
 
 
 def test_predict_ranking():
-    data = generate_random_polars_frame(10, 10000, 42)
+    data = generate_random_polars_frame(num_columns=10, num_datapoints=10000, seed=42)
     dataset = lgb.Dataset(
         data,
-        label=generate_random_polars_series(10000, 43, generate_nulls=False, values=np.arange(4)),
+        label=generate_random_polars_series(num_datapoints=10000, seed=43, generate_nulls=False, values=np.arange(4)),
         group=np.array([1000, 2000, 3000, 4000]),
         params=dummy_dataset_params(),
     )
@@ -411,3 +456,238 @@ def test_get_data_polars_frame_subset(rng):
     assert len(subset_data) == len(used_indices)
     assert subset_data.shape == (subset_size, 3)
     assert_frame_equal(subset_data, expected_subset)
+
+
+# ------------------------------------------- CATEGORICAL ----------------------------------------- #
+
+
+def test_categorical_encoding(tmp_path):
+    cat1_categories = ["a", "b", "c"]
+    cat1_values = ["a", "b", "c", "b", "a"]
+    cat2_categories = ["b", "c", "d"]
+    cat2_values = ["b", "c", "c", "d", "d"]
+    ordered_categories = ["high", "low", "mid"]
+    ordered_values = ["low", "high", "mid", "high", "low"]
+
+    df = pl.DataFrame(
+        {
+            "cat1": pl.Series(cat1_values, dtype=_UNORDERED_CATEGORICAL),
+            "cat2": pl.Series(cat2_values, dtype=_UNORDERED_CATEGORICAL),
+            "cat3": pl.Series(ordered_values, dtype=pl.Enum(categories=ordered_categories)),
+            "num_col": [1.0, 2.0, 3.0, 4.0, 5.0],
+        }
+    )
+    y = [0, 1, 0, 1, 0]
+
+    ds = lgb.Dataset(df, label=y, params=dummy_dataset_params())
+    ds.construct()
+
+    assert ds.num_data() == 5
+    assert ds.num_feature() == 4
+    assert ds.get_feature_name() == ["cat1", "cat2", "cat3", "num_col"]
+
+    assert ds.categorical_feature == "auto"
+    assert len(ds.pandas_categorical) == 3
+    assert ds.pandas_categorical[0] == cat1_categories
+    assert ds.pandas_categorical[1] == cat2_categories
+    assert ds.pandas_categorical[2] == ordered_categories
+    assert ds.params["categorical_column"] == [0, 1]  # ordered categorical not treated as categorical by default
+
+    # Verify correct encodings
+    ref_df = pl.DataFrame(
+        {
+            "cat1": [cat1_categories.index(v) for v in cat1_values],  # [0, 1, 2, 1, 0]
+            "cat2": [cat2_categories.index(v) for v in cat2_values],  # [0, 1, 1, 2, 2],
+            "cat3": [ordered_categories.index(v) for v in ordered_values],  # [1, 0, 2, 0, 1],
+            "num_col": [1.0, 2.0, 3.0, 4.0, 5.0],
+        }
+    )
+    ref_ds = lgb.Dataset(ref_df, label=y, categorical_feature=[0, 1], params=dummy_dataset_params())
+    ref_ds.construct()
+
+    assert_datasets_equal(tmp_path, ds, ref_ds)
+
+
+def test_categorical_encoding_unseen_category(tmp_path):
+    train_values = ["a", "b", "c", "a", "b"]
+    valid_values = ["a", "c", "d", "d", "a"]  # "d" is unseen in training data
+
+    train_df = pl.DataFrame(
+        {
+            "cat_col": pl.Series(train_values, dtype=_UNORDERED_CATEGORICAL),
+            "num_col": [1.0, 2.0, 3.0, 4.0, 5.0],
+        }
+    )
+    valid_df = pl.DataFrame(
+        {
+            "cat_col": pl.Series(valid_values, dtype=_UNORDERED_CATEGORICAL),
+            "num_col": [6.0, 7.0, 8.0, 9.0, 10.0],
+        }
+    )
+
+    train_ds = lgb.Dataset(train_df, label=[0, 1, 0, 1, 0], params=dummy_dataset_params())
+    valid_ds = lgb.Dataset(valid_df, label=[1, 0, 1, 0, 1], reference=train_ds, params=dummy_dataset_params())
+    train_ds.construct()
+    valid_ds.construct()
+
+    # Verify unseen category is encoded as NaN
+    ref_valid_df = pl.DataFrame(
+        {
+            "cat_col": pl.Series(["a", "c", None, None, "a"], dtype=_UNORDERED_CATEGORICAL),
+            "num_col": [6.0, 7.0, 8.0, 9.0, 10.0],
+        }
+    )
+    ref_valid_ds = lgb.Dataset(ref_valid_df, label=[1, 0, 1, 0, 1], reference=train_ds, params=dummy_dataset_params())
+    ref_valid_ds.construct()
+
+    assert_datasets_equal(tmp_path, valid_ds, ref_valid_ds)
+
+
+def test_categorical_encoding_registered_but_unobserved(tmp_path):
+    # Define full DataFrame with all categories observed
+    full_df = pl.DataFrame(
+        {
+            "unordered_col": pl.Series(["a", "b", "c", "d"], dtype=_UNORDERED_CATEGORICAL),
+            "ordered_col": pl.Series(["e", "f", "g", "h"], dtype=pl.Enum(categories=["e", "f", "g", "h"])),
+        }
+    )
+
+    # Slice train from full_df so all categories are preserved despite not all being observed
+    train_df = full_df[[0, 2, 2]]  # ["a", "c", "c"] and ["e", "g", "g"]
+    valid_df = pl.DataFrame(
+        {
+            "unordered_col": pl.Series(["a", "b", "d"], dtype=_UNORDERED_CATEGORICAL),
+            "ordered_col": pl.Series(["h", "e", "f"], dtype=pl.Enum(categories=["e", "f", "g", "h"])),
+        }
+    )
+
+    train_ds = lgb.Dataset(train_df, label=[0, 1, 0], params=dummy_dataset_params())
+    valid_ds = lgb.Dataset(valid_df, label=[0, 1, 0], reference=train_ds, params=dummy_dataset_params())
+    train_ds.construct()
+    valid_ds.construct()
+
+    # NOTE: Polars is deviating from the pandas behavior here. In pandas, the category set is attached to
+    # the dtype and unobserved categories are preserved. In Polars, unoberved categories are dropped.
+    assert train_ds.pandas_categorical[0] == ["a", "c"]
+    assert train_ds.pandas_categorical[1] == ["e", "f", "g", "h"]
+    assert train_ds.params["categorical_column"] == [0]  # only unordered column is treated as categorical
+
+    # Python-side encoding: both ordered and unordered columns use all registered categories to encode
+    valid_df_encoded = lgb.basic._data_from_narwhals(
+        data=valid_df,
+        feature_name="auto",
+        categorical_feature="auto",
+        pandas_categorical=train_ds.pandas_categorical,
+    )[0]
+    assert valid_df_encoded[:, 0].to_list() == [0.0, None, None]  # a -> 0, b -> None, d -> None
+    assert valid_df_encoded[:, 1].to_list() == [3.0, 0.0, 1.0]  # h -> 3, e -> 0, f -> 1
+
+    # C++ binning
+    # - Unordered columns: only codes observed during training are binned. Unseen codes are treated as missing.
+    # - Ordered columns: treats as continuous. Unseen values interpolate (e<f<g) or clip (h clipped to g).
+    ref_valid_df = pl.DataFrame(
+        {
+            "unordered_col": pl.Series(["a", None, None], dtype=_UNORDERED_CATEGORICAL),
+            "ordered_col": pl.Series(["g", "e", "g"], dtype=pl.Enum(categories=["e", "f", "g", "h"])),
+        }
+    )
+    ref_valid_ds = lgb.Dataset(ref_valid_df, label=[0, 1, 0], reference=train_ds, params=dummy_dataset_params())
+    ref_valid_ds.construct()
+
+    assert_datasets_equal(tmp_path, valid_ds, ref_valid_ds)
+
+
+def test_categorical_with_missing_values(tmp_path):
+    categories = ["a", "b"]
+    values_none = ["a", "b", None, "a", None]
+    # NOTE: Polars does not allow NaN values in categorical columns
+
+    X = pl.DataFrame(
+        {
+            "cat_none": pl.Series(values_none, dtype=_UNORDERED_CATEGORICAL),
+            "num": [1.0, 2.0, 3.0, 4.0, 5.0],
+        }
+    )
+    y = [0, 1, 0, 1, 0]
+
+    ds = lgb.Dataset(X, label=y, params=dummy_dataset_params())
+    ds.construct()
+    assert ds.pandas_categorical == [categories]
+
+    ref_df = pl.DataFrame(
+        {
+            "cat_none": [0.0, 1.0, np.nan, 0.0, np.nan],
+            "num": [1.0, 2.0, 3.0, 4.0, 5.0],
+        }
+    )
+    ref_ds = lgb.Dataset(ref_df, label=y, categorical_feature=[0], params=dummy_dataset_params())
+    ref_ds.construct()
+    assert_datasets_equal(tmp_path, ds, ref_ds)
+
+
+def test_dataset_construction_with_high_cardinality_categorical_succeeds(rng):
+    X = pl.DataFrame({"x1": rng.integers(low=0, high=5_000, size=(10_000,))})
+    y = rng.uniform(size=(10_000,))
+    ds = lgb.Dataset(X, y, categorical_feature=["x1"])
+    ds.construct()
+    assert ds.num_data() == 10_000
+    assert ds.num_feature() == 1
+
+
+# ---------------------------------------- DTYPE VALIDATION --------------------------------------- #
+
+
+@pytest.mark.parametrize(
+    ("dtype", "values"),
+    [
+        (pl.Int8, [1, 2, 3]),
+        (pl.Int16, [1, 2, 3]),
+        (pl.Int32, [1, 2, 3]),
+        (pl.Int64, [1, 2, 3]),
+        (pl.UInt8, [1, 2, 3]),
+        (pl.UInt16, [1, 2, 3]),
+        (pl.UInt32, [1, 2, 3]),
+        (pl.UInt64, [1, 2, 3]),
+        (pl.Float32, [1.0, 2.0, 3.0]),
+        (pl.Float64, [1.0, 2.0, 3.0]),
+        (pl.Boolean, [True, False, True]),
+        # Categorical dtypes are supported, but tested separately
+    ],
+)
+def test_polars_supported_dtypes(tmp_path, dtype, values):
+    df = pl.DataFrame({"test_col": pl.Series(values, dtype=dtype), "num_col": [4.0, 5.0, 6.0]})
+    y = [0, 1, 0]
+
+    ds = lgb.Dataset(df, label=y, params=dummy_dataset_params())
+    ds.construct()
+
+    assert ds.num_data() == 3
+    assert ds.num_feature() == 2
+    assert ds.get_feature_name() == ["test_col", "num_col"]
+    assert ds.get_label().tolist() == y
+
+    # Verify values are preserved
+    ref_df = pl.DataFrame({"test_col": values, "num_col": [4.0, 5.0, 6.0]})
+    ref_ds = lgb.Dataset(ref_df, label=y, params=dummy_dataset_params())
+    ref_ds.construct()
+
+    assert_datasets_equal(tmp_path, ds, ref_ds)
+
+
+@pytest.mark.parametrize(
+    ("dtype", "values"),
+    [
+        (pl.String, ["a", "b", "c"]),
+        (pl.Date, [date(2020, 1, 1), date(2020, 1, 2), date(2020, 1, 3)]),
+        (pl.Datetime, [datetime(2020, 1, 1), datetime(2020, 1, 2), datetime(2020, 1, 3)]),
+        (pl.Duration, [1, 2, 3]),
+        (pl.Struct, [{"a": 1}, {"a": 2}, {"a": 3}]),
+        (pl.List, [[1, 2], [3, 4], [5, 6]]),
+    ],
+)
+def test_polars_unsupported_dtypes(dtype, values):
+    df = pl.DataFrame({"test_col": pl.Series(values, dtype=dtype), "num_col": [1.0, 2.0, 3.0]})
+    y = [0, 1, 0]
+
+    with pytest.raises(ValueError, match="DataFrame dtypes must be int, float, bool, categorical or enum"):
+        lgb.Dataset(df, label=y).construct()

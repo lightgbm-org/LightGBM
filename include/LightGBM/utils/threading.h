@@ -120,6 +120,9 @@ class ParallelPartitionRunner {
       INDEX_T cnt,
       const std::function<INDEX_T(int, INDEX_T, INDEX_T, INDEX_T*, INDEX_T*)>& func,
       INDEX_T* out) {
+    if (cnt == 0) {
+      return 0;
+    }
     int nblock = 1;
     INDEX_T inner_size = cnt;
     if (FORCE_SIZE) {

@@ -1,6 +1,6 @@
 #!/bin/bash
 
-set -e -E -o -u pipefail
+set -e -E -u -o pipefail
 
 # defaults
 CONDA_ENV="test-env"
@@ -55,6 +55,7 @@ cd "${BUILD_DIRECTORY}"
 if [[ $TASK == "swig" ]]; then
     cmake -B build -S . -DUSE_SWIG=ON
     cmake --build build -j4 || exit 1
+    ./.ci/check-abi.sh ./lib_lightgbm.*
     if [[ $OS_NAME == "linux" ]] && [[ $COMPILER == "gcc" ]]; then
         objdump -T ./lib_lightgbm.so > ./objdump.log || exit 1
         objdump -T ./lib_lightgbm_swig.so >> ./objdump.log || exit 1
@@ -83,9 +84,19 @@ if [[ "$TASK" == "cpp-tests" ]]; then
     exit 0
 fi
 
-# including python=version=[build=*_cp*] to ensure that conda prefers CPython and doesn't fall back to
-# other implementations like pypy
-CONDA_PYTHON_REQUIREMENT="python=${PYTHON_VERSION}[build=*_cp*]"
+# From Python 3.13 onwards, CPython packages on conda-forge have build strings
+# with formats like "*_cp314".
+#
+# Have to be specific here (no trailing wildcard) to avoid unintentionally pulling
+# in free-threaded builds (e.g. "*_cp314t").
+PYTHON_MAJOR_VERSION="${PYTHON_VERSION%%.*}"
+PYTHON_MINOR_VERSION="${PYTHON_VERSION#*.}"
+if (( PYTHON_MAJOR_VERSION > 3 || (PYTHON_MAJOR_VERSION == 3 && PYTHON_MINOR_VERSION > 12) )); then
+    PYTHON_ABI_TAG="cp${PYTHON_VERSION//./}"
+else
+    PYTHON_ABI_TAG="cpython"
+fi
+CONDA_PYTHON_REQUIREMENT="python=${PYTHON_VERSION}[build=*_${PYTHON_ABI_TAG}]"
 
 if [[ $TASK == "if-else" ]]; then
     conda create -q -y -n "${CONDA_ENV}" "${CONDA_PYTHON_REQUIREMENT}" numpy
@@ -102,9 +113,9 @@ if [[ $TASK == "if-else" ]]; then
 fi
 
 PYTHON_ENV_MANAGER="conda"
-if [[ "${PYTHON_VERSION}" == "3.10" ]]; then
+if [[ "${PYTHON_VERSION}" == "3.11" ]]; then
     PYTHON_ENV_MANAGER="pixi"
-    CI_PIXI_ENV="py310"
+    CI_PIXI_ENV="py311"
 fi
 
 # 'pixi' is used for end-of-life Python versions
@@ -113,6 +124,7 @@ if [[ "${PYTHON_ENV_MANAGER}" == "pixi" ]]; then
 else
     CONDA_REQUIREMENT_FILE="${BUILD_DIRECTORY}/.ci/conda-envs/ci-core.txt"
     conda create \
+        -q \
         -y \
         -n "${CONDA_ENV}" \
         --file "${CONDA_REQUIREMENT_FILE}" \
@@ -129,6 +141,13 @@ fi
 
 cd "${BUILD_DIRECTORY}"
 
+PYTEST_ARGS=(
+    -ra
+    --cov=lightgbm
+    --cov-fail-under=75
+)
+SITE_PACKAGES=$(python -c "import sysconfig; print(sysconfig.get_paths()['platlib'])")
+
 if [[ $TASK == "sdist" ]]; then
     sh ./build-python.sh sdist || exit 1
     sh .ci/check-python-dists.sh ./dist || exit 1
@@ -136,7 +155,8 @@ if [[ $TASK == "sdist" ]]; then
     if [[ $PRODUCES_ARTIFACTS == "true" ]]; then
         cp "./dist/lightgbm-${LGB_VER}.tar.gz" "${BUILD_ARTIFACTSTAGINGDIRECTORY}" || exit 1
     fi
-    pytest -ra ./tests/python_package_test || exit 1
+    ./.ci/check-abi.sh "${SITE_PACKAGES}"/lightgbm/lib/lib_lightgbm.* || exit 1
+    pytest  "${PYTEST_ARGS[@]}" ./tests/python_package_test || exit 1
     exit 0
 elif [[ $TASK == "bdist" ]]; then
     if [[ $OS_NAME == "macos" ]]; then
@@ -146,7 +166,12 @@ elif [[ $TASK == "bdist" ]]; then
             cp "$(echo "dist/lightgbm-${LGB_VER}-py3-none-macosx"*.whl)" "${BUILD_ARTIFACTSTAGINGDIRECTORY}" || exit 1
         fi
     else
-        sh ./build-python.sh bdist_wheel --integrated-opencl || exit 1
+        BUILD_PYTHON_FLAGS=()
+        if [[ "${ARCH}" != "ppc64le" ]]; then
+            BUILD_PYTHON_FLAGS+=(--integrated-opencl)
+        fi
+
+        sh ./build-python.sh bdist_wheel "${BUILD_PYTHON_FLAGS[@]}" || exit 1
 
         # print some debugging logs about the wheel's GLIBC version and dependencies on shared libraries
         pip install 'auditwheel>=6.5.1'
@@ -174,16 +199,21 @@ elif [[ $TASK == "bdist" ]]; then
             # manylinux tag than we intended)
             if [[ $ARCH == "x86_64" ]]; then
                 PLATFORM="manylinux_2_27_x86_64.manylinux_2_28_x86_64"
+            elif [[ $ARCH == "ppc64le" ]]; then
+                PLATFORM="manylinux_2_27_ppc64le.manylinux_2_28_ppc64le"
             else
                 PLATFORM="manylinux2014_aarch64.manylinux_2_17_aarch64"
             fi
             cp "dist/lightgbm-${LGB_VER}-py3-none-${PLATFORM}.whl" "${BUILD_ARTIFACTSTAGINGDIRECTORY}" || exit 1
         fi
-        # Make sure we can do both CPU and GPU; see tests/python_package_test/test_dual.py
-        export LIGHTGBM_TEST_DUAL_CPU_GPU=1
+        if [[ "${ARCH}" != "ppc64le" ]]; then
+            # Make sure we can do both CPU and GPU; see tests/python_package_test/test_dual.py
+            export LIGHTGBM_TEST_DUAL_CPU_GPU=1
+        fi
     fi
     pip install -v --no-deps ./dist/*.whl || exit 1
-    pytest -ra ./tests || exit 1
+    ./.ci/check-abi.sh "${SITE_PACKAGES}"/lightgbm/lib/lib_lightgbm.* || exit 1
+    pytest "${PYTEST_ARGS[@]}" ./tests || exit 1
     exit 0
 fi
 
@@ -199,13 +229,15 @@ if [[ $TASK == "gpu" ]]; then
             --config-settings=cmake.define.USE_GPU=ON \
             "./dist/lightgbm-${LGB_VER}.tar.gz" \
         || exit 1
-        pytest -ra ./tests/python_package_test || exit 1
+        ./.ci/check-abi.sh "${SITE_PACKAGES}"/lightgbm/lib/lib_lightgbm.* || exit 1
+        pytest "${PYTEST_ARGS[@]}" ./tests/python_package_test || exit 1
         exit 0
     elif [[ $METHOD == "wheel" ]]; then
         sh ./build-python.sh bdist_wheel --gpu || exit 1
         sh ./.ci/check-python-dists.sh ./dist || exit 1
         pip install -v --no-deps "$(echo "./dist/lightgbm-${LGB_VER}"*.whl)" || exit 1
-        pytest -ra ./tests || exit 1
+        ./.ci/check-abi.sh "${SITE_PACKAGES}"/lightgbm/lib/lib_lightgbm.* || exit 1
+        pytest "${PYTEST_ARGS[@]}" ./tests || exit 1
         exit 0
     elif [[ $METHOD == "source" ]]; then
         cmake -B build -S . -DUSE_GPU=ON
@@ -225,16 +257,23 @@ elif [[ $TASK == "cuda" ]]; then
             --config-settings=cmake.define.USE_CUDA=ON \
             "./dist/lightgbm-${LGB_VER}.tar.gz" \
         || exit 1
-        pytest -ra ./tests/python_package_test || exit 1
+        ./.ci/check-abi.sh "${SITE_PACKAGES}"/lightgbm/lib/lib_lightgbm.* || exit 1
+        pytest "${PYTEST_ARGS[@]}" ./tests/python_package_test || exit 1
         exit 0
     elif [[ $METHOD == "wheel" ]]; then
         sh ./build-python.sh bdist_wheel --cuda || exit 1
         sh ./.ci/check-python-dists.sh ./dist || exit 1
         pip install -v --no-deps "$(echo "./dist/lightgbm-${LGB_VER}"*.whl)" || exit 1
-        pytest -ra ./tests || exit 1
+        ./.ci/check-abi.sh "${SITE_PACKAGES}"/lightgbm/lib/lib_lightgbm.* || exit 1
+        pytest "${PYTEST_ARGS[@]}" ./tests || exit 1
         exit 0
     elif [[ $METHOD == "source" ]]; then
-        cmake -B build -S . -DUSE_CUDA=ON
+        # we want at least 1 CI job testing that manual override of CMAKE_CUDA_ARCHITECTURES works
+        cmake \
+            -B build \
+            -S . \
+            -DUSE_CUDA=ON \
+            -DCMAKE_CUDA_ARCHITECTURES="native"
     fi
 elif [[ $TASK == "mpi" ]]; then
     if [[ $METHOD == "pip" ]]; then
@@ -246,13 +285,15 @@ elif [[ $TASK == "mpi" ]]; then
             --config-settings=cmake.define.USE_MPI=ON \
             "./dist/lightgbm-${LGB_VER}.tar.gz" \
         || exit 1
-        pytest -ra ./tests/python_package_test || exit 1
+        ./.ci/check-abi.sh "${SITE_PACKAGES}"/lightgbm/lib/lib_lightgbm.* || exit 1
+        pytest "${PYTEST_ARGS[@]}" ./tests/python_package_test || exit 1
         exit 0
     elif [[ $METHOD == "wheel" ]]; then
         sh ./build-python.sh bdist_wheel --mpi || exit 1
         sh ./.ci/check-python-dists.sh ./dist || exit 1
         pip install -v --no-deps "$(echo "./dist/lightgbm-${LGB_VER}"*.whl)" || exit 1
-        pytest -ra ./tests || exit 1
+        ./.ci/check-abi.sh "${SITE_PACKAGES}"/lightgbm/lib/lib_lightgbm.* || exit 1
+        pytest "${PYTEST_ARGS[@]}" ./tests || exit 1
         exit 0
     elif [[ $METHOD == "source" ]]; then
         cmake -B build -S . -DUSE_MPI=ON -DUSE_DEBUG=ON
@@ -261,10 +302,30 @@ else
     cmake -B build -S .
 fi
 
-cmake --build build --target _lightgbm -j4 || exit 1
+# targets:
+#
+#   _lightgbm = lib_lightgbm.{dylib,so}
+#   _ lightgbm = the CLI (for distributed tests)
+#
+cmake --build build --target _lightgbm lightgbm -j4 || exit 1
 
 sh ./build-python.sh install --precompile || exit 1
-pytest -ra ./tests || exit 1
+
+# This MPI skip can be removed when those jobs do not use conda.
+# ref: https://github.com/lightgbm-org/LightGBM/issues/7355#issuecomment-5578260518
+if [[ "${TASK}" != "mpi" ]]; then
+    echo "testing imports with 'python -O1'"
+    PYTHONOPTIMIZE=1 python -c "import lightgbm; print(lightgbm.__version__)"
+
+    echo "testing imports with 'python -O2'"
+    PYTHONOPTIMIZE=2 python -c "import lightgbm; print(lightgbm.__version__)"
+fi
+
+python ./.ci/test-imports.py
+
+echo "running tests"
+./.ci/check-abi.sh "${SITE_PACKAGES}"/lightgbm/lib/lib_lightgbm.*
+pytest "${PYTEST_ARGS[@]}" ./tests || exit 1
 
 if [[ $TASK == "regular" ]]; then
     if [[ $PRODUCES_ARTIFACTS == "true" ]]; then
@@ -287,7 +348,7 @@ matplotlib.use\(\"Agg\"\)\
     # install optional plotting libraries
     # (not necessary for pixi-managed environments, where they're just installed by default)
     if [[ "${PYTHON_ENV_MANAGER}" != "pixi" ]]; then
-        conda install -y -n $CONDA_ENV \
+        conda install -q -y -n $CONDA_ENV \
             'h5py>=3.10' \
             'ipywidgets>=8.1.2' \
             'notebook>=7.1.2'
@@ -299,7 +360,7 @@ matplotlib.use\(\"Agg\"\)\
 
     # importing the library should succeed even if all optional dependencies are not present
     if [[ "${PYTHON_ENV_MANAGER}" != "pixi" ]]; then
-        conda uninstall -n $CONDA_ENV --force --yes \
+        conda uninstall -q -n $CONDA_ENV --force --yes \
             cffi \
             dask \
             distributed \

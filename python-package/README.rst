@@ -40,7 +40,7 @@ You can install it by the following command: ``brew install libomp``.
 Install Nightly Packages
 ''''''''''''''''''''''''
 
-Python packages are built on each new commit to ``master`` and uploaded to https://anaconda.org/lightgbm-packages.
+Python packages are built on each new commit to ``main`` and uploaded to https://anaconda.org/lightgbm-packages.
 
 Only the latest development version is available there, and can be installed like this:
 
@@ -127,9 +127,9 @@ Build from Sources
 
 For **macOS** users, you can perform installation either with **Apple Clang** or **gcc**.
 
-- In case you prefer **Apple Clang**, you should install **OpenMP** (details for installation can be found in `Installation Guide <https://github.com/lightgbm-org/LightGBM/blob/master/docs/Installation-Guide.rst#apple-clang>`__) first.
+- In case you prefer **Apple Clang**, you should install **OpenMP** (details for installation can be found in `Installation Guide <https://github.com/lightgbm-org/LightGBM/blob/main/docs/Installation-Guide.rst#apple-clang>`__) first.
 
-- In case you prefer **gcc**, you need to install it (details for installation can be found in `Installation Guide <https://github.com/lightgbm-org/LightGBM/blob/master/docs/Installation-Guide.rst#gcc-1>`__) and specify compilers by running ``export CXX=g++-7 CC=gcc-7`` (replace "7" with version of **gcc** installed on your machine) first.
+- In case you prefer **gcc**, you need to install it (details for installation can be found in `Installation Guide <https://github.com/lightgbm-org/LightGBM/blob/main/docs/Installation-Guide.rst#gcc-1>`__) and specify compilers by running ``export CXX=g++-7 CC=gcc-7`` (replace "7" with version of **gcc** installed on your machine) first.
 
 For **Windows** users, **Visual Studio** (or `VS Build Tools <https://visualstudio.microsoft.com/downloads/>`_) is needed.
 
@@ -159,7 +159,7 @@ All requirements from `Build from Sources section <#build-from-sources>`__ apply
 
 For **Windows** users, compilation with **MinGW-w64** is not supported.
 
-**MPI** libraries are needed: details for installation can be found in `Installation Guide <https://github.com/lightgbm-org/LightGBM/blob/master/docs/Installation-Guide.rst#build-mpi-version>`__.
+**MPI** libraries are needed: details for installation can be found in `Installation Guide <https://github.com/lightgbm-org/LightGBM/blob/main/docs/Installation-Guide.rst#build-mpi-version>`__.
 
 |
 
@@ -174,7 +174,7 @@ All requirements from `Build from Sources section <#build-from-sources>`__ apply
 
 For **macOS** users, the GPU version is not supported.
 
-**Boost** and **OpenCL** are needed: details for installation can be found in `Installation Guide <https://github.com/lightgbm-org/LightGBM/blob/master/docs/Installation-Guide.rst#build-gpu-version>`__.
+**Boost** and **OpenCL** are needed: details for installation can be found in `Installation Guide <https://github.com/lightgbm-org/LightGBM/blob/main/docs/Installation-Guide.rst#build-gpu-version>`__.
 Almost always you also need to pass ``OpenCL_INCLUDE_DIR``, ``OpenCL_LIBRARY`` options for **Linux** and ``BOOST_ROOT``, ``BOOST_LIBRARYDIR`` options for **Windows** to **CMake** via ``pip`` options, like
 
 .. code:: sh
@@ -209,11 +209,33 @@ Build CUDA Version
 
     pip install lightgbm --no-binary lightgbm --config-settings=cmake.define.USE_CUDA=ON
 
+
+By default, the library will be built with support for a hard-coded list of GPU architectures
+based on the detected CUDA Toolkit version.
+
+To build the library with support for more architectures, set ``CMAKE_CUDA_ARCHITECTURES``.
+
+.. code:: sh
+
+    # example: all Blackwell arches, including DGX Spark
+    pip install \
+      --no-binary lightgbm \
+      --config-settings=cmake.define.USE_CUDA=ON \
+      --config-settings=cmake.define.CMAKE_CUDA_ARCHITECTURES='100;120;121-real;121-virtual' \
+      'lightgbm>=4.7.0'
+
+    # example: just the local GPU
+    pip install \
+      --no-binary lightgbm \
+      --config-settings=cmake.define.USE_CUDA=ON \
+      --config-settings=cmake.define.CMAKE_CUDA_ARCHITECTURES='native' \
+      'lightgbm>=4.7.0'
+
 All requirements from `Build from Sources section <#build-from-sources>`__ apply for this installation option as well.
 
 For **macOS** and **Windows** users, the CUDA version is not supported.
 
-**CUDA** library is needed: details for installation can be found in `Installation Guide <https://github.com/lightgbm-org/LightGBM/blob/master/docs/Installation-Guide.rst#build-cuda-version>`__.
+**CUDA** library is needed: details for installation can be found in `Installation Guide <https://github.com/lightgbm-org/LightGBM/blob/main/docs/Installation-Guide.rst#build-cuda-version>`__.
 
 Don't confuse with `GPU version <#build-gpu-version>`__.
 To use the CUDA version within Python, pass ``{"device": "cuda"}`` respectively in parameters.
@@ -230,8 +252,8 @@ Build with MinGW-w64 on Windows
 `MinGW-w64 <https://www.mingw-w64.org/>`_ should be installed first.
 
 It is recommended to use **Visual Studio** for its better multithreading efficiency in **Windows** for many-core systems
-(see `Question 4 <https://github.com/lightgbm-org/LightGBM/blob/master/docs/FAQ.rst#4-i-am-using-windows-should-i-use-visual-studio-or-mingw-for-compiling-lightgbm>`__
-and `Question 8 <https://github.com/lightgbm-org/LightGBM/blob/master/docs/FAQ.rst#8-cpu-usage-is-low-like-10-in-windows-when-using-lightgbm-on-very-large-datasets-with-many-core-systems>`__).
+(see `Question 4 <https://github.com/lightgbm-org/LightGBM/blob/main/docs/FAQ.rst#4-i-am-using-windows-should-i-use-visual-studio-or-mingw-for-compiling-lightgbm>`__
+and `Question 8 <https://github.com/lightgbm-org/LightGBM/blob/main/docs/FAQ.rst#8-cpu-usage-is-low-like-10-in-windows-when-using-lightgbm-on-very-large-datasets-with-many-core-systems>`__).
 
 |
 
@@ -324,8 +346,8 @@ All requirements from `Build with Time Costs Output section <#build-with-time-co
 
 If you get any errors during installation or due to any other reasons,
 you may want to build dynamic library from sources by any method you prefer
-(see `Installation Guide <https://github.com/lightgbm-org/LightGBM/blob/master/docs/Installation-Guide.rst>`__).
-For example, you can use ``MSBuild`` tool and `solution file <https://github.com/lightgbm-org/LightGBM/blob/master/windows/LightGBM.sln>`__ from the repo.
+(see `Installation Guide <https://github.com/lightgbm-org/LightGBM/blob/main/docs/Installation-Guide.rst>`__).
+For example, you can use ``MSBuild`` tool and `solution file <https://github.com/lightgbm-org/LightGBM/blob/main/windows/LightGBM.sln>`__ from the repo.
 
 .. code:: sh
 
@@ -350,12 +372,12 @@ In environments with restricted or no internet access, install those tools and t
 Troubleshooting
 ---------------
 
-Refer to `FAQ <https://github.com/lightgbm-org/LightGBM/tree/master/docs/FAQ.rst>`_.
+Refer to `FAQ <https://github.com/lightgbm-org/LightGBM/tree/main/docs/FAQ.rst>`_.
 
 Examples
 --------
 
-Refer to the walk through examples in `Python guide folder <https://github.com/lightgbm-org/LightGBM/tree/master/examples/python-guide>`_.
+Refer to the walk through examples in `Python guide folder <https://github.com/lightgbm-org/LightGBM/tree/main/examples/python-guide>`_.
 
 Supported Python Versions
 -------------------------
@@ -386,7 +408,7 @@ Then run the following from the root of the repo.
 Then open `htmlcov/index.html` to view a clickable coverage report.
 
 .. |License| image:: https://img.shields.io/github/license/lightgbm-org/lightgbm.svg
-   :target: https://github.com/lightgbm-org/LightGBM/blob/master/LICENSE
+   :target: https://github.com/lightgbm-org/LightGBM/blob/main/LICENSE
 .. |Python Versions| image:: https://img.shields.io/pypi/pyversions/lightgbm.svg?logo=python&logoColor=white
    :target: https://pypi.org/project/lightgbm
 .. |PyPI Version| image:: https://img.shields.io/pypi/v/lightgbm.svg?logo=pypi&logoColor=white

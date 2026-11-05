@@ -340,11 +340,17 @@ for (submodule in list.dirs(
 }
 
 # copy files into the place CMake expects
+CMAKE_R_DIR <- file.path(TEMP_SOURCE_DIR, "cmake")
 CMAKE_MODULES_R_DIR <- file.path(TEMP_SOURCE_DIR, "cmake", "modules")
 dir.create(CMAKE_MODULES_R_DIR, recursive = TRUE)
 result <- file.copy(
   from = file.path("cmake", "modules", "FindLibR.cmake")
   , to = sprintf("%s/", CMAKE_MODULES_R_DIR)
+  , overwrite = TRUE
+)
+result <- file.copy(
+  from = file.path("cmake", "Utils.cmake")
+  , to = sprintf("%s/", CMAKE_R_DIR)
   , overwrite = TRUE
 )
 .handle_result(result)
@@ -367,34 +373,6 @@ result <- file.copy(
   , overwrite = TRUE
 )
 .handle_result(result)
-
-# R packages cannot have versions like 3.0.0rc1, but
-# 3.0.0-1 is acceptable
-LGB_VERSION <- readLines("VERSION.txt")[1L]
-LGB_VERSION <- gsub(
-  pattern = "rc"
-  , replacement = "-"
-  , x = LGB_VERSION
-  , fixed = TRUE
-)
-
-# DESCRIPTION has placeholders for version
-# and date so it doesn't have to be updated manually
-DESCRIPTION_FILE <- file.path(TEMP_R_DIR, "DESCRIPTION")
-description_contents <- readLines(DESCRIPTION_FILE)
-description_contents <- gsub(
-  pattern = "~~VERSION~~"
-  , replacement = LGB_VERSION
-  , x = description_contents
-  , fixed = TRUE
-)
-description_contents <- gsub(
-  pattern = "~~DATE~~"
-  , replacement = as.character(Sys.Date())
-  , x = description_contents
-  , fixed = TRUE
-)
-writeLines(description_contents, DESCRIPTION_FILE)
 
 # NOTE: --keep-empty-dirs is necessary to keep the deep paths expected
 #       by CMake while also meeting the CRAN req to create object files

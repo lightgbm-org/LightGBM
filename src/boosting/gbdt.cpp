@@ -445,6 +445,8 @@ bool GBDT::TrainOneIter(const score_t* gradients, const score_t* hessians) {
     // add model
     models_.push_back(std::move(new_tree));
   }
+  // the new trees need RecomputeMaxDepth() before the next pred_contrib
+  models_initialized_ = false;
 
   if (!should_continue) {
     Log::Warning("Stopped training because there are no more leaves that meet the split requirements");
@@ -822,11 +824,11 @@ void GBDT::ResetConfig(const Config* config) {
   shrinkage_rate_ = new_config->learning_rate;
   if (tree_learner_ != nullptr) {
     tree_learner_->ResetConfig(new_config.get());
-  }
 
-  boosting_on_gpu_ = objective_function_ != nullptr && objective_function_->IsCUDAObjective() &&
-                    !data_sample_strategy_->IsHessianChange();  // for sample strategy with Hessian change, fall back to boosting on CPU
-  tree_learner_->ResetBoostingOnGPU(boosting_on_gpu_);
+    boosting_on_gpu_ = objective_function_ != nullptr && objective_function_->IsCUDAObjective() &&
+                      !data_sample_strategy_->IsHessianChange();  // for sample strategy with Hessian change, fall back to boosting on CPU
+    tree_learner_->ResetBoostingOnGPU(boosting_on_gpu_);
+  }
 
   if (train_data_ != nullptr) {
     data_sample_strategy_->ResetSampleConfig(new_config.get(), false);

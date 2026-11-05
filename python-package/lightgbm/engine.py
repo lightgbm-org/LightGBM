@@ -14,12 +14,11 @@ from . import callback
 from .basic import (
     Booster,
     Dataset,
+    EvalResult,
     LightGBMError,
     _choose_param_value,
     _ConfigAliases,
     _InnerPredictor,
-    _LGBM_BoosterEvalMethodResultType,
-    _LGBM_BoosterEvalMethodResultWithStandardDeviationType,
     _LGBM_CustomObjectiveFunction,
     _LGBM_EvalFunctionResultType,
     _log_warning,
@@ -68,12 +67,19 @@ def _choose_num_iterations(*, num_boost_round_kwarg: int, params: Dict[str, Any]
     This function handles that choice, and issuing helpful warnings in the cases where the
     result might be surprising.
 
+    Parameters
+    ----------
+    num_boost_round_kwarg : int
+        Value of the ``num_boost_round`` keyword argument from ``cv()`` or ``train()``.
+    params : dict
+        Parameters.
+
     Returns
     -------
     params : dict
         Parameters, with ``"num_iterations"`` set to the preferred value and all other
         aliases of ``num_iterations`` removed.
-    """
+    """  # noqa: DOC105
     num_iteration_configs_provided = {
         alias: params[alias] for alias in _ConfigAliases.get("num_iterations") if alias in params
     }
@@ -111,7 +117,7 @@ def train(
     train_set: Dataset,
     num_boost_round: int = 100,
     valid_sets: Optional[List[Dataset]] = None,
-    valid_names: Optional[List[str]] = None,
+    valid_names: Optional[Union[str, List[str]]] = None,
     feval: Optional[Union[_LGBM_CustomMetricFunction, List[_LGBM_CustomMetricFunction]]] = None,
     init_model: Optional[Union[str, Path, Booster]] = None,
     keep_training_booster: bool = False,
@@ -130,7 +136,7 @@ def train(
         Number of boosting iterations.
     valid_sets : list of Dataset, or None, optional (default=None)
         List of data to be evaluated on during training.
-    valid_names : list of str, or None, optional (default=None)
+    valid_names : str, list of str, or None, optional (default=None)
         Names of ``valid_sets``.
     feval : callable, list of callable, or None, optional (default=None)
         Customized evaluation function.
@@ -191,7 +197,7 @@ def train(
     -------
     booster : Booster
         The trained Booster model.
-    """
+    """  # noqa: DOC105
     if not isinstance(train_set, Dataset):
         raise TypeError(f"train() only accepts Dataset object, train_set has type '{type(train_set).__name__}'.")
 
@@ -201,6 +207,15 @@ def train(
                 raise TypeError(
                     "Every item in valid_sets must be a Dataset object. "
                     f"Item {i} has type '{type(valid_item).__name__}'."
+                )
+
+    if isinstance(valid_names, str):
+        valid_names = [valid_names]
+    if valid_names is not None:
+        for i, valid_name in enumerate(valid_names):
+            if not isinstance(valid_name, str):
+                raise TypeError(
+                    f"Every item in valid_names must be a string. Item {i} has type '{type(valid_name).__name__}'."
                 )
 
     # create predictor first
@@ -250,8 +265,6 @@ def train(
     if valid_sets is not None:
         if isinstance(valid_sets, Dataset):
             valid_sets = [valid_sets]
-        if isinstance(valid_names, str):
-            valid_names = [valid_names]
         for i, valid_data in enumerate(valid_sets):
             # reduce cost for prediction training data
             if valid_data is train_set:
@@ -321,7 +334,7 @@ def train(
 
         booster.update(fobj=fobj)
 
-        evaluation_result_list: List[_LGBM_BoosterEvalMethodResultType] = []
+        evaluation_result_list: List[EvalResult] = []
         # check evaluation result.
         if valid_sets is not None:
             if is_valid_contain_train:
@@ -341,13 +354,11 @@ def train(
                 )
         except callback.EarlyStopException as earlyStopException:
             booster.best_iteration = earlyStopException.best_iteration + 1
-            # eval results from cv() have a 5th element with the standard deviation of metrics,
-            # which is not needed for early stopping
-            evaluation_result_list = [item[:4] for item in earlyStopException.best_score]
+            evaluation_result_list = earlyStopException.best_score
             break
     booster.best_score = defaultdict(OrderedDict)
-    for dataset_name, metric_name, metric_value, _ in evaluation_result_list:
-        booster.best_score[dataset_name][metric_name] = metric_value
+    for result in evaluation_result_list:
+        booster.best_score[result.dataset_name][result.metric_name] = result.metric_value
     if not keep_training_booster:
         booster.model_from_string(booster.model_to_string()).free_dataset()
     return booster
@@ -371,7 +382,10 @@ class CVBooster:
         The list of underlying fitted models.
     best_iteration : int
         The best iteration of fitted model.
-    """
+    """  # noqa: DOC605
+
+    boosters: list[Booster]
+    best_iteration: int
 
     def __init__(
         self,
@@ -383,7 +397,7 @@ class CVBooster:
         ----------
         model_file : str, pathlib.Path or None, optional (default=None)
             Path to the CVBooster model file.
-        """
+        """  # noqa: DOC105
         self.boosters: List[Booster] = []
         self.best_iteration = -1
 
@@ -474,7 +488,7 @@ class CVBooster:
         -------
         str_repr : str
             JSON string representation of CVBooster.
-        """
+        """  # noqa: DOC105
         return json.dumps(
             self._to_dict(num_iteration=num_iteration, start_iteration=start_iteration, importance_type=importance_type)
         )
@@ -507,7 +521,7 @@ class CVBooster:
         -------
         self : CVBooster
             Returns self.
-        """
+        """  # noqa: DOC105
         with open(filename, "w") as file:
             json.dump(
                 self._to_dict(
@@ -593,8 +607,8 @@ def _make_n_folds(
 
 
 def _agg_cv_result(
-    raw_results: List[List[_LGBM_BoosterEvalMethodResultType]],
-) -> List[_LGBM_BoosterEvalMethodResultWithStandardDeviationType]:
+    raw_results: List[List[EvalResult]],
+) -> List[EvalResult]:
     """Aggregate cross-validation results."""
     # build up 2 maps, of the form:
     #
@@ -608,19 +622,28 @@ def _agg_cv_result(
     #
     metric_types: Dict[Tuple[str, str], bool] = OrderedDict()
     metric_values: Dict[Tuple[str, str], List[float]] = OrderedDict()
-    for one_result in raw_results:
-        for dataset_name, metric_name, metric_value, maximize in one_result:
-            key = (dataset_name, metric_name)
-            metric_types[key] = maximize
+    for result_list in raw_results:
+        for result in result_list:
+            key = (result.dataset_name, result.metric_name)
+            metric_types[key] = result.maximize
             metric_values.setdefault(key, [])
-            metric_values[key].append(metric_value)
+            metric_values[key].append(result.metric_value)
 
     # turn that into a list of tuples of the form:
     #
     # [
     #     (<dataset_name>, <metric_name>, mean(<values>), <maximize>, std_dev(<values>))
     # ]
-    return [(k[0], k[1], float(np.mean(v)), metric_types[k], float(np.std(v))) for k, v in metric_values.items()]
+    return [
+        EvalResult(
+            dataset_name=k[0],
+            metric_name=k[1],
+            metric_value=float(np.mean(v)),
+            maximize=metric_types[k],
+            metric_std_dev=float(np.std(v)),
+        )
+        for k, v in metric_values.items()
+    ]
 
 
 def cv(
@@ -738,7 +761,7 @@ def cv(
         {'train metric1-mean': [values], 'valid metric1-mean': [values],
         'train metric2-mean': [values], 'valid metric2-mean': [values],
         ...}.
-    """
+    """  # noqa: DOC105
     if not isinstance(train_set, Dataset):
         raise TypeError(f"cv() only accepts Dataset object, train_set has type '{type(train_set).__name__}'.")
 
@@ -842,10 +865,10 @@ def cv(
                 )
             )
         cvbooster.update(fobj=fobj)  # type: ignore[call-arg]
-        res = _agg_cv_result(cvbooster.eval_valid(feval))  # type: ignore[call-arg]
-        for dataset_name, metric_name, metric_mean, _, metric_std_dev in res:
-            results[f"{dataset_name} {metric_name}-mean"].append(metric_mean)
-            results[f"{dataset_name} {metric_name}-stdv"].append(metric_std_dev)
+        evaluation_result_list = _agg_cv_result(cvbooster.eval_valid(feval))  # type: ignore[call-arg]
+        for result in evaluation_result_list:
+            results[f"{result.dataset_name} {result.metric_name}-mean"].append(result.metric_value)
+            results[f"{result.dataset_name} {result.metric_name}-stdv"].append(result.metric_std_dev)  # type: ignore[arg-type]
         try:
             for cb in callbacks_after_iter:
                 cb(
@@ -855,7 +878,7 @@ def cv(
                         iteration=i,
                         begin_iteration=0,
                         end_iteration=num_boost_round,
-                        evaluation_result_list=res,
+                        evaluation_result_list=evaluation_result_list,
                     )
                 )
         except callback.EarlyStopException as earlyStopException:

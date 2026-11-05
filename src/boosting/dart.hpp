@@ -37,7 +37,6 @@ class DART: public GBDT {
   * \param train_data Training data
   * \param objective_function Training objective function
   * \param training_metrics Training metrics
-  * \param output_model_filename Filename of output model
   */
   void Init(const Config* config, const Dataset* train_data,
             const ObjectiveFunction* objective_function,

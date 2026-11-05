@@ -7,7 +7,7 @@
 
 Instead, please open a private vulnerability report in this repository, on the "Security and quality" tab.
 
-See https://docs.github.com/en/code-security/how-tos/report-and-fix-vulnerabilities/privately-reporting-a-security-vulnerability
+See https://docs.github.com/en/code-security/how-tos/report-and-fix-vulnerabilities/report-privately
 
 ## Report Details
 

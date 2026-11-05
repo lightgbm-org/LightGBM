@@ -10,7 +10,7 @@ site:
 repo:
   url:
     home: https://github.com/lightgbm-org/LightGBM/
-    source: https://github.com/lightgbm-org/LightGBM/tree/master/R-package/
+    source: https://github.com/lightgbm-org/LightGBM/tree/main/R-package/
     issue: https://github.com/lightgbm-org/LightGBM/issues/
     user: https://github.com/
 
@@ -48,7 +48,7 @@ navbar:
       href: reference/index.html
   right:
     - icon: fa-github fa-lg
-      href: https://github.com/lightgbm-org/LightGBM/tree/master/R-package
+      href: https://github.com/lightgbm-org/LightGBM/tree/main/R-package
 
 reference:
   - title: Datasets

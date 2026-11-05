@@ -21,11 +21,13 @@ from os import SEEK_END, environ
 from os.path import getsize
 from pathlib import Path
 from tempfile import NamedTemporaryFile
-from typing import TYPE_CHECKING, Any, Callable, Dict, Iterable, Iterator, List, Optional, Set, Tuple, Union
+from typing import TYPE_CHECKING, Any, Callable, Dict, Iterable, Iterator, List, NamedTuple, Optional, Set, Tuple, Union
 
-import narwhals as nw
-import narwhals.dependencies as nwd
-import narwhals.typing as nwt
+import narwhals.stable.v2 as nw
+import narwhals.stable.v2.dependencies as nwd
+import narwhals.stable.v2.dtypes as nw_dtypes
+import narwhals.stable.v2.selectors as ncs
+import narwhals.stable.v2.typing as nwt
 import numpy as np
 import scipy.sparse
 
@@ -64,8 +66,6 @@ _ctypes_float_array = Union[
 ]
 _LGBM_EvalFunctionResultType = Tuple[str, float, bool]
 _LGBM_BoosterBestScoreType = Dict[str, Dict[str, float]]
-_LGBM_BoosterEvalMethodResultType = Tuple[str, str, float, bool]
-_LGBM_BoosterEvalMethodResultWithStandardDeviationType = Tuple[str, str, float, bool, float]
 _LGBM_CategoricalFeatureConfiguration = Union[List[str], List[int], "Literal['auto']"]
 _LGBM_FeatureNameConfiguration = Union[List[str], "Literal['auto']"]
 _LGBM_GroupType = Union[
@@ -75,9 +75,12 @@ _LGBM_GroupType = Union[
     pd_Series,
     nwt.IntoSeries,
 ]
+# 'position' intentionally does not support 'list' inputs
+# ref: https://github.com/lightgbm-org/LightGBM/pull/5929#discussion_r1262646998
 _LGBM_PositionType = Union[
     np.ndarray,
     pd_Series,
+    nwt.IntoSeries,
 ]
 _LGBM_InitScoreType = Union[
     List[float],
@@ -227,7 +230,7 @@ def register_logger(
         Method used to log info messages.
     warning_method_name : str, optional (default="warning")
         Method used to log warning messages.
-    """
+    """  # noqa: DOC105
     if not _has_method(logger, info_method_name) or not _has_method(logger, warning_method_name):
         raise TypeError(f"Logger must provide '{info_method_name}' and '{warning_method_name}' method")
 
@@ -455,16 +458,6 @@ def _c_array(ctype: type, values: List[Any]) -> ctypes.Array:
     return (ctype * len(values))(*values)  # type: ignore[operator]
 
 
-def _json_default_with_numpy(obj: Any) -> Any:
-    """Convert numpy classes to JSON serializable objects."""
-    if isinstance(obj, (np.integer, np.floating, np.bool_)):
-        return obj.item()
-    elif isinstance(obj, np.ndarray):
-        return obj.tolist()
-    else:
-        return obj
-
-
 def _to_string(x: Union[int, float, str, List]) -> str:
     if isinstance(x, list):
         val_list = ",".join(str(val) for val in x)
@@ -588,7 +581,7 @@ def _choose_param_value(main_param_name: str, params: Dict[str, Any], default_va
     params : dict
         A ``params`` dict with exactly one value for ``main_param_name``, and all aliases ``main_param_name`` removed.
         If both ``main_param_name`` and one or more aliases for it are found, the value of ``main_param_name`` will be preferred.
-    """
+    """  # noqa: DOC105
     # avoid side effects on passed-in parameters
     params = deepcopy(params)
 
@@ -731,6 +724,25 @@ def _check_for_bad_pandas_dtypes(pandas_dtypes_series: pd_Series) -> None:
         )
 
 
+def _check_for_bad_narwhals_dtypes(data: nw.DataFrame) -> None:
+    # Narwhals schema inference does not support pandas' SparseDtype columns, so we need to check pandas
+    # types separately to prevent false positives (https://github.com/narwhals-dev/narwhals/issues/3722)
+    if data.implementation.is_pandas():
+        bad_types = {
+            column_name: dtype
+            for column_name, dtype in data.to_native().dtypes.items()
+            if not isinstance(dtype, pd_CategoricalDtype) and not _is_allowed_numpy_dtype(dtype.type)
+        }
+    else:
+        allowed_dtypes = (nw_dtypes.IntegerType, nw_dtypes.FloatType, nw.Boolean, nw.Categorical, nw.Enum)
+        bad_types = {col: dtype for col, dtype in data.schema.items() if not isinstance(dtype, allowed_dtypes)}
+    if bad_types:
+        raise ValueError(
+            f"DataFrame dtypes must be int, float, bool, categorical or enum.\n"
+            f"Fields with bad dtypes: {', '.join(f'{col}: {dtype}' for col, dtype in bad_types.items())}"
+        )
+
+
 def _pandas_to_numpy(
     data: pd_DataFrame,
     target_dtype: "np.typing.DTypeLike",
@@ -739,59 +751,58 @@ def _pandas_to_numpy(
     try:
         # most common case (no nullable dtypes)
         return data.to_numpy(dtype=target_dtype, copy=False)
-    except TypeError:
-        # 1.0 <= pd version < 1.1 and nullable dtypes, least common case
-        # raises error because array is casted to type(pd.NA) and there's no na_value argument
-        return data.astype(target_dtype, copy=False).values
     except ValueError:
         # data has nullable dtypes, but we can specify na_value argument and copy will be made
         return data.to_numpy(dtype=target_dtype, na_value=np.nan)
 
 
-def _data_from_pandas(
-    data: pd_DataFrame,
+def _pandas_df_to_numpy(data: pd_DataFrame) -> np.ndarray:
+    df_dtypes = [dtype.type for dtype in data.dtypes]
+    df_dtypes.append(np.float32)
+    target_dtype = np.result_type(*df_dtypes)
+    return _pandas_to_numpy(data, target_dtype=target_dtype)
+
+
+def _data_from_narwhals(
+    data: nwt.IntoDataFrame,
     feature_name: _LGBM_FeatureNameConfiguration,
     categorical_feature: _LGBM_CategoricalFeatureConfiguration,
     pandas_categorical: Optional[List[List]],
-) -> Tuple[np.ndarray, List[str], Union[List[str], List[int]], List[List]]:
+) -> Tuple[nwt.IntoDataFrame, List[str], Union[List[str], List[int]], List[List]]:
+    data = nw.from_native(data)
+
+    # validation
     if len(data.shape) != 2 or data.shape[0] < 1:
         raise ValueError("Input data must be 2 dimensional and non empty.")
-
-    # take shallow copy in case we modify categorical columns
-    # whole column modifications don't change the original df
-    data = data.copy(deep=False)
+    _check_for_bad_narwhals_dtypes(data)
 
     # determine feature names
     if feature_name == "auto":
-        feature_name = [str(col) for col in data.columns]
+        feature_name = [str(col) for col in data.schema.names()]
 
     # determine categorical features
-    cat_cols = [
-        col for col, dtype in zip(data.columns, data.dtypes, strict=True) if isinstance(dtype, pd_CategoricalDtype)
-    ]
-    cat_cols_not_ordered: List[str] = [col for col in cat_cols if not data[col].cat.ordered]
+    cat_cols = data.select(ncs.by_dtype(nw.Categorical, nw.Enum)).columns
+    # Ordered categoricals have ordinal semantics, which means we handle them as numeric features.
+    # By excluding them from ``categorical_feature``, the C++ backend uses ``value < threshold`` splits
+    # on their integer codes. See docs/Advanced-Topics.rst#categorical-feature-support.
+    cat_cols_not_ordered: List[str] = [col for col in cat_cols if not nw.is_ordered_categorical(data.get_column(col))]
     if pandas_categorical is None:  # train dataset
-        pandas_categorical = [list(data[col].cat.categories) for col in cat_cols]
+        pandas_categorical = [data.get_column(col).cat.get_categories().to_list() for col in cat_cols]
     else:
         if len(cat_cols) != len(pandas_categorical):
             raise ValueError("train and valid dataset categorical_feature do not match.")
-        for col, category in zip(cat_cols, pandas_categorical, strict=True):
-            if list(data[col].cat.categories) != list(category):
-                data[col] = data[col].cat.set_categories(category)
     if cat_cols:  # cat_cols is list
-        data[cat_cols] = data[cat_cols].apply(lambda x: x.cat.codes).replace({-1: np.nan})
+        data = data.with_columns(
+            nw.col(col).replace_strict({cat: i for i, cat in enumerate(categories)}, default=None).alias(col)
+            for col, categories in zip(cat_cols, pandas_categorical, strict=True)
+        )
 
     # use cat cols from DataFrame
     if categorical_feature == "auto":
         categorical_feature = cat_cols_not_ordered
 
-    df_dtypes = [dtype.type for dtype in data.dtypes]
-    # so that the target dtype considers floats
-    df_dtypes.append(np.float32)
-    target_dtype = np.result_type(*df_dtypes)
-
     return (
-        _pandas_to_numpy(data, target_dtype=target_dtype),
+        data.to_native(),
         feature_name,
         categorical_feature,
         pandas_categorical,
@@ -802,7 +813,7 @@ def _dump_pandas_categorical(
     pandas_categorical: Optional[List[List]],
     file_name: Optional[Union[str, Path]] = None,
 ) -> str:
-    categorical_json = json.dumps(pandas_categorical, default=_json_default_with_numpy)
+    categorical_json = json.dumps(pandas_categorical)
     pandas_str = f"\npandas_categorical:{categorical_json}\n"
     if file_name is not None:
         with open(file_name, "a") as f:
@@ -866,7 +877,7 @@ class Sequence(abc.ABC):
         Default size of a batch.
     """
 
-    batch_size = 4096  # Defaults to read 4K rows in each batch.
+    batch_size: int = 4096  # Defaults to read 4K rows in each batch.
 
     @abc.abstractmethod
     def __getitem__(self, idx: Union[int, slice, List[int]]) -> np.ndarray:
@@ -895,7 +906,7 @@ class Sequence(abc.ABC):
         -------
         result : numpy 1-D array or numpy 2-D array
             1-D array if idx is int, 2-D array if idx is slice or list.
-        """
+        """  # noqa: DOC105
         raise NotImplementedError("Sub-classes of lightgbm.Sequence must implement __getitem__()")
 
     @abc.abstractmethod
@@ -935,7 +946,7 @@ class _InnerPredictor:
             Other parameters for the prediction.
         manage_handle : bool
             If ``True``, free the corresponding Booster on the C++ side when this Python object is deleted.
-        """
+        """  # noqa: DOC105
         self._handle = booster_handle
         self.__is_manage_handle = manage_handle
         self.pandas_categorical = pandas_categorical
@@ -964,14 +975,12 @@ class _InnerPredictor:
             Booster.
         pred_parameter : dict
             Other parameters for the prediction.
-        """
-        out_cur_iter = ctypes.c_int(0)
-        _safe_call(
-            _LIB.LGBM_BoosterGetCurrentIteration(
-                booster._handle,
-                ctypes.byref(out_cur_iter),
-            )
-        )
+
+        Returns
+        -------
+        _InnerPredictor
+            An ``_InnerPredictor`` instance.
+        """  # noqa: DOC105
         return cls(
             booster_handle=booster._handle,
             pandas_categorical=booster.pandas_categorical,
@@ -993,7 +1002,12 @@ class _InnerPredictor:
             Path to the model file.
         pred_parameter : dict
             Other parameters for the prediction.
-        """
+
+        Returns
+        -------
+        _InnerPredictor
+            An ``_InnerPredictor`` instance.
+        """  # noqa: DOC105
         booster_handle = ctypes.c_void_p()
         out_num_iterations = ctypes.c_int(0)
         _safe_call(
@@ -1041,6 +1055,13 @@ class _InnerPredictor:
         data : str, pathlib.Path, numpy array, pandas DataFrame, scipy.sparse, pyarrow Table or polars DataFrame
             Data source for prediction.
             If str or pathlib.Path, it represents the path to a text file (CSV, TSV, or LibSVM).
+
+            .. versionadded:: 4.2.0
+                Support for ``pyarrow`` inputs
+
+            .. versionadded:: 4.7.0
+                Support for ``polars`` inputs
+
         start_iteration : int, optional (default=0)
             Start index of the iteration to predict.
         num_iteration : int, optional (default=-1)
@@ -1065,11 +1086,11 @@ class _InnerPredictor:
         result : numpy array, scipy.sparse or list of scipy.sparse
             Prediction result.
             Can be sparse or a list of sparse objects (each element represents predictions for one class) for feature contributions (when ``pred_contrib=True``).
-        """
+        """  # noqa: DOC105
         if isinstance(data, Dataset):
             raise TypeError("Cannot use Dataset instance for prediction, please use raw data instead")
-        if isinstance(data, pd_DataFrame) and validate_features:
-            data_names = [str(x) for x in data.columns]
+        if nwd.is_into_dataframe(data) and validate_features:
+            data_names = [str(x) for x in nw.from_native(data).schema.names()]
             ptr_names = (ctypes.c_char_p * len(data_names))()
             ptr_names[:] = [x.encode("utf-8") for x in data_names]
             _safe_call(
@@ -1080,8 +1101,8 @@ class _InnerPredictor:
                 )
             )
 
-        if isinstance(data, pd_DataFrame):
-            data = _data_from_pandas(
+        if nwd.is_into_dataframe(data):
+            data = _data_from_narwhals(
                 data=data,
                 feature_name="auto",
                 categorical_feature="auto",
@@ -1131,6 +1152,15 @@ class _InnerPredictor:
         elif isinstance(data, np.ndarray):
             preds, nrow = self.__pred_for_np2d(
                 mat=data,
+                start_iteration=start_iteration,
+                num_iteration=num_iteration,
+                predict_type=predict_type,
+            )
+        elif isinstance(data, pd_DataFrame):
+            # NumPy-backed frames can use this path without converting through Arrow, avoiding conversion overhead
+            # when their data is contiguous. pandas SparseDtype also cannot be exported through Arrow's C-stream.
+            preds, nrow = self.__pred_for_np2d(
+                mat=_pandas_df_to_numpy(data),
                 start_iteration=start_iteration,
                 num_iteration=num_iteration,
                 predict_type=predict_type,
@@ -1721,20 +1751,55 @@ class Dataset:
         data : str, pathlib.Path, numpy array, pandas DataFrame, scipy.sparse, Sequence, list of Sequence, list of numpy array, pyarrow Table or polars DataFrame
             Data source of Dataset.
             If str or pathlib.Path, it represents the path to a text file (CSV, TSV, or LibSVM) or a LightGBM Dataset binary file.
+
+            .. versionadded:: 4.2.0
+                Support for ``pyarrow`` inputs
+
+            .. versionadded:: 4.7.0
+                Support for ``polars`` inputs
+
         label : list, numpy 1-D array, pandas Series / one-column DataFrame, pyarrow ChunkedArray, polars Series or None, optional (default=None)
             Label of the data.
+
+            .. versionadded:: 4.2.0
+                Support for ``pyarrow`` inputs
+
+            .. versionadded:: 4.7.0
+                Support for ``polars`` inputs
+
         reference : Dataset or None, optional (default=None)
             If this is Dataset for validation, training data should be used as reference.
         weight : list, numpy 1-D array, pandas Series, pyarrow ChunkedArray, polars Series or None, optional (default=None)
             Weight for each instance. Weights should be non-negative.
+
+            .. versionadded:: 4.2.0
+                Support for ``pyarrow`` inputs
+
+            .. versionadded:: 4.7.0
+                Support for ``polars`` inputs
+
         group : list, numpy 1-D array, pandas Series, pyarrow ChunkedArray, polars Series or None, optional (default=None)
             Group/query data.
             Only used in the learning-to-rank task.
             sum(group) = n_samples.
             For example, if you have a 100-document dataset with ``group = [10, 20, 40, 10, 10, 10]``, that means that you have 6 groups,
             where the first 10 records are in the first group, records 11-30 are in the second group, records 31-70 are in the third group, etc.
+
+            .. versionadded:: 4.2.0
+                Support for ``pyarrow`` inputs
+
+            .. versionadded:: 4.7.0
+                Support for ``polars`` inputs
+
         init_score : list, list of lists (for multi-class task), numpy array, pandas Series, pandas DataFrame (for multi-class task), pyarrow ChunkedArray, pyarrow Table (for multi-class task), polars Series, polars DataFrame (for multi-class task) or None, optional (default=None)
             Init score for Dataset.
+
+            .. versionadded:: 4.2.0
+                Support for ``pyarrow`` inputs
+
+            .. versionadded:: 4.7.0
+                Support for ``polars`` inputs
+
         feature_name : list of str, or 'auto', optional (default="auto")
             Feature names.
             If 'auto' and data is pandas DataFrame, pyarrow Table, or polars DataFrame, data columns names are used.
@@ -1752,9 +1817,9 @@ class Dataset:
             Other parameters for Dataset.
         free_raw_data : bool, optional (default=True)
             If True, raw data is freed after constructing inner Dataset.
-        position : numpy 1-D array, pandas Series or None, optional (default=None)
+        position : numpy 1-D array, pandas Series, pyarrow ChunkedArray, polars Series or None, optional (default=None)
             Position of items used in unbiased learning-to-rank task.
-        """
+        """  # noqa: DOC105
         self._handle: Optional[_DatasetHandle] = None
         self.data = data
         self.label = label
@@ -1841,7 +1906,7 @@ class Dataset:
         -------
         self : Dataset
             Constructed Dataset object.
-        """
+        """  # noqa: DOC105
         self._handle = ctypes.c_void_p()
         _safe_call(
             _LIB.LGBM_DatasetCreateByReference(
@@ -1876,7 +1941,7 @@ class Dataset:
         -------
         self : Dataset
             Constructed Dataset object.
-        """
+        """  # noqa: DOC105
         ncol = len(sample_indices)
         assert len(sample_data) == ncol, "#sample data column != #column indices"
 
@@ -1928,7 +1993,7 @@ class Dataset:
         -------
         self : Dataset
             Dataset object.
-        """
+        """  # noqa: DOC105
         nrow, ncol = data.shape
         data = data.reshape(data.size)
         data_ptr, data_type, _ = _c_float_array(data)
@@ -2055,16 +2120,13 @@ class Dataset:
         if reference is not None:
             self.pandas_categorical = reference.pandas_categorical
             categorical_feature = reference.categorical_feature
-        if isinstance(data, pd_DataFrame):
-            data, feature_name, categorical_feature, self.pandas_categorical = _data_from_pandas(
+        if nwd.is_into_dataframe(data):
+            data, feature_name, categorical_feature, self.pandas_categorical = _data_from_narwhals(
                 data=data,
                 feature_name=feature_name,
                 categorical_feature=categorical_feature,
                 pandas_categorical=self.pandas_categorical,
             )
-            self.original_feature_name_ = np.array(feature_name, dtype=object)
-        if nwd.is_into_dataframe(data) and feature_name == "auto":
-            feature_name = nw.from_native(data).schema.names()
             self.original_feature_name_ = np.array(feature_name, dtype=object)
 
         # 'feature_name == "auto"' after the block above means no feature names were provided
@@ -2131,6 +2193,8 @@ class Dataset:
             self.__init_from_csc(csc=data, params_str=params_str, ref_dataset=ref_dataset)
         elif isinstance(data, np.ndarray):
             self.__init_from_np2d(mat=data, params_str=params_str, ref_dataset=ref_dataset)
+        elif isinstance(data, pd_DataFrame):
+            self.__init_from_np2d(mat=_pandas_df_to_numpy(data), params_str=params_str, ref_dataset=ref_dataset)
         elif nwd.is_into_dataframe(data):
             self.__init_from_narwhals(data=nw.from_native(data), params_str=params_str, ref_dataset=ref_dataset)
         elif isinstance(data, list) and len(data) > 0:
@@ -2189,10 +2253,20 @@ class Dataset:
 
         Mimics behavior in c_api.cpp:LGBM_DatasetCreateFromMats()
 
+        Parameters
+        ----------
+        seqs : list of Sequence
+            List of ``Sequence`` objects to sample from.
+        total_nrow : int
+            Total (not per-sequence) rows to return.
+
         Returns
         -------
-            sampled_rows, sampled_row_indices
-        """
+        sampled_rows : np.ndarray
+            Sample data.
+        sampled_rows_indices : np.ndarray
+            0-based indices in the original data that would select ``sampled_rows``.
+        """  # noqa: DOC105
         indices = self._create_sample_indices(total_nrow=total_nrow)
 
         # Select sampled rows, transpose to column order.
@@ -2446,7 +2520,7 @@ class Dataset:
         -------
         compare_result : bool
           Returns whether two dictionaries with params are equal.
-        """
+        """  # noqa: DOC105
         for k, v in other_params.items():
             if k not in ignore_keys:
                 if k not in params or params[k] != v:
@@ -2569,28 +2643,63 @@ class Dataset:
         data : str, pathlib.Path, numpy array, pandas DataFrame, scipy.sparse, Sequence, list of Sequence, list of numpy array, pyarrow Table or polars DataFrame
             Data source of Dataset.
             If str or pathlib.Path, it represents the path to a text file (CSV, TSV, or LibSVM) or a LightGBM Dataset binary file.
+
+            .. versionadded:: 4.2.0
+                Support for ``pyarrow`` inputs
+
+            .. versionadded:: 4.7.0
+                Support for ``polars`` inputs
+
         label : list, numpy 1-D array, pandas Series / one-column DataFrame, pyarrow ChunkedArray, polars Series or None, optional (default=None)
             Label of the data.
+
+            .. versionadded:: 4.2.0
+                Support for ``pyarrow`` inputs
+
+            .. versionadded:: 4.7.0
+                Support for ``polars`` inputs
+
         weight : list, numpy 1-D array, pandas Series, pyarrow ChunkedArray, polars Series or None, optional (default=None)
             Weight for each instance. Weights should be non-negative.
+
+            .. versionadded:: 4.2.0
+                Support for ``pyarrow`` inputs
+
+            .. versionadded:: 4.7.0
+                Support for ``polars`` inputs
+
         group : list, numpy 1-D array, pandas Series, pyarrow ChunkedArray, polars Series or None, optional (default=None)
             Group/query data.
             Only used in the learning-to-rank task.
             sum(group) = n_samples.
             For example, if you have a 100-document dataset with ``group = [10, 20, 40, 10, 10, 10]``, that means that you have 6 groups,
             where the first 10 records are in the first group, records 11-30 are in the second group, records 31-70 are in the third group, etc.
+
+            .. versionadded:: 4.2.0
+                Support for ``pyarrow`` inputs
+
+            .. versionadded:: 4.7.0
+                Support for ``polars`` inputs
+
         init_score : list, list of lists (for multi-class task), numpy array, pandas Series, pandas DataFrame (for multi-class task), pyarrow ChunkedArray, pyarrow Table (for multi-class task), polars Series, polars DataFrame (for multi-class task) or None, optional (default=None)
             Init score for Dataset.
+
+            .. versionadded:: 4.2.0
+                Support for ``pyarrow`` inputs
+
+            .. versionadded:: 4.7.0
+                Support for ``polars`` inputs
+
         params : dict or None, optional (default=None)
             Other parameters for validation Dataset.
-        position : numpy 1-D array, pandas Series or None, optional (default=None)
+        position : numpy 1-D array, pandas Series, pyarrow ChunkedArray, polars Series or None, optional (default=None)
             Position of items used in unbiased learning-to-rank task.
 
         Returns
         -------
         valid : Dataset
             Validation Dataset with reference to self.
-        """
+        """  # noqa: DOC105
         ret = Dataset(
             data,
             label=label,
@@ -2624,7 +2733,7 @@ class Dataset:
         -------
         subset : Dataset
             Subset of the current Dataset.
-        """
+        """  # noqa: DOC105
         if params is None:
             params = self.params
         ret = Dataset(
@@ -2657,7 +2766,7 @@ class Dataset:
         -------
         self : Dataset
             Returns self.
-        """
+        """  # noqa: DOC105
         _safe_call(
             _LIB.LGBM_DatasetSaveBinary(
                 self.construct()._handle,
@@ -2714,11 +2823,17 @@ class Dataset:
         data : list, list of lists (for multi-class task), numpy array, pandas Series, pandas DataFrame (for multi-class task), pyarrow ChunkedArray, pyarrow Table (for multi-class task), polars Series, polars DataFrame (for multi-class task) or None
             The data to be set.
 
+            .. versionadded:: 4.2.0
+                Support for ``pyarrow`` inputs
+
+            .. versionadded:: 4.7.0
+                Support for ``polars`` inputs
+
         Returns
         -------
         self : Dataset
             Dataset with set property.
-        """
+        """  # noqa: DOC105
         if self._handle is None:
             raise Exception(f"Cannot set {field_name} before construct dataset")
         if data is None:
@@ -2866,7 +2981,7 @@ class Dataset:
         -------
         self : Dataset
             Dataset with set categorical features.
-        """
+        """  # noqa: DOC105
         if self.categorical_feature == categorical_feature:
             return self
         if self.data is not None:
@@ -2968,7 +3083,7 @@ class Dataset:
         -------
         self : Dataset
             Dataset with set feature name.
-        """
+        """  # noqa: DOC105
         if feature_name != "auto":
             self.feature_name = feature_name
             self._has_non_default_feature_names = True
@@ -2996,11 +3111,17 @@ class Dataset:
         label : list, numpy 1-D array, pandas Series / one-column DataFrame, pyarrow ChunkedArray, polars Series or None
             The label information to be set into Dataset.
 
+            .. versionadded:: 4.2.0
+                Support for ``pyarrow`` inputs
+
+            .. versionadded:: 4.7.0
+                Support for ``polars`` inputs
+
         Returns
         -------
         self : Dataset
             Dataset with set label.
-        """
+        """  # noqa: DOC105
         self.label = label
         if self._handle is not None:
             if isinstance(label, pd_DataFrame):
@@ -3026,11 +3147,17 @@ class Dataset:
         weight : list, numpy 1-D array, pandas Series, pyarrow ChunkedArray, polars Series or None
             Weight to be set for each data point. Weights should be non-negative.
 
+            .. versionadded:: 4.2.0
+                Support for ``pyarrow`` inputs
+
+            .. versionadded:: 4.7.0
+                Support for ``polars`` inputs
+
         Returns
         -------
         self : Dataset
             Dataset with set weight.
-        """
+        """  # noqa: DOC105
         # Check if the weight contains values other than one
         if weight is not None:
             if nwd.is_into_series(weight):
@@ -3059,11 +3186,17 @@ class Dataset:
         init_score : list, list of lists (for multi-class task), numpy array, pandas Series, pandas DataFrame (for multi-class task), pyarrow ChunkedArray, pyarrow Table (for multi-class task), polars Series, polars DataFrame (for multi-class task) or None
             Init score for Booster.
 
+            .. versionadded:: 4.2.0
+                Support for ``pyarrow`` inputs
+
+            .. versionadded:: 4.7.0
+                Support for ``polars`` inputs
+
         Returns
         -------
         self : Dataset
             Dataset with set init score.
-        """
+        """  # noqa: DOC105
         self.init_score = init_score
         if self._handle is not None and init_score is not None:
             self.set_field("init_score", init_score)
@@ -3085,11 +3218,17 @@ class Dataset:
             For example, if you have a 100-document dataset with ``group = [10, 20, 40, 10, 10, 10]``, that means that you have 6 groups,
             where the first 10 records are in the first group, records 11-30 are in the second group, records 31-70 are in the third group, etc.
 
+            .. versionadded:: 4.2.0
+                Support for ``pyarrow`` inputs
+
+            .. versionadded:: 4.7.0
+                Support for ``polars`` inputs
+
         Returns
         -------
         self : Dataset
             Dataset with set group.
-        """
+        """  # noqa: DOC105
         self.group = group
         if self._handle is not None and group is not None:
             if isinstance(group, pd_Series) or not nwd.is_into_series(group):
@@ -3109,17 +3248,18 @@ class Dataset:
 
         Parameters
         ----------
-        position : numpy 1-D array, pandas Series or None, optional (default=None)
+        position : numpy 1-D array, pandas Series, pyarrow ChunkedArray, polars Series or None, optional (default=None)
             Position of items used in unbiased learning-to-rank task.
 
         Returns
         -------
         self : Dataset
             Dataset with set position.
-        """
+        """  # noqa: DOC105
         self.position = position
         if self._handle is not None and position is not None:
-            position = _list_to_1d_numpy(data=position, dtype=np.int32, name="position")
+            if isinstance(position, pd_Series) or not nwd.is_into_series(position):
+                position = _list_to_1d_numpy(data=position, dtype=np.int32, name="position")
             self.set_field("position", position)
             self.position = self.get_field("position")  # original values can be modified at cpp side
         return self
@@ -3177,6 +3317,12 @@ class Dataset:
         label : list, numpy 1-D array, pandas Series / one-column DataFrame, pyarrow ChunkedArray, polars Series or None
             The label information from the Dataset.
             For a constructed ``Dataset``, this will only return a numpy array.
+
+            .. versionadded:: 4.2.0
+                Support for ``pyarrow`` inputs
+
+            .. versionadded:: 4.7.0
+                Support for ``polars`` inputs
         """
         if self.label is None:
             self.label = self.get_field("label")
@@ -3190,6 +3336,12 @@ class Dataset:
         weight : list, numpy 1-D array, pandas Series, pyarrow ChunkedArray, polars Series or None
             Weight for each data point from the Dataset. Weights should be non-negative.
             For a constructed ``Dataset``, this will only return ``None`` or a numpy array.
+
+            .. versionadded:: 4.2.0
+                Support for ``pyarrow`` inputs
+
+            .. versionadded:: 4.7.0
+                Support for ``polars`` inputs
         """
         if self.weight is None:
             self.weight = self.get_field("weight")
@@ -3203,6 +3355,12 @@ class Dataset:
         init_score : list, list of lists (for multi-class task), numpy array, pandas Series, pandas DataFrame (for multi-class task), pyarrow ChunkedArray, pyarrow Table (for multi-class task), polars Series, polars DataFrame (for multi-class task) or None
             Init score of Booster.
             For a constructed ``Dataset``, this will only return ``None`` or a numpy array.
+
+            .. versionadded:: 4.2.0
+                Support for ``pyarrow`` inputs
+
+            .. versionadded:: 4.7.0
+                Support for ``polars`` inputs
         """
         if self.init_score is None:
             self.init_score = self.get_field("init_score")
@@ -3215,6 +3373,12 @@ class Dataset:
         -------
         data : str, pathlib.Path, numpy array, pandas DataFrame, scipy.sparse, Sequence, list of Sequence, list of numpy array, pyarrow Table, polars DataFrame, or None
             Raw data used in the Dataset construction.
+
+            .. versionadded:: 4.2.0
+                Support for ``pyarrow`` inputs
+
+            .. versionadded:: 4.7.0
+                Support for ``polars`` inputs
         """
         if self._handle is None:
             raise Exception("Cannot get data before construct Dataset")
@@ -3256,6 +3420,12 @@ class Dataset:
             For example, if you have a 100-document dataset with ``group = [10, 20, 40, 10, 10, 10]``, that means that you have 6 groups,
             where the first 10 records are in the first group, records 11-30 are in the second group, records 31-70 are in the third group, etc.
             For a constructed ``Dataset``, this will only return ``None`` or a numpy array.
+
+            .. versionadded:: 4.2.0
+                Support for ``pyarrow`` inputs
+
+            .. versionadded:: 4.7.0
+                Support for ``polars`` inputs
         """
         if self.group is None:
             self.group = self.get_field("group")
@@ -3269,7 +3439,7 @@ class Dataset:
 
         Returns
         -------
-        position : numpy 1-D array, pandas Series or None
+        position : numpy 1-D array, pandas Series, pyarrow ChunkedArray, polars Series or None
             Position of items used in unbiased learning-to-rank task.
             For a constructed ``Dataset``, this will only return ``None`` or a numpy array.
         """
@@ -3331,7 +3501,7 @@ class Dataset:
         -------
         number_of_bins : int
             The number of constructed bins for the feature in the Dataset.
-        """
+        """  # noqa: DOC105
         if self._handle is not None:
             if isinstance(feature, str):
                 feature_index = self.feature_name.index(feature)
@@ -3365,7 +3535,7 @@ class Dataset:
         -------
         ref_chain : set of Dataset
             Chain of references of the Datasets.
-        """
+        """  # noqa: DOC105
         head = self
         ref_chain: Set[Dataset] = set()
         while len(ref_chain) < ref_limit:
@@ -3473,7 +3643,7 @@ class Dataset:
         -------
         self : Dataset
             Returns self.
-        """
+        """  # noqa: DOC105
         _safe_call(
             _LIB.LGBM_DatasetDumpText(
                 self.construct()._handle,
@@ -3499,6 +3669,60 @@ _LGBM_CustomEvalFunction = Union[
 ]
 
 
+class EvalResult(NamedTuple):  # numpydoc ignore=PR02
+    """
+    Result from computing an evaluation metric on a dataset.
+
+    In ``lightgbm<4.7.0``, evaluation results were stored in tuples like this:
+
+      * train(): ``(dataset_name, metric_name, metric_value, maximize)``
+      * cv(): ``(dataset_name, metric_name, mean(metric_value), maximize, std_dev(metric_value))``
+
+    Parameters
+    ----------
+    dataset_name : str
+        Unique identifier for the dataset this result was computed on.
+    metric_name : str
+        Unique identifier for the metric (e.g. "rmse").
+    metric_value : float
+        Value of the evaluation metric.
+    maximize : bool
+        Are higher values better? e.g. ``True`` for AUC and ``False`` for binary error.
+    metric_std_dev : float or None
+        If not ``None``, the standard deviation of metric values computed over a range of results.
+        For example, used when aggregating over cross-validation folds in ``cv()``.
+    """  # noqa: DOC601, DOC603
+
+    dataset_name: str
+    metric_name: str
+    metric_value: float
+    maximize: bool
+    metric_std_dev: Optional[float] = None
+
+    def __len__(self) -> int:
+        if not self.is_cv_result():
+            return 4
+        else:
+            return 5
+
+    def __iter__(self) -> Any:
+        i = 0
+        while i < len(self):
+            yield getattr(self, self._fields[i])
+            i += 1
+
+    def is_cv_result(self) -> bool:
+        """
+        Whether the result was created by ``cv()``.
+
+        If ``True``:
+
+          * ``metric_value`` = mean of ``metric_name`` over CV folds
+          * ``metric_std_dev`` = standard deviation of ``metric_name`` over CV folds
+        """
+        return self.metric_std_dev is not None
+
+
 class Booster:
     """Booster in LightGBM."""
 
@@ -3521,7 +3745,7 @@ class Booster:
             Path to the model file.
         model_str : str or None, optional (default=None)
             Model will be loaded from this string.
-        """
+        """  # noqa: DOC105
         self._handle = ctypes.c_void_p()
         self._network = False
         self.__need_reload_eval_info = True
@@ -3753,7 +3977,7 @@ class Booster:
         -------
         self : Booster
             Booster with set network.
-        """
+        """  # noqa: DOC105
         if isinstance(machines, (list, set)):
             machines = ",".join(machines)
         _safe_call(
@@ -3997,7 +4221,7 @@ class Booster:
         -------
         self : Booster
             Booster with new parameters.
-        """
+        """  # noqa: DOC105
         params_str = _param_dict_to_str(params)
         if params_str:
             _safe_call(
@@ -4051,7 +4275,7 @@ class Booster:
             case. For example, if you have added any randomness (like column sampling by
             setting ``feature_fraction_bynode < 1.0``), it is possible that another call
             to ``update()`` would produce a non-empty tree.
-        """
+        """  # noqa: DOC105
         # need reset training data
         if train_set is None and self.train_set_version != self.train_set.version:
             train_set = self.train_set
@@ -4123,7 +4347,7 @@ class Booster:
             case. For example, if you have added any randomness (like column sampling by
             setting ``feature_fraction_bynode < 1.0``), it is possible that another call
             to ``__boost()`` would produce a non-empty tree.
-        """
+        """  # noqa: DOC105
         if self.__num_class > 1:
             grad = grad.ravel(order="F")
             hess = hess.ravel(order="F")
@@ -4254,7 +4478,7 @@ class Booster:
         data: Dataset,
         name: str,
         feval: Optional[Union[_LGBM_CustomEvalFunction, List[_LGBM_CustomEvalFunction]]] = None,
-    ) -> List[_LGBM_BoosterEvalMethodResultType]:
+    ) -> List[EvalResult]:
         """Evaluate for data.
 
         Parameters
@@ -4284,9 +4508,10 @@ class Booster:
 
         Returns
         -------
-        result : list
-            List with (dataset_name, metric_name, metric_value, maximize) tuples.
-        """
+        result : list[EvalResult]
+            List of ``lightgbm.EvalResult`` objects, named tuples of the form
+            (dataset_name, metric_name, metric_value, maximize).
+        """  # noqa: DOC105
         if not isinstance(data, Dataset):
             raise TypeError("Can only eval for Dataset instance")
         data_idx = -1
@@ -4307,7 +4532,7 @@ class Booster:
     def eval_train(
         self,
         feval: Optional[Union[_LGBM_CustomEvalFunction, List[_LGBM_CustomEvalFunction]]] = None,
-    ) -> List[_LGBM_BoosterEvalMethodResultType]:
+    ) -> List[EvalResult]:
         """Evaluate for training data.
 
         Parameters
@@ -4333,15 +4558,16 @@ class Booster:
 
         Returns
         -------
-        result : list
-            List with (train_dataset_name, metric_name, metric_value, maximize) tuples.
-        """
+        result : list[EvalResult]
+            List of ``lightgbm.EvalResult`` objects, named tuples of the form
+            (dataset_name, metric_name, metric_value, maximize).
+        """  # noqa: DOC105
         return self.__inner_eval(data_name=self._train_data_name, data_idx=0, feval=feval)
 
     def eval_valid(
         self,
         feval: Optional[Union[_LGBM_CustomEvalFunction, List[_LGBM_CustomEvalFunction]]] = None,
-    ) -> List[_LGBM_BoosterEvalMethodResultType]:
+    ) -> List[EvalResult]:
         """Evaluate for validation data.
 
         Parameters
@@ -4368,8 +4594,9 @@ class Booster:
         Returns
         -------
         result : list
-            List with (validation_dataset_name, metric_name, metric_value, maximize) tuples.
-        """
+            List of ``lightgbm.EvalResult`` objects, named tuples of the form
+            (dataset_name, metric_name, metric_value, maximize).
+        """  # noqa: DOC105
         return [
             item
             for i in range(1, self.__num_dataset)
@@ -4404,7 +4631,7 @@ class Booster:
         -------
         self : Booster
             Returns self.
-        """
+        """  # noqa: DOC105
         if num_iteration is None:
             num_iteration = self.best_iteration
         importance_type_int = _FEATURE_IMPORTANCE_TYPE_MAPPER[importance_type]
@@ -4439,7 +4666,7 @@ class Booster:
         -------
         self : Booster
             Booster with shuffled models.
-        """
+        """  # noqa: DOC105
         _safe_call(
             _LIB.LGBM_BoosterShuffleModels(
                 self._handle,
@@ -4463,7 +4690,7 @@ class Booster:
             Loaded Booster object.
         """
         # ensure that existing Booster is freed before replacing it
-        # with a new one createdfrom file
+        # with a new one created from file
         _safe_call(_LIB.LGBM_BoosterFree(self._handle))
         self._free_buffer()
         self._handle = ctypes.c_void_p()
@@ -4511,7 +4738,7 @@ class Booster:
         -------
         str_repr : str
             String representation of Booster.
-        """
+        """  # noqa: DOC105
         if num_iteration is None:
             num_iteration = self.best_iteration
         importance_type_int = _FEATURE_IMPORTANCE_TYPE_MAPPER[importance_type]
@@ -4585,7 +4812,7 @@ class Booster:
         -------
         json_repr : dict
             JSON format of Booster.
-        """
+        """  # noqa: DOC105
         if num_iteration is None:
             num_iteration = self.best_iteration
         importance_type_int = _FEATURE_IMPORTANCE_TYPE_MAPPER[importance_type]
@@ -4621,12 +4848,7 @@ class Booster:
                 )
             )
         ret = json.loads(string_buffer.value.decode("utf-8"), object_hook=object_hook)
-        ret["pandas_categorical"] = json.loads(
-            json.dumps(
-                self.pandas_categorical,
-                default=_json_default_with_numpy,
-            )
-        )
+        ret["pandas_categorical"] = json.loads(json.dumps(self.pandas_categorical))
         return ret
 
     def predict(
@@ -4648,6 +4870,13 @@ class Booster:
         data : str, pathlib.Path, numpy array, pandas DataFrame, scipy.sparse, pyarrow Table or polars DataFrame
             Data source for prediction.
             If str or pathlib.Path, it represents the path to a text file (CSV, TSV, or LibSVM).
+
+            .. versionadded:: 4.2.0
+                Support for ``pyarrow`` inputs
+
+            .. versionadded:: 4.7.0
+                Support for ``polars`` inputs
+
         start_iteration : int, optional (default=0)
             Start index of the iteration to predict.
             If <= 0, starts from the first iteration.
@@ -4670,6 +4899,8 @@ class Booster:
                 you can install the shap package (https://github.com/slundberg/shap).
                 Note that unlike the shap package, with ``pred_contrib`` we return a matrix with an extra
                 column, where the last column is the expected value.
+                Summing each row's Shapley values with its expected value gives you the model's raw score
+                (as returned by ``predict(X, raw_score=True)``).
 
         data_has_header : bool, optional (default=False)
             Whether the data has header.
@@ -4685,7 +4916,7 @@ class Booster:
         result : numpy array, scipy.sparse or list of scipy.sparse
             Prediction result.
             Can be sparse or a list of sparse objects (each element represents predictions for one class) for feature contributions (when ``pred_contrib=True``).
-        """
+        """  # noqa: DOC105
         predictor = _InnerPredictor.from_booster(
             booster=self,
             pred_parameter=deepcopy(kwargs),
@@ -4729,8 +4960,22 @@ class Booster:
         data : str, pathlib.Path, numpy array, pandas DataFrame, scipy.sparse, Sequence, list of Sequence, list of numpy array, pyarrow Table or polars DataFrame
             Data source for refit.
             If str or pathlib.Path, it represents the path to a text file (CSV, TSV, or LibSVM).
+
+            .. versionadded:: 4.2.0
+                Support for ``pyarrow`` inputs
+
+            .. versionadded:: 4.7.0
+                Support for ``polars`` inputs
+
         label : list, numpy 1-D array, pandas Series / one-column DataFrame, pyarrow ChunkedArray, polars Series or None
             Label for refit.
+
+            .. versionadded:: 4.2.0
+                Support for ``pyarrow`` inputs
+
+            .. versionadded:: 4.7.0
+                Support for ``polars`` inputs
+
         decay_rate : float, optional (default=0.9)
             Decay rate of refit,
             will use ``leaf_output = decay_rate * old_leaf_output + (1.0 - decay_rate) * new_leaf_output`` to refit trees.
@@ -4744,6 +4989,12 @@ class Booster:
 
             .. versionadded:: 4.0.0
 
+            .. versionadded:: 4.2.0
+                Support for ``pyarrow`` inputs
+
+            .. versionadded:: 4.7.0
+                Support for ``polars`` inputs
+
         group : list, numpy 1-D array, pandas Series, pyarrow ChunkedArray, polars Series or None, optional (default=None)
             Group/query size for ``data``.
             Only used in the learning-to-rank task.
@@ -4753,10 +5004,19 @@ class Booster:
 
             .. versionadded:: 4.0.0
 
+            .. versionadded:: 4.7.0
+                Support for ``polars`` inputs
+
         init_score : list, list of lists (for multi-class task), numpy array, pandas Series, pandas DataFrame (for multi-class task), pyarrow ChunkedArray, pyarrow Table (for multi-class task), polars Series, polars DataFrame (for multi-class task) or None, optional (default=None)
             Init score for ``data``.
 
             .. versionadded:: 4.0.0
+
+            .. versionadded:: 4.2.0
+                Support for ``pyarrow`` inputs
+
+            .. versionadded:: 4.7.0
+                Support for ``polars`` inputs
 
         feature_name : list of str, or 'auto', optional (default="auto")
             Feature names for ``data``.
@@ -4801,7 +5061,7 @@ class Booster:
         -------
         result : Booster
             Refitted Booster.
-        """
+        """  # noqa: DOC105
         if self.__set_objective_to_none:
             raise LightGBMError("Cannot refit due to null objective function.")
         if dataset_params is None:
@@ -5030,7 +5290,7 @@ class Booster:
         -------
         result : numpy array
             Array with feature importances.
-        """
+        """  # noqa: DOC105
         if iteration is None:
             iteration = self.best_iteration
         importance_type_int = _FEATURE_IMPORTANCE_TYPE_MAPPER[importance_type]
@@ -5085,7 +5345,7 @@ class Booster:
             and the bin edges.
         result_array_like : numpy array or pandas DataFrame (if pandas is installed)
             If ``xgboost_style=True``, the histogram of used splitting values for the specified feature.
-        """
+        """  # noqa: DOC105
 
         def add(root: Dict[str, Any]) -> None:
             """Recursively add thresholds."""
@@ -5128,7 +5388,7 @@ class Booster:
         data_name: str,
         data_idx: int,
         feval: Optional[Union[_LGBM_CustomEvalFunction, List[_LGBM_CustomEvalFunction]]],
-    ) -> List[_LGBM_BoosterEvalMethodResultType]:
+    ) -> List[EvalResult]:
         """Evaluate training or validation data."""
         if data_idx >= self.__num_dataset:
             raise ValueError("Data_idx should be smaller than number of dataset")
@@ -5148,7 +5408,14 @@ class Booster:
             if tmp_out_len.value != self.__num_inner_eval:
                 raise ValueError("Wrong length of eval results")
             for i in range(self.__num_inner_eval):
-                ret.append((data_name, self.__name_inner_eval[i], result[i], self.__higher_better_inner_eval[i]))
+                ret.append(
+                    EvalResult(
+                        dataset_name=data_name,
+                        metric_name=self.__name_inner_eval[i],
+                        metric_value=result[i],
+                        maximize=self.__higher_better_inner_eval[i],
+                    )
+                )
         if callable(feval):
             feval = [feval]
         if feval is not None:
@@ -5161,11 +5428,24 @@ class Booster:
                     continue
                 feval_ret = eval_function(self.__inner_predict(data_idx=data_idx), cur_data)
                 if isinstance(feval_ret, list):
-                    for metric_name, metric_value, maximize in feval_ret:
-                        ret.append((data_name, metric_name, metric_value, maximize))
+                    for eval_tuple in feval_ret:
+                        ret.append(
+                            EvalResult(
+                                dataset_name=data_name,
+                                metric_name=eval_tuple[0],
+                                metric_value=eval_tuple[1],
+                                maximize=eval_tuple[2],
+                            )
+                        )
                 else:
-                    metric_name, metric_value, maximize = feval_ret
-                    ret.append((data_name, metric_name, metric_value, maximize))
+                    ret.append(
+                        EvalResult(
+                            dataset_name=data_name,
+                            metric_name=feval_ret[0],
+                            metric_value=feval_ret[1],
+                            maximize=feval_ret[2],
+                        )
+                    )
         return ret
 
     def __inner_predict(self, *, data_idx: int) -> np.ndarray:

@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 #
 # LightGBM documentation build configuration file, created by
@@ -82,6 +81,7 @@ if needs_sphinx > sphinx.__version__:
 # extensions coming with Sphinx (named 'sphinx.ext.*') or your custom
 # ones.
 extensions = [
+    "myst_parser",
     "sphinx.ext.autodoc",
     "sphinx.ext.autosummary",
     "sphinx.ext.todo",
@@ -89,6 +89,13 @@ extensions = [
     "sphinx.ext.napoleon",
     "sphinx.ext.intersphinx",
 ]
+
+# override default list of supported extensions
+# ref: https://www.sphinx-doc.org/en/master/usage/markdown.html
+source_suffix = {
+    ".md": "markdown",
+    ".rst": "restructuredtext",
+}
 
 autodoc_default_flags = ["members", "inherited-members", "show-inheritance"]
 autodoc_default_options = {
@@ -164,6 +171,15 @@ exclude_patterns = ["_build", "Thumbs.db", ".DS_Store"]
 # The name of the Pygments (syntax highlighting) style to use.
 pygments_style = "default"
 
+# -- myst configuration ---------------------------------------------------
+# ref: https://myst-parser.readthedocs.io/en/latest/configuration.html
+
+# use "GitHub-flavored markdown"
+myst_gfm_only = True
+
+# generate hyperlinks that open new tabs
+myst_links_external_new_tab = True
+
 # -- Configuration for C API docs generation ------------------------------
 
 if C_API:
@@ -223,7 +239,7 @@ def generate_doxygen_xml(app: Sphinx) -> None:
     ----------
     app : sphinx.application.Sphinx
         The application object representing the Sphinx process.
-    """
+    """  # noqa: DOC105
     doxygen_args = [
         f"INPUT={CURR_PATH.parent / 'include' / 'LightGBM' / 'c_api.h'}",
         f"OUTPUT_DIRECTORY={CURR_PATH / 'doxyoutput'}",
@@ -267,7 +283,7 @@ def generate_r_docs(app: Sphinx) -> None:
     ----------
     app : sphinx.application.Sphinx
         The application object representing the Sphinx process.
-    """
+    """  # noqa: DOC105
     commands = f"""
     export TAR=/bin/tar
     cd {CURR_PATH.parent}
@@ -300,7 +316,7 @@ def replace_reference_to_r_docs(app: Sphinx) -> None:
     ----------
     app : sphinx.application.Sphinx
         The application object representing the Sphinx process.
-    """
+    """  # noqa: DOC105
     index_doc_path = CURR_PATH / "index.rst"
     with open(index_doc_path, "r+t", encoding="utf-8") as index_doc:
         content = index_doc.read()
@@ -316,7 +332,7 @@ def setup(app: Sphinx) -> None:
     ----------
     app : sphinx.application.Sphinx
         The application object representing the Sphinx process.
-    """
+    """  # noqa: DOC105
     first_run = not (CURR_PATH / "_FIRST_RUN.flag").exists()
     if first_run and RTD:
         (CURR_PATH / "_FIRST_RUN.flag").touch()

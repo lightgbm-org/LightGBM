@@ -13,6 +13,7 @@
 
 #include <R_ext/Rdynload.h>
 #include <R_ext/Altrep.h>
+#include <R_ext/Visibility.h>
 
 #ifndef R_NO_REMAP
 #define R_NO_REMAP
@@ -95,7 +96,7 @@ const void* get_altrepped_raw_dataptr_or_null(SEXP R_raw) {
   return get_ptr_from_altrepped_raw(R_raw)->data();
 }
 
-void* get_altrepped_raw_dataptr(SEXP R_raw, Rboolean writeable) {
+void* get_altrepped_raw_dataptr(SEXP R_raw, Rboolean writable) {
   return get_ptr_from_altrepped_raw(R_raw)->data();
 }
 
@@ -173,7 +174,7 @@ const void* get_altrepped_vec_dataptr_or_null(SEXP R_vec) {
   return R_ExternalPtrAddr(R_altrep_data1(R_vec));
 }
 
-void* get_altrepped_vec_dataptr(SEXP R_vec, Rboolean writeable) {
+void* get_altrepped_vec_dataptr(SEXP R_vec, Rboolean writable) {
   return R_ExternalPtrAddr(R_altrep_data1(R_vec));
 }
 
@@ -1488,7 +1489,24 @@ static const R_CallMethodDef CallEntries[] = {
   {NULL, NULL, 0}
 };
 
-LIGHTGBM_C_EXPORT void R_init_lightgbm(DllInfo *dll);
+/*
+   R_init_lightgbm() is the only symbol the package needs to export.
+
+   See "Controlling Visibility" in "Writing R Extensions", which says:
+
+       A shared object which registers its entry points needs only for have
+       one visible entry point, its initializer
+
+  The Windows-specific branch here is only needed for the CMake-based build,
+  which doesn't re-use lightgbm-win.def.
+*/
+#ifdef _WIN32
+#define LIGHTGBM_R_INIT_EXPORT LIGHTGBM_EXTERN_C __declspec(dllexport)
+#else
+#define LIGHTGBM_R_INIT_EXPORT LIGHTGBM_EXTERN_C attribute_visible
+#endif
+
+LIGHTGBM_R_INIT_EXPORT void R_init_lightgbm(DllInfo *dll);
 
 void R_init_lightgbm(DllInfo *dll) {
   R_registerRoutines(dll, NULL, CallEntries, NULL, NULL);

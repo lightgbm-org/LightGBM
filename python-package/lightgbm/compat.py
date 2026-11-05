@@ -10,38 +10,21 @@ from typing import TYPE_CHECKING, Any, List
 try:
     from sklearn import __version__ as _sklearn_version
     from sklearn.base import BaseEstimator, ClassifierMixin, RegressorMixin
+    from sklearn.exceptions import NotFittedError
+    from sklearn.model_selection import BaseCrossValidator, GroupKFold, StratifiedKFold
     from sklearn.preprocessing import LabelEncoder
     from sklearn.utils.class_weight import compute_sample_weight
     from sklearn.utils.multiclass import check_classification_targets
-    from sklearn.utils.validation import assert_all_finite, check_array, check_X_y
+    from sklearn.utils.validation import _check_sample_weight, assert_all_finite, check_array, check_X_y
 
-    try:
-        from sklearn.exceptions import NotFittedError
-        from sklearn.model_selection import BaseCrossValidator, GroupKFold, StratifiedKFold
-    except ImportError:
-        from sklearn.cross_validation import BaseCrossValidator, GroupKFold, StratifiedKFold
-        from sklearn.utils.validation import NotFittedError
-    try:
-        from sklearn.utils.validation import _check_sample_weight
-
-        # As of https://github.com/scikit-learn/scikit-learn/pull/32212, scikit-learn started raising an error
-        # when sample weights are all 0. This argument allow_all_zero_weights can be used switch back
-        # to the old behavior of allowing them.
-        #
-        # This can be removed when the minimum scikit-learn version supported here is v1.9.
-        SKLEARN_CHECK_SAMPLE_WEIGHT_HAS_ALLOW_ZERO_WEIGHTS_ARG = (
-            "allow_all_zero_weights" in inspect.signature(_check_sample_weight).parameters
-        )
-
-    except ImportError:
-        from sklearn.utils.validation import check_consistent_length
-
-        SKLEARN_CHECK_SAMPLE_WEIGHT_HAS_ALLOW_ZERO_WEIGHTS_ARG = False
-
-        # dummy function to support older version of scikit-learn
-        def _check_sample_weight(sample_weight: Any, X: Any, dtype: Any = None) -> Any:
-            check_consistent_length(sample_weight, X)
-            return sample_weight
+    # As of https://github.com/scikit-learn/scikit-learn/pull/32212, scikit-learn started raising an error
+    # when sample weights are all 0. This argument allow_all_zero_weights can be used switch back
+    # to the old behavior of allowing them.
+    #
+    # This can be removed when the minimum scikit-learn version supported here is v1.9.
+    SKLEARN_CHECK_SAMPLE_WEIGHT_HAS_ALLOW_ZERO_WEIGHTS_ARG = (
+        "allow_all_zero_weights" in inspect.signature(_check_sample_weight).parameters
+    )
 
     try:
         from sklearn.utils.validation import validate_data
@@ -167,14 +150,11 @@ if TYPE_CHECKING:
 
 """pandas"""
 try:
+    from pandas import CategoricalDtype as pd_CategoricalDtype
     from pandas import DataFrame as pd_DataFrame
     from pandas import Series as pd_Series
     from pandas import concat
 
-    try:
-        from pandas import CategoricalDtype as pd_CategoricalDtype
-    except ImportError:
-        from pandas.api.types import CategoricalDtype as pd_CategoricalDtype
     PANDAS_INSTALLED = True
 except ImportError:
     PANDAS_INSTALLED = False

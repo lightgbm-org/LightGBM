@@ -1,6 +1,10 @@
 name: CUDA Version
 
 on:
+  push:
+    # run on pushes to LightGBM branches matching certain names
+    branches:
+      - cuda-*
   # Run manually by clicking a button in the UI
   workflow_dispatch:
 
@@ -43,8 +47,14 @@ jobs:
         include:
           - method: wheel
             compiler: gcc
-            python_version: "3.11"
-            cuda_version: "12.8.0"
+            python_version: "3.12"
+            cuda_version: "13.2.1"
+            linux_version: "ubuntu24.04"
+            task: cuda
+          - method: wheel
+            compiler: gcc
+            python_version: "3.13"
+            cuda_version: "12.9.1"
             linux_version: "ubuntu22.04"
             task: cuda
           - method: source
@@ -54,7 +64,7 @@ jobs:
             linux_version: "ubuntu22.04"
             task: cuda
           - method: pip
-            compiler: clang
+            compiler: gcc
             python_version: "3.12"
             cuda_version: "11.8.0"
             linux_version: "ubuntu20.04"
@@ -72,12 +82,14 @@ jobs:
               git \
               sudo
       - name: Checkout repository
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
         with:
           fetch-depth: 5
           persist-credentials: false
           submodules: true
       - name: Setup and run tests
+        env:
+          CI_CUDA_VERSION: ${{ matrix.cuda_version }}
         run: |
           export BUILD_ARTIFACTSTAGINGDIRECTORY="${{ github.workspace }}/artifacts"
           export BUILD_DIRECTORY="$GITHUB_WORKSPACE"
@@ -98,6 +110,6 @@ jobs:
       statuses: read
     steps:
       - name: Note that all tests succeeded
-        uses: re-actors/alls-green@05ac9388f0aebcb5727afa17fcccfecd6f8ec5fe  # v1.2.2
+        uses: re-actors/alls-green@b5b5b37504aa4183270bd3d855c52a67f212be35  # v1.3.0
         with:
           jobs: ${{ toJSON(needs) }}

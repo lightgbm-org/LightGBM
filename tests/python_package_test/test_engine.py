@@ -4,7 +4,6 @@ import itertools
 import json
 import math
 import pickle
-import platform
 import random
 import re
 from pathlib import Path
@@ -155,6 +154,47 @@ def test_regression(objective):
     else:
         assert ret < 343
     assert evals_result["valid_0"]["l2"][-1] == pytest.approx(ret)
+
+
+@pytest.mark.skipif(
+    BuildInfo.has_cuda, reason="CUDA version has a different implementation of WeightedPercentileFun, not tested here"
+)
+@pytest.mark.parametrize("objective", ["regression_l1", "quantile", "mape"])
+def test_weighted_percentile_inside_label_range(objective):
+    # Regression test for https://github.com/lightgbm-org/LightGBM/issues/7151
+    # WeightedPercentileFun used the wrong
+    # CDF segment for linear interpolation and could return values outside
+    # [min(y), max(y)]. The pre-fix implementation produced a "weighted
+    # median" of 1.0 for y=[2,3,4,5], w=[4,3,2,1], far below min(y)=2.
+    #
+    # The correct weighted median for that example is 2 + 1/3 = 2.333..., and
+    # any weighted percentile with non-negative weights must lie in the label
+    # range. We train a model that cannot learn any structure from X (a single
+    # constant feature) so BoostFromScore dominates the prediction.
+    X = np.zeros((4, 1))
+    y = np.array([2.0, 3.0, 4.0, 5.0])
+    w = np.array([4.0, 3.0, 2.0, 1.0])
+    params = {
+        "objective": objective,
+        "verbose": -1,
+        "num_leaves": 2,
+        "min_data_in_leaf": 1,
+        "min_sum_hessian_in_leaf": 0.0,
+        "learning_rate": 1.0,
+        "feature_fraction": 1.0,
+        "bagging_fraction": 1.0,
+    }
+    if objective == "quantile":
+        params["alpha"] = 0.5
+    train = lgb.Dataset(X, label=y, weight=w)
+    gbm = lgb.train(params, train, num_boost_round=1)
+    preds = gbm.predict(X)
+    assert np.all(preds >= y.min() - 1e-6), f"{objective}: prediction {preds.min()} fell below min(y)={y.min()}"
+    assert np.all(preds <= y.max() + 1e-6), f"{objective}: prediction {preds.max()} rose above max(y)={y.max()}"
+    # For regression_l1 the single-leaf prediction is exactly the weighted
+    # median of y; verify it matches the expected 2 + 1/3.
+    if objective == "regression_l1":
+        np.testing.assert_allclose(preds, 2.0 + 1.0 / 3.0, rtol=1e-6)
 
 
 def test_missing_value_handle():
@@ -925,6 +965,59 @@ def test_early_stopping_ignores_training_set(use_valid):
             bst = train_fn()
         assert bst.current_iteration() == 2
         assert bst.best_iteration == 0
+
+
+@pytest.mark.parametrize("disabling_reason", ["dart", "train_set_only"])
+def test_early_stopping_callback_can_be_reused_after_it_disabled_itself(disabling_reason):
+    X, y = make_synthetic_regression()
+    X_train, X_valid, y_train, y_valid = train_test_split(X, y, test_size=0.1, random_state=42)
+    params = {
+        "metric": "None",
+        "min_data": 1,
+        "num_leaves": 2,
+        "objective": "regression",
+        "verbose": -1,
+    }
+    num_boost_round = 5
+    callback = lgb.early_stopping(1, verbose=False)
+    train_ds = lgb.Dataset(X_train, y_train)
+
+    if disabling_reason == "dart":
+        disabling_params = {**params, "boosting": "dart"}
+        disabling_valid_sets = [lgb.Dataset(X_valid, y_valid)]
+        warning_match = "Early stopping is not available in dart mode"
+    else:
+        disabling_params = params
+        disabling_valid_sets = [train_ds]
+        warning_match = "Only training set found, disabling early stopping."
+
+    with pytest.warns(UserWarning, match=warning_match):
+        bst0 = lgb.train(
+            disabling_params,
+            train_ds,
+            num_boost_round=num_boost_round,
+            valid_sets=disabling_valid_sets,
+            feval=constant_metric,
+            callbacks=[callback],
+        )
+
+    # early stopping should not have been triggered
+    assert callback.enabled is False
+    assert bst0.best_iteration == 0
+    assert bst0.current_iteration() == num_boost_round
+
+    # re-using the same callback object in a later training call, early stopping is successfully enabled
+    bst1 = lgb.train(
+        params,
+        lgb.Dataset(X_train, y_train),
+        num_boost_round=num_boost_round,
+        valid_sets=[lgb.Dataset(X_valid, y_valid)],
+        feval=constant_metric,
+        callbacks=[callback],
+    )
+    assert callback.enabled is True
+    assert bst1.best_iteration == 1
+    assert bst1.current_iteration() == 1
 
 
 @pytest.mark.parametrize("first_metric_only", [True, False])
@@ -1909,6 +2002,19 @@ def test_reference_chain(rng):
     assert len(evals_result["valid_1"]["rmse"]) == 20
 
 
+def assert_contribs_sum_to_raw_score(booster, X):
+    raw_score = booster.predict(X, raw_score=True)
+    # per class, num_features contributions and the expected value
+    contribs = booster.predict(X, pred_contrib=True).reshape(*raw_score.shape, -1)
+    np.testing.assert_allclose(contribs.sum(axis=-1), raw_score, rtol=1e-14, atol=1e-14)
+
+
+def tree_depth(node):
+    if "split_feature" not in node:
+        return 0
+    return 1 + max(tree_depth(node["left_child"]), tree_depth(node["right_child"]))
+
+
 def test_contribs():
     X, y = load_breast_cancer(return_X_y=True)
     X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.1, random_state=42)
@@ -1920,18 +2026,130 @@ def test_contribs():
     lgb_train = lgb.Dataset(X_train, y_train)
     gbm = lgb.train(params, lgb_train, num_boost_round=20)
 
-    assert (
-        np.linalg.norm(gbm.predict(X_test, raw_score=True) - np.sum(gbm.predict(X_test, pred_contrib=True), axis=1))
-        < 1e-4
+    assert_contribs_sum_to_raw_score(gbm, X_test)
+
+
+def test_contribs_with_missing_values(rng_fixed_seed):
+    X = rng_fixed_seed.normal(size=(500, 5))
+    X[rng_fixed_seed.random(500) < 0.2, 0] = np.nan
+    y = np.where(np.isnan(X[:, 0]), 3.0, X[:, 0]) + X[:, 1]
+    gbm = lgb.train({"objective": "regression", "verbose": -1}, lgb.Dataset(X, y), num_boost_round=20)
+    assert_contribs_sum_to_raw_score(gbm, X)
+
+
+def test_contribs_with_categorical_feature(rng_fixed_seed):
+    X = rng_fixed_seed.normal(size=(500, 5))
+    X[:, 0] = rng_fixed_seed.integers(0, 10, size=500)
+    category_effect = np.array([3.0, -1.0, 0.5, 2.0, -2.0, 1.0, 0.0, -0.5, 1.5, -1.5])
+    y = category_effect[X[:, 0].astype(int)] + X[:, 1]
+    gbm = lgb.train(
+        {"objective": "regression", "verbose": -1},
+        lgb.Dataset(X, y, categorical_feature=[0]),
+        num_boost_round=20,
     )
+    assert_contribs_sum_to_raw_score(gbm, X)
 
 
-def test_contribs_sparse():
+def test_contribs_of_small_tree():
+    # one tree: x0 <= 0.5 ? (x1 <= 0.5 ? 0 : 4) : 10, with 2, 2 and 4 training rows in its leaves
+    X = np.array([[0, 0], [0, 0], [0, 1], [0, 1], [1, 0], [1, 0], [1, 1], [1, 1]], dtype=float)
+    y = np.array([0, 0, 4, 4, 10, 10, 10, 10], dtype=float)
+    params = {
+        "objective": "regression",
+        "num_leaves": 3,
+        "min_data_in_leaf": 1,
+        "learning_rate": 1.0,
+        "boost_from_average": False,
+        "verbose": -1,
+    }
+    gbm = lgb.train(params, lgb.Dataset(X, y), num_boost_round=1)
+    X_test = np.array([[0, 0], [0, 1], [1, 0], [1, 1]], dtype=float)
+
+    expected = np.array(
+        [
+            # phi_x0, phi_x1, expected value
+            [-4.5, -1.5, 6.0],
+            [-3.5, 1.5, 6.0],
+            [4.5, -0.5, 6.0],
+            [3.5, 0.5, 6.0],
+        ]
+    )
+    np.testing.assert_allclose(gbm.predict(X_test, pred_contrib=True), expected, rtol=1e-14, atol=1e-14)
+
+
+@pytest.mark.parametrize("depth", [8, 16, 24, 32, 48, 64, 99])
+def test_contribs_numerically_stable_in_deep_trees(depth, rng_fixed_seed):
+    # One tree that splits off the sample with the largest label at each level, every time on a new feature.
+    # The labels are convex, so the largest label is always the farthest from the mean and has the best split.
+    num_features = 100
+    X = np.eye(num_features)
+    y = (np.arange(1, num_features + 1) / num_features) ** 2
+    params = {
+        "objective": "regression",
+        "num_leaves": depth + 1,
+        "max_depth": depth,
+        "min_data_in_leaf": 1,
+        "min_data_in_bin": 1,
+        "min_sum_hessian_in_leaf": 0.0,
+        "learning_rate": 1.0,
+        "boost_from_average": False,
+        "verbose": -1,
+    }
+    gbm = lgb.train(params, lgb.Dataset(X, y), num_boost_round=1)
+    assert tree_depth(gbm.dump_model()["tree_info"][0]["tree_structure"]) == depth
+    # a row that follows the chain down to the deepest leaf, and rows that leave it early
+    X_test = np.vstack([np.zeros(num_features), (rng_fixed_seed.random((100, num_features)) < 0.5).astype(float)])
+
+    assert_contribs_sum_to_raw_score(gbm, X_test)
+
+
+def test_contribs_after_update():
+    X, y = load_breast_cancer(return_X_y=True)
+    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.1, random_state=42)
+    params = {
+        "objective": "binary",
+        "metric": "binary_logloss",
+        "verbose": -1,
+    }
+    gbm = lgb.Booster(params, lgb.Dataset(X_train, y_train))
+    # predict contributions between updates, so that every call sees trees added after the previous one
+    for _ in range(5):
+        gbm.update()
+        contribs = gbm.predict(X_test, pred_contrib=True)
+        assert np.linalg.norm(gbm.predict(X_test, raw_score=True) - np.sum(contribs, axis=1)) < 1e-4
+        loaded_contribs = lgb.Booster(model_str=gbm.model_to_string()).predict(X_test, pred_contrib=True)
+        np.testing.assert_allclose(contribs, loaded_contribs)
+
+
+def test_contribs_in_callback():
+    X, y = load_breast_cancer(return_X_y=True)
+    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.1, random_state=42)
+    params = {
+        "objective": "binary",
+        "metric": "binary_logloss",
+        "verbose": -1,
+    }
+    num_boost_round = 5
+    contribs_errors = []
+
+    def check_contribs(env):
+        contribs = env.model.predict(X_test, pred_contrib=True)
+        raw_score = env.model.predict(X_test, raw_score=True)
+        contribs_errors.append(np.linalg.norm(raw_score - np.sum(contribs, axis=1)))
+
+    lgb.train(params, lgb.Dataset(X_train, y_train), num_boost_round=num_boost_round, callbacks=[check_contribs])
+    assert len(contribs_errors) == num_boost_round
+    assert max(contribs_errors) < 1e-4
+
+
+# Seed 0 reproduces a sparse/dense rounding mismatch when FMA is enabled.
+@pytest.mark.parametrize("data_seed", [None, 0], ids=["randomized", "fixed_seed"])
+def test_contribs_sparse(data_seed):
     n_features = 20
     n_samples = 100
     # generate CSR sparse dataset
     X, y = make_multilabel_classification(
-        n_samples=n_samples, sparse=True, n_features=n_features, n_classes=1, n_labels=2
+        n_samples=n_samples, sparse=True, n_features=n_features, n_classes=1, n_labels=2, random_state=data_seed
     )
     y = y.flatten()
     X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.1, random_state=42)
@@ -1946,29 +2164,24 @@ def test_contribs_sparse():
     # convert data to dense and get back same contribs
     contribs_dense = gbm.predict(X_test.toarray(), pred_contrib=True)
     # validate the values are the same
-    if platform.machine() == "aarch64":
-        np.testing.assert_allclose(contribs_csr.toarray(), contribs_dense, rtol=1, atol=1e-12)
-    else:
-        np.testing.assert_allclose(contribs_csr.toarray(), contribs_dense)
-    assert np.linalg.norm(gbm.predict(X_test, raw_score=True) - np.sum(contribs_dense, axis=1)) < 1e-4
+    np.testing.assert_allclose(contribs_csr.toarray(), contribs_dense)
+    assert_contribs_sum_to_raw_score(gbm, X_test.toarray())
     # validate using CSC matrix
     X_test_csc = X_test.tocsc()
     contribs_csc = gbm.predict(X_test_csc, pred_contrib=True)
     assert isspmatrix_csc(contribs_csc)
     # validate the values are the same
-    if platform.machine() == "aarch64":
-        np.testing.assert_allclose(contribs_csc.toarray(), contribs_dense, rtol=1, atol=1e-12)
-    else:
-        np.testing.assert_allclose(contribs_csc.toarray(), contribs_dense)
+    np.testing.assert_allclose(contribs_csc.toarray(), contribs_dense)
 
 
-def test_contribs_sparse_multiclass():
+@pytest.mark.parametrize("data_seed", [None, 0], ids=["randomized", "fixed_seed"])
+def test_contribs_sparse_multiclass(data_seed):
     n_features = 20
     n_samples = 100
     n_labels = 4
     # generate CSR sparse dataset
     X, y = make_multilabel_classification(
-        n_samples=n_samples, sparse=True, n_features=n_features, n_classes=1, n_labels=n_labels
+        n_samples=n_samples, sparse=True, n_features=n_features, n_classes=1, n_labels=n_labels, random_state=data_seed
     )
     y = y.flatten()
     X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.1, random_state=42)
@@ -1990,12 +2203,8 @@ def test_contribs_sparse_multiclass():
     contribs_csr_arr_re = contribs_csr_array.reshape(
         (contribs_csr_array.shape[0], contribs_csr_array.shape[1] * contribs_csr_array.shape[2])
     )
-    if platform.machine() == "aarch64":
-        np.testing.assert_allclose(contribs_csr_arr_re, contribs_dense, rtol=1, atol=1e-12)
-    else:
-        np.testing.assert_allclose(contribs_csr_arr_re, contribs_dense)
-    contribs_dense_re = contribs_dense.reshape(contribs_csr_array.shape)
-    assert np.linalg.norm(gbm.predict(X_test, raw_score=True) - np.sum(contribs_dense_re, axis=2)) < 1e-4
+    np.testing.assert_allclose(contribs_csr_arr_re, contribs_dense)
+    assert_contribs_sum_to_raw_score(gbm, X_test.toarray())
     # validate using CSC matrix
     X_test_csc = X_test.tocsc()
     contribs_csc = gbm.predict(X_test_csc, pred_contrib=True)
@@ -2007,10 +2216,7 @@ def test_contribs_sparse_multiclass():
     contribs_csc_array = contribs_csc_array.reshape(
         (contribs_csc_array.shape[0], contribs_csc_array.shape[1] * contribs_csc_array.shape[2])
     )
-    if platform.machine() == "aarch64":
-        np.testing.assert_allclose(contribs_csc_array, contribs_dense, rtol=1, atol=1e-12)
-    else:
-        np.testing.assert_allclose(contribs_csc_array, contribs_dense)
+    np.testing.assert_allclose(contribs_csc_array, contribs_dense)
 
 
 @pytest.mark.skipif(
@@ -2468,7 +2674,11 @@ def test_mape_for_specific_boosting_types(boosting_type):
     pred_mean = pred.mean()
     # the following checks that dart and rf with mape can predict outside the 0-1 range
     # https://github.com/lightgbm-org/LightGBM/issues/1579
-    assert pred_mean > 8
+    # Threshold is intentionally loose (>5) because fixing the
+    # WeightedPercentileFun segment bug (#7151) shifted the output of MAPE
+    # training. The intent of this assertion is to guard against predictions
+    # being stuck inside [0, 1]; a mean around 6-8 satisfies that.
+    assert pred_mean > 5
 
 
 def check_constant_features(y_true, expected_pred, more_params):
@@ -4799,12 +5009,86 @@ def test_train_raises_informative_error_if_any_valid_sets_are_not_dataset_object
         )
 
 
+def test_train_rejects_invalid_valid_names():
+    X, y = make_synthetic_regression(n_samples=100, n_features=2)
+    train_set = lgb.Dataset(X, label=y)
+    valid_set = lgb.Dataset(X.copy(), label=y.copy())
+    with pytest.raises(TypeError, match=r"Every item in valid_names must be a string\. Item 0 has type 'Dataset'\."):
+        lgb.train(
+            {"objective": "regression", "verbosity": -1, "num_threads": 1},
+            train_set,
+            num_boost_round=1,
+            valid_sets=[train_set, valid_set],
+            valid_names=[train_set, "valid"],
+        )
+    with pytest.raises(TypeError, match=r"Every item in valid_names must be a string\. Item 1 has type 'Dataset'\."):
+        lgb.train(
+            {"objective": "regression", "verbosity": -1, "num_threads": 1},
+            train_set,
+            num_boost_round=1,
+            valid_sets=[train_set, valid_set],
+            valid_names=["train", valid_set],
+        )
+
+
+def test_train_valid_names_accepts_str_subclass():
+    X, y = make_synthetic_regression(n_samples=100, n_features=2)
+    train_set = lgb.Dataset(X, label=y)
+    booster = lgb.train(
+        {"objective": "regression", "verbosity": -1, "num_threads": 1},
+        train_set,
+        num_boost_round=1,
+        valid_sets=[train_set],
+        valid_names=np.str_("flamingo"),
+    )
+    assert list(booster.best_score) == ["flamingo"]
+
+
 def test_train_raises_informative_error_for_params_of_wrong_type():
     X, y = make_synthetic_regression()
     params = {"num_leaves": "too-many"}
     dtrain = lgb.Dataset(X, label=y)
     with pytest.raises(lgb.basic.LightGBMError, match='Parameter num_leaves should be of type int, got "too-many"'):
         lgb.train(params, dtrain)
+
+
+def test_train_raises_informative_error_for_unknown_metric():
+    X, y = load_breast_cancer(return_X_y=True)
+    dtrain = lgb.Dataset(X, label=y)
+    params = {"objective": "binary", "metric": "nonsense", "verbose": -1}
+    with pytest.raises(lgb.basic.LightGBMError, match="Unknown metric 'nonsense'"):
+        lgb.train(params, dtrain, num_boost_round=1, valid_sets=[dtrain])
+
+
+@pytest.mark.parametrize(
+    "metric",
+    [
+        "custom",
+        "na",
+        "none",
+        "null",
+        ["none", "null"],
+        ["None"],
+        ["NULL"],
+    ],
+)
+def test_train_sentinel_metric_disables_builtin_metrics(metric):
+    X, y = load_breast_cancer(return_X_y=True)
+    dtrain = lgb.Dataset(X, label=y)
+    evals_result = {}
+    params = {"objective": "binary", "metric": metric, "verbose": -1}
+    lgb.train(params, dtrain, num_boost_round=1, valid_sets=[dtrain], callbacks=[lgb.record_evaluation(evals_result)])
+    assert evals_result == {}
+
+
+def test_train_with_metric_python_none_uses_default_metric():
+    X, y = load_breast_cancer(return_X_y=True)
+    dtrain = lgb.Dataset(X, label=y)
+    dvalid = lgb.Dataset(X, label=y, reference=dtrain)
+    evals_result = {}
+    params = {"objective": "binary", "metric": None, "verbose": -1}
+    lgb.train(params, dtrain, num_boost_round=1, valid_sets=[dvalid], callbacks=[lgb.record_evaluation(evals_result)])
+    assert "binary_logloss" in evals_result["valid_0"]
 
 
 def test_quantized_training():

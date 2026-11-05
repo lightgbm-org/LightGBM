@@ -11,6 +11,7 @@
 #include <algorithm>
 #include <fstream>
 #include <iostream>
+#include <numeric>
 #include <vector>
 
 using LightGBM::TestUtils;
@@ -187,4 +188,96 @@ TEST(SingleRow, Normal) {
 
 TEST(SingleRow, Contrib) {
     test_predict_type(C_API_PREDICT_CONTRIB, 29);
+}
+
+TEST(SingleRow, CSRFastPredictionTypeAndIterationRange) {
+    DatasetHandle dataset;
+    ASSERT_EQ(0, TestUtils::LoadDatasetFromExamples(
+        "binary_classification/binary.train", "max_bin=15", &dataset));
+    BoosterHandle booster;
+    ASSERT_EQ(0, LGBM_BoosterCreate(
+        dataset, "objective=binary num_leaves=7 verbosity=-1 num_threads=1", &booster));
+    for (int i = 0; i < 10; ++i) {
+        int finished;
+        ASSERT_EQ(0, LGBM_BoosterUpdateOneIter(booster, &finished));
+    }
+    int num_features;
+    ASSERT_EQ(0, LGBM_BoosterGetNumFeature(booster, &num_features));
+    const int32_t indptr[] = {0, 2};
+    const int32_t indices[] = {0, 5};
+    const double rows[][2] = {{0.5, 2.0}, {-1.0, 0.0}};
+    for (int predict_type : {C_API_PREDICT_NORMAL, C_API_PREDICT_RAW_SCORE,
+                             C_API_PREDICT_LEAF_INDEX, C_API_PREDICT_CONTRIB}) {
+        for (int start_iteration : {0, 2}) {
+            for (int num_iteration : {-1, 3}) {
+                SCOPED_TRACE(::testing::Message() << "type=" << predict_type
+                    << " start=" << start_iteration << " count=" << num_iteration);
+                int64_t expected_size;
+                ASSERT_EQ(0, LGBM_BoosterCalcNumPredict(
+                    booster, 1, predict_type, start_iteration, num_iteration, &expected_size));
+                // Accommodate all output types so an incorrect type reports a test failure.
+                const int64_t capacity = std::max<int64_t>(num_features + 1, 10);
+                std::vector<std::vector<double>> expected;
+                for (const auto& row : rows) {
+                    std::vector<double> output(capacity);
+                    int64_t written;
+                    ASSERT_EQ(0, LGBM_BoosterPredictForCSR(
+                        booster, indptr, C_API_DTYPE_INT32, indices, row, C_API_DTYPE_FLOAT64,
+                        2, 2, num_features, predict_type, start_iteration, num_iteration,
+                        "num_threads=1", &written, output.data()));
+                    ASSERT_EQ(expected_size, written);
+                    expected.push_back(output);
+                }
+                FastConfigHandle fast;
+                ASSERT_EQ(0, LGBM_BoosterPredictForCSRSingleRowFastInit(
+                    booster, predict_type, start_iteration, num_iteration,
+                    C_API_DTYPE_FLOAT64, num_features, "num_threads=1", &fast));
+                // Reuse the predictor across alternating input rows.
+                for (int repeat = 0; repeat < 3; ++repeat) {
+                    for (int row = 0; row < 2; ++row) {
+                        std::vector<double> output(capacity);
+                        int64_t written;
+                        ASSERT_EQ(0, LGBM_BoosterPredictForCSRSingleRowFast(
+                            fast, indptr, C_API_DTYPE_INT32, indices, rows[row],
+                            2, 2, &written, output.data()));
+                        EXPECT_EQ(expected_size, written);
+                        for (int64_t i = 0; i < expected_size; ++i) {
+                            EXPECT_DOUBLE_EQ(expected[row][i], output[i]);
+                        }
+                    }
+                }
+                EXPECT_EQ(0, LGBM_FastConfigFree(fast));
+            }
+        }
+    }
+    EXPECT_EQ(0, LGBM_BoosterFree(booster));
+    EXPECT_EQ(0, LGBM_DatasetFree(dataset));
+}
+
+TEST(SingleRow, ContribAfterBoosterMerge) {
+    DatasetHandle dataset;
+    ASSERT_EQ(0, TestUtils::LoadDatasetFromExamples("binary_classification/binary.train", "max_bin=15", &dataset));
+    BoosterHandle boosters[2];
+    for (BoosterHandle& booster : boosters) {
+        int finished;
+        ASSERT_EQ(0, LGBM_BoosterCreate(dataset, "objective=binary verbosity=-1", &booster));
+        ASSERT_EQ(0, LGBM_BoosterUpdateOneIter(booster, &finished));
+    }
+    std::vector<double> row(28, 0.5), contrib(29);
+    double raw_score;
+    int64_t written;
+    auto predict = [&](int predict_type, double* out) {
+        return LGBM_BoosterPredictForMatSingleRow(boosters[0], row.data(), C_API_DTYPE_FLOAT64, 28, 1, predict_type,
+                                                  0, -1, "", &written, out);
+    };
+    // predict contributions before the merge, so that the merged trees are added after that call
+    ASSERT_EQ(0, predict(C_API_PREDICT_CONTRIB, contrib.data()));
+    ASSERT_EQ(0, LGBM_BoosterMerge(boosters[0], boosters[1]));
+    ASSERT_EQ(0, predict(C_API_PREDICT_CONTRIB, contrib.data()));
+    ASSERT_EQ(0, predict(C_API_PREDICT_RAW_SCORE, &raw_score));
+    EXPECT_NEAR(raw_score, std::accumulate(contrib.begin(), contrib.end(), 0.0), 1e-10);
+    for (BoosterHandle booster : boosters) {
+        EXPECT_EQ(0, LGBM_BoosterFree(booster));
+    }
+    EXPECT_EQ(0, LGBM_DatasetFree(dataset));
 }

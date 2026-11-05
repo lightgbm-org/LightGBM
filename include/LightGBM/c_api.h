@@ -563,11 +563,11 @@ LIGHTGBM_C_EXPORT int LGBM_DatasetDumpText(DatasetHandle handle,
 /*!
  * \brief Set vector to a content in info.
  * \note
- * - \a group only works for ``C_API_DTYPE_INT32``;
+ * - \a group and \a position only work for ``C_API_DTYPE_INT32``;
  * - \a label and \a weight only work for ``C_API_DTYPE_FLOAT32``;
  * - \a init_score only works for ``C_API_DTYPE_FLOAT64``.
  * \param handle Handle of dataset
- * \param field_name Field name, can be \a label, \a weight, \a init_score, \a group
+ * \param field_name Field name, can be \a label, \a weight, \a init_score, \a group, \a position
  * \param field_data Pointer to data vector
  * \param num_element Number of elements in ``field_data``
  * \param type Type of ``field_data`` pointer, can be ``C_API_DTYPE_INT32``, ``C_API_DTYPE_FLOAT32`` or ``C_API_DTYPE_FLOAT64``
@@ -583,11 +583,11 @@ LIGHTGBM_C_EXPORT int LGBM_DatasetSetField(DatasetHandle handle,
  * \brief Set vector to a content in info.
  * \deprecated This function is deprecated in favor of ``LGBM_DatasetSetFieldFromArrowStream``.
  * \note
- * - \a group converts input datatype into ``int32``;
+ * - \a group and \a position convert input datatype into ``int32``;
  * - \a label and \a weight convert input datatype into ``float32``;
  * - \a init_score converts input datatype into ``float64``.
  * \param handle Handle of dataset
- * \param field_name Field name, can be \a label, \a weight, \a init_score, \a group
+ * \param field_name Field name, can be \a label, \a weight, \a init_score, \a group, \a position
  * \param n_chunks The number of Arrow arrays passed to this function
  * \param chunks Pointer to the list of Arrow arrays
  * \param schema Pointer to the schema of all Arrow arrays

@@ -39,6 +39,12 @@ class Linkers {
  public:
   Linkers() {
     is_init_ = false;
+    rank_ = 0;
+    num_machines_ = 1;
+    #ifdef USE_SOCKET
+    socket_timeout_ = 0;
+    local_listen_port_ = 0;
+    #endif
   }
   /*!
   * \brief Constructor
