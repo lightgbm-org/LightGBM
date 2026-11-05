@@ -160,14 +160,14 @@ jobs:
           submodules: true
       - name: Set up 'pixi' for jobs that need it
         if: matrix.pixi-env != ''
-        uses: prefix-dev/setup-pixi@d3f436a425481402e6a95a1d1fc10331c708cd9e  # v0.10.2
+        uses: prefix-dev/setup-pixi@ad1da6449d9e506fd127fd67ab2d054a769f6a94  # v0.11.2
         with:
           environments: ${{ matrix.pixi-env }}
       - name: Install pandoc
-        uses: r-lib/actions/setup-pandoc@465b7d8e732ca3921382b1674c59bada9cbf3399  # v2.13.0
+        uses: r-lib/actions/setup-pandoc@f9a764fea8d5c63df6ef9a5c7795bf7deb5d7e05  # v2.14.0
       - name: Install tinytex
         if: startsWith(matrix.os, 'windows')
-        uses: r-lib/actions/setup-tinytex@465b7d8e732ca3921382b1674c59bada9cbf3399  # v2.13.0
+        uses: r-lib/actions/setup-tinytex@f9a764fea8d5c63df6ef9a5c7795bf7deb5d7e05  # v2.14.0
         env:
           CTAN_MIRROR: https://ctan.math.illinois.edu/systems/win32/miktex
           TINYTEX_INSTALLER: TinyTeX
@@ -221,7 +221,7 @@ jobs:
           & "$env:GITHUB_WORKSPACE/.ci/test-windows.ps1"
       - name: Upload artifacts
         if: ${{ matrix.produces-artifacts == 'true' }}
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9  # v7.0.2
         with:
           name: ${{ matrix.artifact-name }}
           path: ${{ env.BUILD_ARTIFACTSTAGINGDIRECTORY }}/*.tar.gz
@@ -296,7 +296,7 @@ jobs:
           persist-credentials: false
           submodules: true
       - name: Install pandoc
-        uses: r-lib/actions/setup-pandoc@465b7d8e732ca3921382b1674c59bada9cbf3399  # v2.13.0
+        uses: r-lib/actions/setup-pandoc@f9a764fea8d5c63df6ef9a5c7795bf7deb5d7e05  # v2.14.0
       - name: Install system dependencies
         shell: bash
         run: |
