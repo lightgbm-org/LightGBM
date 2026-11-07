@@ -9,7 +9,11 @@
 
 #ifdef USE_CUDA
 
+// pthread.h is not needed by this header (threads use std::thread) and does
+// not exist on Windows, where LightGBM is built with the stub NCCL library.
+#ifndef _WIN32
 #include <pthread.h>
+#endif
 
 #include <LightGBM/objective_function.h>
 #include <LightGBM/network.h>

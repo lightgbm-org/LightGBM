@@ -48,13 +48,14 @@ typedef double label_t;
 typedef float label_t;
 #endif
 
-const score_t kMinScore = -std::numeric_limits<score_t>::infinity();
+// constexpr (not just const) so that nvcc can inline the values in device code
+constexpr score_t kMinScore = -std::numeric_limits<score_t>::infinity();
 
-const score_t kMaxScore = std::numeric_limits<score_t>::infinity();
+constexpr score_t kMaxScore = std::numeric_limits<score_t>::infinity();
 
-const score_t kEpsilon = 1e-15f;
+constexpr score_t kEpsilon = 1e-15f;
 
-const double kZeroThreshold = 1e-35f;
+constexpr double kZeroThreshold = 1e-35f;
 
 
 typedef int32_t comm_size_t;
