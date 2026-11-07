@@ -113,9 +113,9 @@ if [[ $TASK == "if-else" ]]; then
 fi
 
 PYTHON_ENV_MANAGER="conda"
-if [[ "${PYTHON_VERSION}" == "3.10" ]]; then
+if [[ "${PYTHON_VERSION}" == "3.11" ]]; then
     PYTHON_ENV_MANAGER="pixi"
-    CI_PIXI_ENV="py310"
+    CI_PIXI_ENV="py311"
 fi
 
 # 'pixi' is used for end-of-life Python versions
@@ -302,7 +302,12 @@ else
     cmake -B build -S .
 fi
 
-cmake --build build --target _lightgbm -j4 || exit 1
+# targets:
+#
+#   _lightgbm = lib_lightgbm.{dylib,so}
+#   _ lightgbm = the CLI (for distributed tests)
+#
+cmake --build build --target _lightgbm lightgbm -j4 || exit 1
 
 sh ./build-python.sh install --precompile || exit 1
 
