@@ -889,6 +889,15 @@ install(
   ARCHIVE DESTINATION ${CMAKE_INSTALL_PREFIX}/lib
 )
 
+# Static consumers must resolve Arrow C API symbols themselves. nanoarrow is
+# excluded from the subdirectory's install rules, so install its archive here.
+if(BUILD_STATIC_LIB AND NOT __BUILD_FOR_R)
+  install(
+    TARGETS nanoarrow_static
+    ARCHIVE DESTINATION ${CMAKE_INSTALL_PREFIX}/lib
+  )
+endif()
+
 if(INSTALL_HEADERS)
     install(
       DIRECTORY ${LightGBM_HEADER_DIR}/LightGBM

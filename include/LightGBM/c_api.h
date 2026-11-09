@@ -1727,6 +1727,10 @@ static char* LastErrorMsg() { static THREAD_LOCAL char err_msg[512] = "Everythin
  * This will call unsafe ``sprintf`` when compiled using C standards before C99.
  * \param msg Error message
  */
+#ifndef __cplusplus
+/* C inline functions with external linkage cannot call the static LastErrorMsg(). */
+static
+#endif
 INLINE_FUNCTION void LGBM_SetLastError(const char* msg) {
 #if !defined(__cplusplus) && (!defined(__STDC__) || (__STDC_VERSION__ < 199901L))
   sprintf(LastErrorMsg(), "%s", msg);  /* NOLINT(runtime/printf) */
