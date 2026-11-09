@@ -1,0 +1,5 @@
+# Project-specific runner labels used by the existing workflows.
+self-hosted-runner:
+  labels:
+    - ubuntu-24.04-ppc64le-p10
+    - github-hosted-linux-gpu-amd64

@@ -31,6 +31,13 @@ repos:
         exclude: ^windows/.*$
       - id: end-of-file-fixer
       - id: trailing-whitespace
+  - repo: https://github.com/rhysd/actionlint
+    rev: 914e7df21a07ef503a81201c76d2b11c789d3fca  # v1.7.12
+    hooks:
+      - id: actionlint
+        # Keep this hook focused on workflow semantics, independent of which
+        # optional shellcheck / pyflakes executables are on the caller's PATH.
+        args: ["-shellcheck=", "-pyflakes="]
   - repo: https://github.com/python-jsonschema/check-jsonschema
     rev: 0.38.2
     hooks:
