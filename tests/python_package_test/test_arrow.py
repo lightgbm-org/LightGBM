@@ -790,6 +790,7 @@ def test_arrow_supported_dtypes(tmp_path, dtype, values):
         (pa.timestamp("s"), [1577836800000000, 1577923200000000, 1578009600000000]),
         (pa.duration("s"), [1, 2, 3]),
         (pa.list_(pa.int8()), [[1], [2], [3]]),
+        (pa.float16(), np.array([1.0, 2.0, 3.0], dtype=np.float16)),
     ],
 )
 def test_arrow_unsupported_dtypes(dtype, values):
