@@ -556,6 +556,32 @@ def test_categorical_with_missing_values(tmp_path):
     assert_datasets_equal(tmp_path, ds, ref_ds)
 
 
+def test_pandas_categorical_auto_with_integer_column_labels(rng):
+    # integer column labels that are not positions, e.g. after dropping the first column
+    X = pd.DataFrame(
+        {
+            1: rng.uniform(size=100),
+            2: pd.Categorical(rng.choice(a=["a", "b", "c"], size=100)),
+            3: rng.uniform(size=100),
+        }
+    )
+    ds = lgb.Dataset(X, rng.uniform(size=100)).construct()
+    assert ds.params["categorical_column"] == [1]
+    assert ds.get_feature_name() == ["1", "2", "3"]
+
+
+def test_pandas_categorical_auto_with_manual_feature_name(rng):
+    X = pd.DataFrame(
+        {
+            "x1": rng.uniform(size=100),
+            "x2": pd.Categorical(rng.choice(a=["a", "b", "c"], size=100)),
+        }
+    )
+    ds = lgb.Dataset(X, rng.uniform(size=100), feature_name=["c", "d"]).construct()
+    assert ds.params["categorical_column"] == [1]
+    assert ds.get_feature_name() == ["c", "d"]
+
+
 def test_pandas_dataset_construction_with_high_cardinality_categorical_succeeds(rng):
     X = pd.DataFrame({"x1": rng.integers(low=0, high=5_000, size=(10_000,))})
     y = rng.uniform(size=(10_000,))
