@@ -275,7 +275,6 @@ void LinearTreeLearner<TREE_LEARNER_TYPE>::CalculateLinear(Tree* tree, bool is_r
             nan_found = true;
             break;
           }
-          num_nonzero[tid][leaf_num] += 1;
           curr_row[feat] = val;
         } else {
           curr_row[feat] = raw_data_ptr[leaf_num][feat][i];
@@ -285,6 +284,7 @@ void LinearTreeLearner<TREE_LEARNER_TYPE>::CalculateLinear(Tree* tree, bool is_r
         if (nan_found) {
           continue;
         }
+        num_nonzero[tid][leaf_num] += 1;
       }
       curr_row[num_feat] = 1.0;
       float h = static_cast<float>(hessians[i]);
@@ -330,7 +330,8 @@ void LinearTreeLearner<TREE_LEARNER_TYPE>::CalculateLinear(Tree* tree, bool is_r
   // copy into eigen matrices and solve
 #pragma omp parallel for num_threads(OMP_NUM_THREADS()) schedule(static)
   for (int leaf_num = 0; leaf_num < num_leaves; ++leaf_num) {
-    if (total_nonzero[leaf_num] < static_cast<int>(leaf_features[leaf_num].size()) + 1) {
+    if ((HAS_NAN && leaf_features[leaf_num].empty()) ||
+        total_nonzero[leaf_num] < static_cast<int>(leaf_features[leaf_num].size()) + 1) {
       if (is_refit) {
         double old_const = tree->LeafConst(leaf_num);
         tree->SetLeafConst(leaf_num, decay_rate * old_const + (1.0 - decay_rate) * tree->LeafOutput(leaf_num) * shrinkage);
@@ -365,7 +366,9 @@ void LinearTreeLearner<TREE_LEARNER_TYPE>::CalculateLinear(Tree* tree, bool is_r
         features_new.push_back(leaf_features[leaf_num][i]);
         coeffs_vec.push_back(decay_rate * old_coeffs[i] + (1.0 - decay_rate) * coeffs(i) * shrinkage);
       } else {
-        if (coeffs(i) < -kZeroThreshold || coeffs(i) > kZeroThreshold) {
+        // Retain features with missing values so prediction can still use the leaf fallback.
+        if (coeffs(i) < -kZeroThreshold || coeffs(i) > kZeroThreshold ||
+            (HAS_NAN && contains_nan_[leaf_features[leaf_num][i]])) {
           coeffs_vec.push_back(coeffs(i));
           int feat = leaf_features[leaf_num][i];
           features_new.push_back(feat);
