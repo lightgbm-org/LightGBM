@@ -179,11 +179,11 @@ class GBDT : public GBDTBase {
     std::stringstream str_buf;
     str_buf << "{";
     for (const auto& line : lines) {
-      const auto pair = Common::Split(line.c_str(), ":");
-      if (pair[1] == " ]")
+      const auto colon_pos = line.find(':');
+      const auto param = line.substr(1, colon_pos - 1);
+      const auto value_str = line.substr(colon_pos + 2, line.size() - colon_pos - 3);
+      if (value_str.empty())
         continue;
-      const auto param = pair[0].substr(1);
-      const auto value_str = pair[1].substr(1, pair[1].size() - 2);
       auto iter = param_types.find(param);
       if (iter == param_types.end()) {
         Log::Warning("Ignoring unrecognized parameter '%s' found in model string.", param.c_str());
@@ -210,6 +210,8 @@ class GBDT : public GBDTBase {
       } else if (param_type == "bool") {
         bool value = value_str == "1";
         str_buf << std::boolalpha << value;
+      } else if (param == "ignore_column") {
+        str_buf << "\"" << value_str << "\"";
       } else if (param_type.substr(0, 6) == "vector") {
         str_buf << "[";
         if (param_type.substr(7, 6) == "string") {

@@ -1609,6 +1609,34 @@ def test_parameters_are_loaded_from_model_file(tmp_path, capsys, rng):
     np.testing.assert_allclose(preds, orig_preds)
 
 
+
+def test_model_load_with_colon_in_parameter(tmp_path):
+    data_file = tmp_path / "data.tsv"
+    data_file.write_text(
+        "ignored\tfeature\tlabel\n"
+        "10\t0.1\t0\n"
+        "11\t0.2\t1\n"
+        "12\t0.3\t0\n"
+        "13\t0.4\t1\n"
+    )
+    train_data = lgb.Dataset(
+        data_file,
+        params={
+            "header": True,
+            "label_column": "name:label",
+            "ignore_column": "name:ignored",
+        },
+    )
+    model = lgb.train({"objective": "regression", "verbosity": -1}, train_data, num_boost_round=1)
+    model_file = tmp_path / "model.txt"
+    model.save_model(model_file)
+
+    loaded_model = lgb.Booster(model_file=model_file)
+
+    assert loaded_model.params["ignore_column"] == "name:ignored"
+
+
+
 def test_string_serialized_params_retrieval(rng):
     # Random train data
     train_x = rng.random((500, 3))
