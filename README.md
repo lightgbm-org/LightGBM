@@ -8,13 +8,9 @@
 Light Gradient Boosting Machine
 ===============================
 
-[![C++ GitHub Actions Build Status](https://github.com/lightgbm-org/LightGBM/actions/workflows/cpp.yml/badge.svg?branch=main)](https://github.com/lightgbm-org/LightGBM/actions/workflows/cpp.yml)
-[![Python-package GitHub Actions Build Status](https://github.com/lightgbm-org/LightGBM/actions/workflows/python_package.yml/badge.svg?branch=main)](https://github.com/lightgbm-org/LightGBM/actions/workflows/python_package.yml)
-[![R-package GitHub Actions Build Status](https://github.com/lightgbm-org/LightGBM/actions/workflows/r_package.yml/badge.svg?branch=main)](https://github.com/lightgbm-org/LightGBM/actions/workflows/r_package.yml)
 [![CUDA Version GitHub Actions Build Status](https://github.com/lightgbm-org/LightGBM/actions/workflows/cuda.yml/badge.svg?branch=main)](https://github.com/lightgbm-org/LightGBM/actions/workflows/cuda.yml)
-[![SWIG Wrapper GitHub Actions Build Status](https://github.com/lightgbm-org/LightGBM/actions/workflows/swig.yml/badge.svg?branch=main)](https://github.com/lightgbm-org/LightGBM/actions/workflows/swig.yml)
-[![Static Analysis GitHub Actions Build Status](https://github.com/lightgbm-org/LightGBM/actions/workflows/static_analysis.yml/badge.svg?branch=main)](https://github.com/lightgbm-org/LightGBM/actions/workflows/static_analysis.yml)
 [![Appveyor Build Status](https://ci.appveyor.com/api/projects/status/1ys5ot401m0fep6l/branch/main?svg=true)](https://ci.appveyor.com/project/guolinke/lightgbm/branch/main)
+[![GitHub Actions Build Status](https://github.com/lightgbm-org/LightGBM/actions/workflows/main.yml/badge.svg?branch=main)](https://github.com/lightgbm-org/LightGBM/actions/workflows/main.yml)
 [![Documentation Status](https://readthedocs.org/projects/lightgbm/badge/?version=latest)](https://lightgbm.readthedocs.io/)
 [![Link checks](https://github.com/lightgbm-org/LightGBM/actions/workflows/lychee.yml/badge.svg?branch=main)](https://github.com/lightgbm-org/LightGBM/actions/workflows/lychee.yml)
 [![License](https://img.shields.io/github/license/lightgbm-org/lightgbm.svg)](https://github.com/lightgbm-org/LightGBM/blob/main/LICENSE)
