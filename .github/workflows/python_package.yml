@@ -2,6 +2,10 @@ name: Python-package
 
 on:
   workflow_call:
+    secrets:
+      anaconda-token:
+        description: 'Token for uploading nightly packages to anaconda.org (optional)'
+        required: false
 
 # default to 0 permissions
 # (job-level overrides add the minimal permissions needed)
@@ -560,7 +564,7 @@ jobs:
           run-id: ${{ github.run_id }}
       - name: upload to anaconda.org
         env:
-          ANACONDA_API_TOKEN: ${{ secrets.ANACONDA_API_TOKEN_LIGHTGBM_PACKAGES }}
+          ANACONDA_API_TOKEN: ${{ secrets.anaconda-token }}
         run: |
           anaconda upload \
             --package lightgbm \

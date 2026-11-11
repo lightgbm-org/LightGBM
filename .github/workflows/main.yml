@@ -42,6 +42,8 @@ jobs:
     permissions:
       contents: read
       id-token: write
+    secrets:
+      anaconda-token: ${{ secrets.ANACONDA_API_TOKEN_LIGHTGBM_PACKAGES }}
   test-r:
     uses: ./.github/workflows/r_package.yml
     permissions:
