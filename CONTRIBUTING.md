@@ -52,6 +52,11 @@ You are welcome to use whatever tools help you, but contributions must meet the 
 
 Maintainers may close contributions which fail to follow these guidelines, and block their authors from further interaction in the repository.
 
+### Other Guidance for Contributing
+
+Before opening a PR, check the existing PRs at https://github.com/lightgbm-org/LightGBM/pulls.
+PRs that duplicate an existing open PR may be closed without review.
+
 ## Development Guide
 
 For more details on how to develop changes to LightGBM, see `Development Guide <./Development-Guide.rst>`__.
