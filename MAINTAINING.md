@@ -96,7 +96,7 @@ Do not merge any other PRs into `main` until the rest of the release is complete
 
 Wait for all CI runs triggered by the merge to `main` to complete successfully.
 
-These run build and test the official artifacts that will be attached to the GitHub release and published to package managers.
+These runs build and test the official artifacts that will be attached to the GitHub release and published to package managers.
 
 ### Step 4: Create a Release
 
