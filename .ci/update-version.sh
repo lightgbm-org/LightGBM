@@ -46,15 +46,3 @@ CONFIGURE_VERSION_PATTERN=$(echo "${CONFIGURE_VERSION}" | sed 's|\.|\\.|g')
 update_file \
     ./R-package/configure \
     "s|${CONFIGURE_VERSION_PATTERN}|${LGB_VERSION_NO_RC}|g"
-
-# only mark the R docs as released on release branches (like 'release/4.8.0')
-GIT_BRANCH=$(git rev-parse --abbrev-ref HEAD 2> /dev/null || true)
-if echo "${GIT_BRANCH}" | grep -q -E '^release/v[0-9]+\.'; then
-    PKGDOWN_MODE="release"
-else
-    PKGDOWN_MODE="unreleased"
-fi
-
-update_file \
-    ./R-package/pkgdown/_pkgdown.yml \
-    "s|^  mode: .*$|  mode: ${PKGDOWN_MODE}|"

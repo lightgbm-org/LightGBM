@@ -74,7 +74,12 @@ git checkout -b "release/v${NEW_VERSION}"
 echo ${NEW_VERSION} > ./VERSION.txt
 ./.ci/update-version.sh
 
+# update pkgdown mode
+sed -i.bak 's|^  mode: unreleased$|  mode: release|' ./R-package/pkgdown/_pkgdown.yml
+rm ./R-package/pkgdown/_pkgdown.yml.bak
+
 # commit and push
+git add --update
 git commit -m "release v${NEW_VERSION}"
 git push upstream "release/v${NEW_VERSION}"
 ```
