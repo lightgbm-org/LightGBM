@@ -60,12 +60,26 @@ gh workflow run \
   ci-images.yml
 ```
 
-
 ## Releasing
 
 ### Step 1: Put up a Release PR
 
-Create a pull request into `main` which prepares the source code for release.
+Create a release branch.
+
+```shell
+NEW_VERSION="4.8.0"
+git checkout -b "release/v${NEW_VERSION}"
+
+# update the version everywhere
+echo ${NEW_VERSION} > ./VERSION.txt
+./.ci/update-version.sh
+
+# commit and push
+git commit -m "release v${NEW_VERSION}"
+git push upstream "release/v${NEW_VERSION}"
+```
+
+Create a pull request into `main` with those changes.
 
 Copy the description and checklist from the previous release PR (for example: https://github.com/lightgbm-org/LightGBM/pull/6796).
 
@@ -82,7 +96,7 @@ Do not merge any other PRs into `main` until the rest of the release is complete
 
 Wait for all CI runs triggered by the merge to `main` to complete successfully.
 
-These runs build and test the official artifacts that will be attached to the GitHub release and published to package managers.
+These run build and test the official artifacts that will be attached to the GitHub release and published to package managers.
 
 ### Step 4: Create a Release
 
