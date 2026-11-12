@@ -41,8 +41,6 @@ update_file \
     ./R-package/configure.ac \
     "s|^AC_INIT.*$|AC_INIT([lightgbm], [${LGB_VERSION_NO_RC}], [], [lightgbm], [])|"
 
-# 'configure' is generated from 'configure.ac' and embeds the version in many places,
-# so replace every occurrence of the version it was last generated with
 CONFIGURE_VERSION=$(sed -n "s|^PACKAGE_VERSION='\(.*\)'$|\1|p" ./R-package/configure)
 CONFIGURE_VERSION_PATTERN=$(echo "${CONFIGURE_VERSION}" | sed 's|\.|\\.|g')
 update_file \
