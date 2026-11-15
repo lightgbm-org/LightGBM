@@ -338,7 +338,7 @@ __kernel void histogram16(__global const uchar4* feature_data_base,
     ushort group_feature = group_id >> POWER_FEATURE_WORKGROUPS;
     // each 2^POWER_FEATURE_WORKGROUPS workgroups process on one feature (compile-time constant)
     // feature_size is the number of examples per feature
-    __global const uchar4* feature_data = feature_data_base + group_feature * feature_size;
+    __global const uchar4* feature_data = feature_data_base + (ulong)group_feature * feature_size;
     // size of threads that process this feature4
     const uint subglobal_size = lsize * (1 << POWER_FEATURE_WORKGROUPS);
     // equivalent thread ID in this subgroup for this feature4
