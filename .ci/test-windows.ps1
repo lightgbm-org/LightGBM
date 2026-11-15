@@ -75,9 +75,9 @@ if (-not $UseConda) {
         --requirement "$env:BUILD_SOURCESDIRECTORY/.ci/pip-envs/requirements-test.txt" `
         --requirement "$env:BUILD_SOURCESDIRECTORY/.ci/pip-envs/requirements-windows-arm64.txt" `
         --upgrade ; Assert-Output $?
-} elseif ($env:PYTHON_VERSION -eq "3.10") {
+} elseif ($env:PYTHON_VERSION -eq "3.11") {
     # 'pixi' is used for end-of-life Python versions
-    $activation = ((& pixi shell-hook --locked -e py310 --shell powershell) -join "`n")
+    $activation = ((& pixi shell-hook --locked -e py311 --shell powershell) -join "`n")
     Invoke-Expression $activation ; Assert-Output $?
 } else {
     # update conda env
@@ -196,7 +196,7 @@ if (($env:TASK -eq "regular") -or (($env:APPVEYOR -eq "true") -and ($env:TASK -e
 
     # install optional plotting libraries
     # (not necessary for pixi-managed environments, where they're just installed by default)
-    if ($env:PYTHON_VERSION -ne "3.10") {
+    if ($env:PYTHON_VERSION -ne "3.11") {
         conda install -q -y -n $env:CONDA_ENV "h5py>=3.10" "ipywidgets>=8.1.2" "notebook>=7.1.2"
     }
     # Run all examples
