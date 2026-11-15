@@ -267,7 +267,7 @@ __global__ void CUDAConstructDiscretizedHistogramDenseKernel(
   const unsigned int num_threads_per_block = blockDim.x * blockDim.y;
   const int partition_column_start = feature_partition_column_index_offsets[blockIdx.x];
   const int partition_column_end = feature_partition_column_index_offsets[blockIdx.x + 1];
-  const BIN_TYPE* data_ptr = data + partition_column_start * num_data;
+  const BIN_TYPE* data_ptr = data + static_cast<size_t>(partition_column_start) * num_data;
   const int num_columns_in_partition = partition_column_end - partition_column_start;
   const uint32_t partition_hist_start = column_hist_offsets_full[blockIdx.x];
   const uint32_t partition_hist_end = column_hist_offsets_full[blockIdx.x + 1];
@@ -292,7 +292,7 @@ __global__ void CUDAConstructDiscretizedHistogramDenseKernel(
     for (data_size_t i = 0; i < num_iteration_this; ++i) {
       const data_size_t data_index = data_indices_ref_this_block[inner_data_index];
       const int32_t grad_and_hess = cuda_gradients_and_hessians[data_index];
-      const uint32_t bin = static_cast<uint32_t>(data_ptr[data_index * num_columns_in_partition + threadIdx.x]);
+      const uint32_t bin = static_cast<uint32_t>(data_ptr[static_cast<size_t>(data_index) * num_columns_in_partition + threadIdx.x]);
       int32_t* pos_ptr = shared_hist_ptr + bin;
       atomicAdd_block(pos_ptr, grad_and_hess);
       inner_data_index += blockDim.y;
@@ -397,7 +397,7 @@ __global__ void CUDAConstructDiscretizedHistogramDenseKernel_GlobalMemory(
   const unsigned int num_threads_per_block = blockDim.x * blockDim.y;
   const int partition_column_start = feature_partition_column_index_offsets[blockIdx.x];
   const int partition_column_end = feature_partition_column_index_offsets[blockIdx.x + 1];
-  const BIN_TYPE* data_ptr = data + partition_column_start * num_data;
+  const BIN_TYPE* data_ptr = data + static_cast<size_t>(partition_column_start) * num_data;
   const int num_columns_in_partition = partition_column_end - partition_column_start;
   const uint32_t partition_hist_start = column_hist_offsets_full[blockIdx.x];
   const uint32_t partition_hist_end = column_hist_offsets_full[blockIdx.x + 1];
@@ -424,7 +424,7 @@ __global__ void CUDAConstructDiscretizedHistogramDenseKernel_GlobalMemory(
     for (data_size_t i = 0; i < num_iteration_this; ++i) {
       const data_size_t data_index = data_indices_ref_this_block[inner_data_index];
       const int32_t grad_and_hess = cuda_gradients_and_hessians[data_index];
-      const uint32_t bin = static_cast<uint32_t>(data_ptr[data_index * num_columns_in_partition + threadIdx.x]);
+      const uint32_t bin = static_cast<uint32_t>(data_ptr[static_cast<size_t>(data_index) * num_columns_in_partition + threadIdx.x]);
       int32_t* pos_ptr = shared_hist_ptr + bin;
       atomicAdd_block(pos_ptr, grad_and_hess);
       inner_data_index += blockDim.y;
