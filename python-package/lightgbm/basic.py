@@ -21,7 +21,21 @@ from os import SEEK_END, environ
 from os.path import getsize
 from pathlib import Path
 from tempfile import NamedTemporaryFile
-from typing import TYPE_CHECKING, Any, Callable, Dict, Iterable, Iterator, List, NamedTuple, Optional, Set, Tuple, Union
+from typing import (
+    TYPE_CHECKING,
+    Any,
+    Callable,
+    Dict,
+    Iterable,
+    Iterator,
+    List,
+    NamedTuple,
+    Optional,
+    Set,
+    Tuple,
+    Union,
+    cast,
+)
 
 import narwhals.stable.v2 as nw
 import narwhals.stable.v2.dependencies as nwd
@@ -920,6 +934,12 @@ class Sequence(abc.ABC):
         -------
         result : numpy 1-D array or numpy 2-D array
             1-D array if idx is int, 2-D array if idx is slice or list.
+
+            Can also be scipy.sparse CSR matrices / arrays
+            (1 row if idx is int, multiple rows if idx is slice or list).
+
+            .. versionadded:: 4.8.0
+                Support for ``scipy.sparse`` return values
         """  # noqa: DOC105
         raise NotImplementedError("Sub-classes of lightgbm.Sequence must implement __getitem__()")
 
@@ -1772,6 +1792,9 @@ class Dataset:
             .. versionadded:: 4.7.0
                 Support for ``polars`` inputs
 
+            .. versionadded:: 4.8.0
+                Support for ``scipy.sparse`` data returned by ``Sequence``
+
         label : list, numpy 1-D array, pandas Series / one-column DataFrame, pyarrow ChunkedArray, polars Series or None, optional (default=None)
             Label of the data.
 
@@ -1994,12 +2017,12 @@ class Dataset:
         )
         return self
 
-    def _push_rows(self, data: np.ndarray) -> "Dataset":
+    def _push_rows(self, data: Union[np.ndarray, scipy.sparse.spmatrix]) -> "Dataset":
         """Add rows to Dataset.
 
         Parameters
         ----------
-        data : numpy 1-D array
+        data : numpy 2-D array or scipy.sparse CSR matrix / array
             New data to add to the Dataset.
 
         Returns
@@ -2008,19 +2031,43 @@ class Dataset:
             Dataset object.
         """  # noqa: DOC105
         nrow, ncol = data.shape
-        data = data.reshape(data.size)
-        data_ptr, data_type, _ = _c_float_array(data)
+        if scipy.sparse.issparse(data):
+            csr = cast("scipy.sparse.spmatrix", data).tocsr()
+            if len(csr.indices) != len(csr.data):
+                raise ValueError(f"Length mismatch: {len(csr.indices)} vs {len(csr.data)}")
+            ptr_indptr, type_ptr_indptr, __ = _c_int_array(csr.indptr)
+            ptr_data, type_ptr_data, _ = _c_float_array(csr.data)
+            assert ncol <= _MAX_INT32
+            csr_indices = csr.indices.astype(np.int32, copy=False)
 
-        _safe_call(
-            _LIB.LGBM_DatasetPushRows(
-                self._handle,
-                data_ptr,
-                data_type,
-                ctypes.c_int32(nrow),
-                ctypes.c_int32(ncol),
-                ctypes.c_int32(self._start_row),
+            _safe_call(
+                _LIB.LGBM_DatasetPushRowsByCSR(
+                    self._handle,
+                    ptr_indptr,
+                    ctypes.c_int(type_ptr_indptr),
+                    csr_indices.ctypes.data_as(ctypes.POINTER(ctypes.c_int32)),
+                    ptr_data,
+                    ctypes.c_int(type_ptr_data),
+                    ctypes.c_int64(len(csr.indptr)),
+                    ctypes.c_int64(len(csr.data)),
+                    ctypes.c_int64(ncol),
+                    ctypes.c_int32(self._start_row),
+                )
             )
-        )
+        else:
+            data = data.reshape(data.size)
+            data_ptr, data_type, _ = _c_float_array(data)
+
+            _safe_call(
+                _LIB.LGBM_DatasetPushRows(
+                    self._handle,
+                    data_ptr,
+                    data_type,
+                    ctypes.c_int32(nrow),
+                    ctypes.c_int32(ncol),
+                    ctypes.c_int32(self._start_row),
+                )
+            )
         self._start_row += nrow
         return self
 
@@ -2255,6 +2302,8 @@ class Dataset:
                 seq = seqs[seq_id]
             id_in_seq = row_id - offset
             row = seq[id_in_seq]
+            if scipy.sparse.issparse(row):
+                row = cast("scipy.sparse.spmatrix", row).toarray().reshape(-1)
             yield row if row.flags["OWNDATA"] else row.copy()
 
     def __sample(self, *, seqs: List[Sequence], total_nrow: int) -> Tuple[List[np.ndarray], List[np.ndarray]]:
@@ -2658,6 +2707,9 @@ class Dataset:
 
             .. versionadded:: 4.7.0
                 Support for ``polars`` inputs
+
+            .. versionadded:: 4.8.0
+                Support for ``scipy.sparse`` data returned by ``Sequence``
 
         label : list, numpy 1-D array, pandas Series / one-column DataFrame, pyarrow ChunkedArray, polars Series or None, optional (default=None)
             Label of the data.

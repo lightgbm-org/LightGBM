@@ -292,6 +292,156 @@ def test_sequence_get_data(num_seq, rng):
     np_assert_array_equal(subset_data.get_data(), X[sorted(used_indices)], strict=True)
 
 
+class CSRSequence(lgb.Sequence):
+    def __init__(self, csr_data, batch_size):
+        self.csr_data = csr_data
+        self.batch_size = batch_size
+
+    def __getitem__(self, idx):
+        # The simple implementation is just a single "return self.csr_data[idx, :]"
+        # The following is for demo and testing purpose.
+        if isinstance(idx, numbers.Integral):
+            return self.csr_data[[idx], :]
+        elif isinstance(idx, slice):
+            if not (idx.step is None or idx.step == 1):
+                raise NotImplementedError("No need to implement, caller will not set step by now")
+            return self.csr_data[idx.start : idx.stop, :]
+        elif isinstance(idx, list):
+            return self.csr_data[idx, :]
+        else:
+            raise TypeError(f"Sequence Index must be an integer/list/slice, got {type(idx).__name__}")
+
+    def __len__(self):
+        return self.csr_data.shape[0]
+
+
+def _create_sequence_from_csr(csr_data, num_seq, batch_size):
+    if num_seq == 1:
+        return CSRSequence(csr_data, batch_size)
+
+    nrow = csr_data.shape[0]
+    seqs = []
+    seq_size = nrow // num_seq
+    for start in range(0, nrow, seq_size):
+        end = min(start + seq_size, nrow)
+        seq = CSRSequence(csr_data[start:end], batch_size)
+        seqs.append(seq)
+    return seqs
+
+
+@pytest.mark.parametrize("sample_count", [11, 100, None])
+@pytest.mark.parametrize("batch_size", [3, None])
+@pytest.mark.parametrize("include_0_and_nan", [False, True])
+@pytest.mark.parametrize("num_seq", [1, 3])
+def test_sequence_sparse(tmpdir, sample_count, batch_size, include_0_and_nan, num_seq, rng):
+    params = {"bin_construct_sample_cnt": sample_count}
+
+    nrow = 50
+    half_nrow = nrow // 2
+    ncol = 11
+    data = np.arange(nrow * ncol, dtype=np.float64).reshape((nrow, ncol))
+
+    if include_0_and_nan:
+        # whole col
+        data[:, 0] = 0
+        data[:, 1] = np.nan
+
+        # half col
+        data[:half_nrow, 3] = 0
+        data[:half_nrow, 2] = np.nan
+
+        data[half_nrow:-2, 4] = 0
+        data[:half_nrow, 4] = np.nan
+
+    X = sparse.csr_matrix(data[:, :-1])
+    Y = data[:, -1]
+
+    csr_bin_fname = tmpdir / "data_from_csr.bin"
+    seq_bin_fname = tmpdir / "data_from_seq.bin"
+
+    # Create dataset from scipy CSR matrix directly.
+    ds = lgb.Dataset(X, label=Y, params=params)
+    ds.save_binary(csr_bin_fname)
+
+    # Create dataset using Sequence that returns sparse data.
+    seqs = _create_sequence_from_csr(X, num_seq, batch_size)
+    seq_ds = lgb.Dataset(seqs, label=Y, params=params)
+    seq_ds.save_binary(seq_bin_fname)
+
+    assert filecmp.cmp(csr_bin_fname, seq_bin_fname)
+
+    # Test for validation set.
+    # Select some random rows as valid data.
+    valid_idx = (rng.random(10) * nrow).astype(np.int32)
+    valid_data = data[valid_idx, :]
+    valid_X = sparse.csr_matrix(valid_data[:, :-1])
+    valid_Y = valid_data[:, -1]
+
+    valid_csr_bin_fname = tmpdir / "valid_data_from_csr.bin"
+    valid_seq_bin_fname = tmpdir / "valid_data_from_seq.bin"
+    valid_seq2_bin_fname = tmpdir / "valid_data_from_seq2.bin"
+
+    valid_ds = lgb.Dataset(valid_X, label=valid_Y, params=params, reference=ds)
+    valid_ds.save_binary(valid_csr_bin_fname)
+
+    # From Dataset constructor, with dataset from scipy CSR matrix.
+    valid_seqs = _create_sequence_from_csr(valid_X, num_seq, batch_size)
+    valid_seq_ds = lgb.Dataset(valid_seqs, label=valid_Y, params=params, reference=ds)
+    valid_seq_ds.save_binary(valid_seq_bin_fname)
+    assert filecmp.cmp(valid_csr_bin_fname, valid_seq_bin_fname)
+
+    # From Dataset.create_valid, with dataset from sequence.
+    valid_seq_ds2 = seq_ds.create_valid(valid_seqs, label=valid_Y, params=params)
+    valid_seq_ds2.save_binary(valid_seq2_bin_fname)
+    assert filecmp.cmp(valid_csr_bin_fname, valid_seq2_bin_fname)
+
+
+@pytest.mark.parametrize("num_seq", [1, 2])
+def test_sequence_sparse_get_data(num_seq, rng):
+    nrow = 20
+    ncol = 11
+    data = np.arange(nrow * ncol, dtype=np.float64).reshape((nrow, ncol))
+    X = sparse.csr_matrix(data[:, :-1])
+    Y = data[:, -1]
+
+    seqs = _create_sequence_from_csr(csr_data=X, num_seq=num_seq, batch_size=6)
+    seq_ds = lgb.Dataset(seqs, label=Y, params=None, free_raw_data=False).construct()
+    assert seq_ds.get_data() == seqs
+
+    used_indices = rng.choice(a=np.arange(nrow), size=nrow // 3, replace=False)
+    subset_data = seq_ds.subset(used_indices).construct()
+    subset = subset_data.get_data()
+    if sparse.issparse(subset):
+        subset = subset.toarray()
+    np_assert_array_equal(subset, data[np.sort(used_indices), :-1], strict=True)
+
+
+def test_sequence_sparse_csr_array():
+    # https://github.com/lightgbm-org/LightGBM/issues/5207
+    rng = np.random.default_rng(123)
+    nrow = 30
+    ncol = 7
+    X = rng.normal(size=(nrow, ncol))
+    X[rng.random(X.shape) < 0.5] = 0.0
+    Y = rng.random(nrow)
+
+    ds_from_csr_matrix = lgb.Dataset(
+        sparse.csr_matrix(X),
+        label=Y,
+        params={"bin_construct_sample_cnt": 20},
+    ).construct()
+    ds_from_csr_array = lgb.Dataset(
+        _create_sequence_from_csr(csr_data=sparse.csr_array(X), num_seq=1, batch_size=8),
+        label=Y,
+        params={"bin_construct_sample_cnt": 20},
+    ).construct()
+
+    params = {"objective": "regression", "verbose": -1, "num_leaves": 5}
+    preds_from_csr_matrix = lgb.train(params, ds_from_csr_matrix, num_boost_round=4).predict(X)
+    preds_from_csr_array = lgb.train(params, ds_from_csr_array, num_boost_round=4).predict(X)
+    np_assert_array_equal(preds_from_csr_matrix, preds_from_csr_array, strict=True)
+
+
 def test_chunked_dataset():
     X_train, X_test, y_train, y_test = train_test_split(
         *load_breast_cancer(return_X_y=True), test_size=0.1, random_state=2
