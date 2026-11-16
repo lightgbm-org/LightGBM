@@ -2022,8 +2022,9 @@ class Dataset:
 
         Parameters
         ----------
-        data : numpy 2-D array or scipy.sparse CSR matrix / array
+        data : numpy 2-D array or scipy.sparse matrix / array
             New data to add to the Dataset.
+            Sparse inputs of any format are converted to CSR.
 
         Returns
         -------
@@ -2032,6 +2033,7 @@ class Dataset:
         """  # noqa: DOC105
         nrow, ncol = data.shape
         if scipy.sparse.issparse(data):
+            # issparse() is not a TypeGuard, hence the cast for the benefit of mypy
             csr = cast("scipy.sparse.spmatrix", data).tocsr()
             if len(csr.indices) != len(csr.data):
                 raise ValueError(f"Length mismatch: {len(csr.indices)} vs {len(csr.data)}")
@@ -2056,13 +2058,13 @@ class Dataset:
             )
         else:
             data = data.reshape(data.size)
-            data_ptr, data_type, _ = _c_float_array(data)
+            ptr_data, type_ptr_data, _ = _c_float_array(data)
 
             _safe_call(
                 _LIB.LGBM_DatasetPushRows(
                     self._handle,
-                    data_ptr,
-                    data_type,
+                    ptr_data,
+                    type_ptr_data,
                     ctypes.c_int32(nrow),
                     ctypes.c_int32(ncol),
                     ctypes.c_int32(self._start_row),

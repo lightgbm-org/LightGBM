@@ -411,6 +411,8 @@ def test_sequence_sparse_get_data(num_seq, rng):
     used_indices = rng.choice(a=np.arange(nrow), size=nrow // 3, replace=False)
     subset_data = seq_ds.subset(used_indices).construct()
     subset = subset_data.get_data()
+    # a single Sequence returns whatever its __getitem__ returns (sparse here),
+    # while a list of Sequences is materialized into a dense numpy array
     if sparse.issparse(subset):
         subset = subset.toarray()
     np_assert_array_equal(subset, data[np.sort(used_indices), :-1], strict=True)
