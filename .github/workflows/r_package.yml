@@ -246,8 +246,8 @@ jobs:
           - clang-asan
           - clang-ubsan
           - gcc16
+          # NOTE: 'gcc-asan' actually runs with both ASAN and UBSAN enabled
           - gcc-asan
-          - gcc-ubsan
           - rchk
           - ubuntu-clang
           - ubuntu-gcc12

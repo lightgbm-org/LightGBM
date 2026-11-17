@@ -353,6 +353,17 @@ SEXP LGBM_DatasetCreateFromMat_R(SEXP data,
   SEXP ret = Rf_protect(R_MakeExternalPtr(nullptr, R_NilValue, R_NilValue));
   int32_t nrow = static_cast<int32_t>(Rf_asInteger(num_row));
   int32_t ncol = static_cast<int32_t>(Rf_asInteger(num_col));
+  // DO NOT MERGE: intentional bugs, to confirm that sanitizer CI jobs catch them.
+  // 'volatile' keeps the compiler from folding these away or warning about them at build time.
+  // UBSAN: signed integer overflow (nrow >= 1, so INT32_MAX + nrow overflows)
+  volatile int32_t ubsan_big = 0x7fffffff;
+  volatile int32_t ubsan_overflowed = ubsan_big + nrow;
+  (void)ubsan_overflowed;
+  // ASAN: heap-buffer-overflow (reads 1 element past the end of a 2-element heap allocation)
+  std::vector<int32_t> asan_dims = {nrow, ncol};
+  volatile size_t asan_idx = asan_dims.size();
+  volatile int32_t asan_past_end = asan_dims.data()[asan_idx];
+  (void)asan_past_end;
   double* p_mat = REAL(data);
   const char* parameters_ptr = CHAR(Rf_protect(Rf_asChar(parameters)));
   DatasetHandle handle = nullptr;
