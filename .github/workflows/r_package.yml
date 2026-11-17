@@ -226,45 +226,6 @@ jobs:
           name: ${{ matrix.artifact-name }}
           path: ${{ env.BUILD_ARTIFACTSTAGINGDIRECTORY }}/*.tar.gz
           if-no-files-found: error
-  test-r-sanitizers:
-    name: r-sanitizers (ubuntu-latest, R-devel, ${{ matrix.compiler }} ASAN/UBSAN)
-    timeout-minutes: 60
-    runs-on: ubuntu-latest
-    container: wch1/r-debug   # zizmor: ignore[unpinned-images]
-    permissions:
-      contents: read
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - r_customization: san
-            compiler: gcc
-          - r_customization: csan
-            compiler: clang
-    steps:
-      - name: Trust git cloning LightGBM
-        run: |
-          git config --global --add safe.directory "${GITHUB_WORKSPACE}"
-      - name: Checkout repository
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
-        with:
-          fetch-depth: 5
-          persist-credentials: false
-          submodules: true
-      - name: Install packages
-        shell: bash
-        run: |
-          RDscript${{ matrix.r_customization }} ./.ci/install-r-deps.R --build --test
-          sh build-cran-package.sh --r-executable=RD${{ matrix.r_customization }}
-          RD${{ matrix.r_customization }} CMD INSTALL lightgbm_*.tar.gz || exit 1
-      - name: Run tests with sanitizers
-        shell: bash
-        run: |
-          cd R-package/tests
-          exit_code=0
-          RDscript${{ matrix.r_customization }} testthat.R >> tests.log 2>&1 || exit_code=-1
-          cat ./tests.log
-          exit ${exit_code}
   test-r-extra-checks:
     name: r-package (${{ matrix.image }}, R-devel)
     timeout-minutes: 60
@@ -282,7 +243,11 @@ jobs:
         image:
           - clang21
           - clang22
+          - clang-asan
+          - clang-ubsan
           - gcc16
+          - gcc-asan
+          - gcc-ubsan
           - rchk
           - ubuntu-clang
           - ubuntu-gcc12
