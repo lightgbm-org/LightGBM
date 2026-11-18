@@ -531,19 +531,20 @@ def test_dataframe_example_case_in_tree_digraph(dataframe_library):
 
 
 @pytest.mark.parametrize("dataframe_library", ["numpy", "pandas", "polars", "pyarrow"])
-def test_empty_example_case_on_tree_digraph_raises_error(dataframe_library):
+@pytest.mark.parametrize("n_rows", [0, 2])
+def test_example_case_with_wrong_number_of_rows_raises_error(dataframe_library, n_rows):
     pytest.importorskip("graphviz")
     X, y = make_synthetic_regression()
     if dataframe_library == "numpy":
-        example_case = X[:0]
+        example_case = X[:n_rows]
     elif dataframe_library == "pandas":
-        example_case = pd.DataFrame(X[:0])
+        example_case = pd.DataFrame(X[:n_rows])
     elif dataframe_library == "polars":
         pl = pytest.importorskip("polars")
-        example_case = pl.DataFrame({str(i): X[:0, i] for i in range(X.shape[1])})
+        example_case = pl.DataFrame({str(i): X[:n_rows, i] for i in range(X.shape[1])})
     else:
         pa = pytest.importorskip("pyarrow")
-        example_case = pa.table({str(i): X[:0, i] for i in range(X.shape[1])})
+        example_case = pa.table({str(i): X[:n_rows, i] for i in range(X.shape[1])})
     ds = lgb.Dataset(X, y)
     bst = lgb.train({"num_leaves": 3}, ds, num_boost_round=1)
     with pytest.raises(ValueError, match="example_case must have a single row."):
