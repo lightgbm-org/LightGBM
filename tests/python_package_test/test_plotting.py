@@ -513,8 +513,8 @@ def test_example_case_in_tree_digraph():
     assert makes_categorical_splits
 
 
-@pytest.mark.parametrize("dataframe_library", ["pandas", "polars", "pyarrow"])
-def test_dataframe_example_case_in_tree_digraph(dataframe_library):
+@pytest.mark.parametrize("input_type", ["pd_DataFrame", "pl_DataFrame", "pa_Table"])
+def test_dataframe_example_case_in_tree_digraph(input_type):
     pytest.importorskip("graphviz")
     X, y = make_synthetic_regression()
     X = pd.DataFrame(X, columns=[f"x{i}" for i in range(X.shape[1])])
@@ -523,10 +523,10 @@ def test_dataframe_example_case_in_tree_digraph(dataframe_library):
     dataframe = X.iloc[[0]]
     example_case = dataframe.assign(cat=dataframe["cat"].cat.codes).to_numpy(dtype=np.float64)
 
-    if dataframe_library == "polars":
+    if input_type == "pl_DataFrame":
         pl = pytest.importorskip("polars")
         dataframe = pl.from_pandas(dataframe)
-    elif dataframe_library == "pyarrow":
+    elif input_type == "pa_Table":
         pa = pytest.importorskip("pyarrow")
         dataframe = pa.Table.from_pandas(dataframe, preserve_index=False)
 
@@ -536,16 +536,16 @@ def test_dataframe_example_case_in_tree_digraph(dataframe_library):
     assert "cat" in "".join(actual.body)
 
 
-@pytest.mark.parametrize("dataframe_library", ["numpy", "pandas", "polars", "pyarrow"])
+@pytest.mark.parametrize("input_type", ["numpy", "pd_DataFrame", "pl_DataFrame", "pa_Table"])
 @pytest.mark.parametrize("n_rows", [0, 2])
-def test_example_case_with_wrong_number_of_rows_raises_error(dataframe_library, n_rows):
+def test_example_case_with_wrong_number_of_rows_raises_error(input_type, n_rows):
     pytest.importorskip("graphviz")
     X, y = make_synthetic_regression()
-    if dataframe_library == "numpy":
+    if input_type == "numpy":
         example_case = X[:n_rows]
-    elif dataframe_library == "pandas":
+    elif input_type == "pd_DataFrame":
         example_case = pd.DataFrame(X[:n_rows])
-    elif dataframe_library == "polars":
+    elif input_type == "pl_DataFrame":
         pl = pytest.importorskip("polars")
         example_case = pl.DataFrame({str(i): X[:n_rows, i] for i in range(X.shape[1])})
     else:
