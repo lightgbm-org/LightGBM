@@ -414,10 +414,9 @@ For more background, see
 You can replicate these checks locally using Docker.
 For more information on the images used for testing, see https://r-hub.github.io/containers/.
 
-In the code below, environment variable `IMAGE` should be set to one of the following values.
+Relevant images:
 
-* `"gcc-asan"` = replicates CRAN's `gcc-ASAN` check
-* `"gcc-ubsan"` = replicates CRAN's `gcc-UBSAN` check
+* `"gcc-asan"` = replicates CRAN's `gcc-ASAN` and `gcc-UBSAN` checks
 * `"clang-asan"` = replicates CRAN's `clang-ASAN` check
 * `"clang-ubsan"` = replicates CRAN's `clang-UBSAN` check
 
