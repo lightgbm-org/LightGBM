@@ -412,12 +412,15 @@ For more background, see
 * [CRAN's configuration of these checks](https://www.stats.ox.ac.uk/pub/bdr/memtests/README.txt)
 
 You can replicate these checks locally using Docker.
-For more information on the image used for testing, see https://github.com/wch/r-debug.
+For more information on the images used for testing, see https://r-hub.github.io/containers/.
 
-In the code below, environment variable `R_CUSTOMIZATION` should be set to one of two values.
+Relevant images:
 
-* `"san"` = replicates CRAN's `gcc-ASAN` and `gcc-UBSAN` checks
-* `"csan"` = replicates CRAN's `clang-ASAN` and `clang-UBSAN` checks
+* `"gcc-asan"` = replicates CRAN's `gcc-ASAN` and `gcc-UBSAN` checks
+* `"clang-asan"` = replicates CRAN's `clang-ASAN` check
+* `"clang-ubsan"` = replicates CRAN's `clang-UBSAN` check
+
+For example, to replicate the `clang` ASAN checks:
 
 ```shell
 docker run \
@@ -425,23 +428,20 @@ docker run \
   -it \
   -v $(pwd):/opt/LightGBM \
   -w /opt/LightGBM \
-  --env R_CUSTOMIZATION=san \
-  wch1/r-debug:latest \
+  ghcr.io/r-hub/containers/clang-asan:latest \
   /bin/bash
 
 # install dependencies
-RDscript${R_CUSTOMIZATION} \
-  -e "install.packages(c('R6', 'data.table', 'jsonlite', 'knitr', 'markdown', 'Matrix', 'RhpcBLASctl', 'testthat'), repos = 'https://cran.r-project.org', Ncpus = parallel::detectCores())"
+Rscript ./.ci/install-r-deps.R --build --test
 
 # install lightgbm
-sh build-cran-package.sh --r-executable=RD${R_CUSTOMIZATION}
-RD${R_CUSTOMIZATION} \
-  CMD INSTALL lightgbm_*.tar.gz
+sh build-cran-package.sh --no-build-vignettes
+R CMD INSTALL lightgbm_*.tar.gz
 
 # run tests
 cd R-package/tests
 rm -f ./tests.log
-RDscript${R_CUSTOMIZATION} testthat.R >> tests.log 2>&1
+Rscript testthat.R | tee -a tests.log 2>&1
 
 # check that tests passed
 echo "test exit code: $?"
