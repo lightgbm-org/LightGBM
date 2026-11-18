@@ -272,6 +272,12 @@ def test_create_tree_digraph(tmp_path, breast_cancer_split):
     with pytest.raises(IndexError, match="tree_index is out of range."):
         lgb.create_tree_digraph(gbm, tree_index=83)
 
+    for example_case in (X_train[0], X_train[:1].tolist()):
+        with pytest.raises(
+            ValueError, match="example_case must be a numpy 2-D array or a Narwhals-supported DataFrame"
+        ):
+            lgb.create_tree_digraph(gbm, example_case=example_case)
+
     graph = lgb.create_tree_digraph(
         gbm,
         tree_index=3,
