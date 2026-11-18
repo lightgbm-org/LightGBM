@@ -722,14 +722,13 @@ def create_tree_digraph(
         show_info = []
 
     if example_case is not None:
-        if isinstance(example_case, np.ndarray):
-            if example_case.ndim != 2:
-                raise ValueError("example_case must be a numpy 2-D array or a Narwhals-supported DataFrame")
-            if example_case.shape[0] != 1:
-                raise ValueError("example_case must have a single row.")
-        elif nwd.is_into_dataframe(example_case):
-            if nw.from_native(example_case).shape[0] != 1:
-                raise ValueError("example_case must have a single row.")
+        is_dataframe = nwd.is_into_dataframe(example_case)
+        if not is_dataframe and (not isinstance(example_case, np.ndarray) or example_case.ndim != 2):
+            raise ValueError("example_case must be a numpy 2-D array or a Narwhals-supported DataFrame")
+        n_rows = nw.from_native(example_case).shape[0] if is_dataframe else example_case.shape[0]
+        if n_rows != 1:
+            raise ValueError("example_case must have a single row.")
+        if is_dataframe:
             example_case = _data_from_narwhals(
                 data=example_case,
                 feature_name="auto",
@@ -737,8 +736,6 @@ def create_tree_digraph(
                 pandas_categorical=booster.pandas_categorical,
             )[0]
             example_case = nw.from_native(example_case).to_numpy()
-        else:
-            raise ValueError("example_case must be a numpy 2-D array or a Narwhals-supported DataFrame")
         example_case = example_case[0]
 
     return _to_graphviz(
