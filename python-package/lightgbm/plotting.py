@@ -671,7 +671,7 @@ def create_tree_digraph(
     orientation : str, optional (default='horizontal')
         Orientation of the tree.
         Can be 'horizontal' or 'vertical'.
-    example_case : numpy 2-D array, Narwhals-supported DataFrame or None, optional (default=None)
+    example_case : numpy 2-D array, Narwhals-supported DataFrame (e.g. pandas, polars, pyarrow) or None, optional (default=None)
         Single row with the same structure as the training data.
         If not None, the plot will highlight the path that sample takes through the tree.
 
