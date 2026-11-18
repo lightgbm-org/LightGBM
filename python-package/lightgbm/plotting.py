@@ -11,7 +11,8 @@ import narwhals.dependencies as nwd
 import narwhals.typing as nwt
 import numpy as np
 
-from .basic import Booster, _data_from_narwhals, _is_zero, _log_warning, _MissingType
+from .basic import Booster, _data_from_narwhals, _is_zero, _log_warning, _MissingType, _pandas_df_to_numpy
+from .compat import pd_DataFrame
 from .sklearn import LGBMModel
 
 __all__ = [
@@ -735,7 +736,10 @@ def create_tree_digraph(
                 categorical_feature="auto",
                 pandas_categorical=booster.pandas_categorical,
             )[0]
-            example_case = nw.from_native(example_case).to_numpy()
+            if isinstance(example_case, pd_DataFrame):
+                example_case = _pandas_df_to_numpy(example_case)
+            else:
+                example_case = nw.from_native(example_case).to_numpy()
         example_case = example_case[0]
 
     return _to_graphviz(
