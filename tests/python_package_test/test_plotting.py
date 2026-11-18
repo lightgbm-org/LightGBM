@@ -511,21 +511,23 @@ def test_example_case_in_tree_digraph():
 def test_dataframe_example_case_in_tree_digraph(dataframe_library):
     pytest.importorskip("graphviz")
     X, y = make_synthetic_regression()
-    bst = lgb.train({"num_leaves": 3}, lgb.Dataset(X, y), num_boost_round=1)
-    example_case = X[[0]]
+    X = pd.DataFrame(X, columns=[f"x{i}" for i in range(X.shape[1])])
+    X["cat"] = pd.Categorical(np.where(y > np.median(y), "high", "low"))
+    bst = lgb.train({"num_leaves": 3, "verbose": -1}, lgb.Dataset(X, y), num_boost_round=1)
+    dataframe = X.iloc[[0]]
+    example_case = dataframe.assign(cat=dataframe["cat"].cat.codes).to_numpy(dtype=np.float64)
 
-    if dataframe_library == "pandas":
-        dataframe = pd.DataFrame(example_case)
-    elif dataframe_library == "polars":
+    if dataframe_library == "polars":
         pl = pytest.importorskip("polars")
-        dataframe = pl.DataFrame(example_case)
-    else:
+        dataframe = pl.from_pandas(dataframe)
+    elif dataframe_library == "pyarrow":
         pa = pytest.importorskip("pyarrow")
-        dataframe = pa.table({str(i): example_case[:, i] for i in range(example_case.shape[1])})
+        dataframe = pa.Table.from_pandas(dataframe, preserve_index=False)
 
     expected = lgb.create_tree_digraph(bst, example_case=example_case)
     actual = lgb.create_tree_digraph(bst, example_case=dataframe)
     assert actual.body == expected.body
+    assert "cat" in "".join(actual.body)
 
 
 @pytest.mark.parametrize("dataframe_library", ["numpy", "pandas", "polars", "pyarrow"])
