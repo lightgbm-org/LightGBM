@@ -468,7 +468,7 @@ def _to_graphviz(
     precision: Optional[int],
     orientation: str,
     constraints: Optional[List[int]],
-    example_case: Optional[np.ndarray],
+    example_row: Optional[np.ndarray],
     max_category_values: int,
     **kwargs: Any,
 ) -> Any:
@@ -513,14 +513,14 @@ def _to_graphviz(
             else:
                 label = f"feature <B>{split_feature}</B> {operator} "
             direction = None
-            if example_case is not None:
+            if example_row is not None:
                 if root["decision_type"] == "==":
                     direction = _determine_direction_for_categorical_split(
-                        fval=example_case[split_feature], thresholds=root["threshold"]
+                        fval=example_row[split_feature], thresholds=root["threshold"]
                     )
                 else:
                     direction = _determine_direction_for_numeric_split(
-                        fval=example_case[split_feature],
+                        fval=example_row[split_feature],
                         threshold=root["threshold"],
                         missing_type_str=root["missing_type"],
                         default_left=root["default_left"],
@@ -597,7 +597,7 @@ def _to_graphviz(
             total_count=tree_info["tree_structure"]["internal_count"],
             parent=None,
             decision=None,
-            highlight=example_case is not None,
+            highlight=example_row is not None,
         )
     else:
         raise Exception("Cannot plot trees with no split")
@@ -722,25 +722,29 @@ def create_tree_digraph(
     if show_info is None:
         show_info = []
 
+    example_row: Optional[np.ndarray] = None
     if example_case is not None:
-        is_dataframe = nwd.is_into_dataframe(example_case)
-        if not is_dataframe and (not isinstance(example_case, np.ndarray) or example_case.ndim != 2):
+        if isinstance(example_case, np.ndarray) and example_case.ndim == 2:
+            n_rows = example_case.shape[0]
+        elif nwd.is_into_dataframe(example_case):
+            n_rows = nw.from_native(example_case).shape[0]
+        else:
             raise ValueError("example_case must be a numpy 2-D array or a Narwhals-supported DataFrame")
-        n_rows = nw.from_native(example_case).shape[0] if is_dataframe else example_case.shape[0]
         if n_rows != 1:
             raise ValueError("example_case must have a single row.")
-        if is_dataframe:
-            example_case = _data_from_narwhals(
+        if isinstance(example_case, np.ndarray):
+            example_row = example_case[0]
+        else:
+            data = _data_from_narwhals(
                 data=example_case,
                 feature_name="auto",
                 categorical_feature="auto",
                 pandas_categorical=booster.pandas_categorical,
             )[0]
-            if isinstance(example_case, pd_DataFrame):
-                example_case = _pandas_df_to_numpy(example_case)
+            if isinstance(data, pd_DataFrame):
+                example_row = _pandas_df_to_numpy(data)[0]
             else:
-                example_case = nw.from_native(example_case).to_numpy()
-        example_case = example_case[0]
+                example_row = nw.from_native(data).to_numpy()[0]
 
     return _to_graphviz(
         tree_info=tree_info,
@@ -749,7 +753,7 @@ def create_tree_digraph(
         precision=precision,
         orientation=orientation,
         constraints=monotone_constraints,
-        example_case=example_case,
+        example_row=example_row,
         max_category_values=max_category_values,
         **kwargs,
     )
