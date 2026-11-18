@@ -22,6 +22,21 @@ BUILD_LOG_FILE=lightgbm.Rcheck/00install.out
 echo "R CMD check build logs:"
 cat "${BUILD_LOG_FILE}"
 
+# UBSAN prints errors but doesn't cause 'R CMD check' to fail.
+#
+# Search the output of examples and tests for sanitizer reports, like R-hub's 'r-check' does:
+# https://github.com/r-hub/containers/blob/005133d8c0633718913f85875bf5b41190699bdc/containers/clang-ubsan/r-check
+SANITIZER_PATTERN='UndefinedBehaviorSanitizer|AddressSanitizer|runtime error:'
+for f in lightgbm.Rcheck/lightgbm-Ex.Rout lightgbm.Rcheck/tests/*.Rout lightgbm.Rcheck/tests/*.Rout.fail; do
+    # skip files that don't exist (like the '*.fail' only written if the tests failed)
+    [[ -f "${f}" ]] || continue
+    if grep -q -E "${SANITIZER_PATTERN}" "${f}"; then
+        echo "found sanitizer errors in '${f}':"
+        cat "${f}"
+        check_succeeded="no"
+    fi
+done
+
 if [[ $check_succeeded == "no" ]]; then
     echo "R CMD check failed"
     exit 1
