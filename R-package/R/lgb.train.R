@@ -330,8 +330,9 @@ lgb.train <- function(params = list(),
   non_train_valid_names <- names(valids)[!(names(valids) == train_data_name)]
   first_valid_name <- non_train_valid_names[1L]
 
-  # When early stopping is not activated, we compute the best iteration / score ourselves by
-  # selecting the first metric and the first dataset
+  # The best iteration and its score are taken from the first metric on the first dataset
+  # in valids that is not the training data. Without early stopping, all iterations are used
+  # for prediction (best_iter = -1), and best_score is the score of the last iteration
   if (record && length(non_train_valid_names) > 0L && is.na(env$best_score)) {
 
     # when using a custom eval function, the metric name is returned from the
@@ -342,18 +343,21 @@ lgb.train <- function(params = list(),
       first_metric <- booster$.__enclos_env__$private$eval_names[1L]
     }
 
-    .find_best <- which.min
-    if (isTRUE(env$eval_list[[1L]]$higher_better[1L])) {
-      .find_best <- which.max
+    scores <- unlist(booster$record_evals[[first_valid_name]][[first_metric]][[.EVAL_KEY()]])
+    # env$met_early_stop is set by an early stopping callback, also by one in 'callbacks'
+    if (using_early_stopping || isTRUE(env$met_early_stop)) {
+      .find_best <- which.min
+      if (isTRUE(env$eval_list[[1L]]$higher_better[1L])) {
+        .find_best <- which.max
+      }
+      booster$best_iter <- unname(.find_best(scores))
+      booster$best_score <- scores[[booster$best_iter]]
+    } else if (isTRUE(booster$best_iter > 0L) && booster$best_iter <= length(scores)) {
+      # the best iteration has been set by another callback in 'callbacks'
+      booster$best_score <- scores[[booster$best_iter]]
+    } else {
+      booster$best_score <- scores[[length(scores)]]
     }
-    booster$best_iter <- unname(
-      .find_best(
-        unlist(
-          booster$record_evals[[first_valid_name]][[first_metric]][[.EVAL_KEY()]]
-        )
-      )
-    )
-    booster$best_score <- booster$record_evals[[first_valid_name]][[first_metric]][[.EVAL_KEY()]][[booster$best_iter]]
   }
 
   # Check for booster model conversion to predictor model
