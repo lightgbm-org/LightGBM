@@ -213,19 +213,48 @@ if(USE_OPENMP)
 endif()
 
 if(USE_GPU)
-    set(BOOST_COMPUTE_HEADER_DIR ${PROJECT_SOURCE_DIR}/external_libs/compute/include)
-    include_directories(${BOOST_COMPUTE_HEADER_DIR})
     find_package(OpenCL REQUIRED)
     include_directories(${OpenCL_INCLUDE_DIRS})
     message(STATUS "OpenCL include directory: " ${OpenCL_INCLUDE_DIRS})
     if(WIN32)
         set(Boost_USE_STATIC_LIBS ON)
     endif()
-    find_package(Boost 1.56.0 COMPONENTS filesystem system REQUIRED)
+
+    # Boost.System availability depends on the version.
+    #
+    #  - pre-1.69  --> regular compiled library
+    #  - 1.69-1.88 --> header-only with a stub library for compatibility (https://www.boost.org/users/history/version_1_69_0.html)
+    #  - 1.89+     --> header-only, no stub library (https://www.boost.org/users/history/version_1_89_0.html)
+
+    # find the current version first
+    find_package(Boost 1.61.0 REQUIRED)
+    if(DEFINED Boost_VERSION_STRING)
+        set(LGB_BOOST_VERSION "${Boost_VERSION_STRING}")
+    else()
+        set(LGB_BOOST_VERSION "${Boost_VERSION}")
+    endif()
+
+    # choose the set of components based on version
+    set(LGB_BOOST_COMPONENTS filesystem)
+    if(LGB_BOOST_VERSION VERSION_LESS 1.69.0)
+        list(APPEND LGB_BOOST_COMPONENTS system)
+    endif()
+    message(STATUS "Boost ${LGB_BOOST_VERSION} found, requesting components: ${LGB_BOOST_COMPONENTS}")
+
+    # require all the necessary components
+    find_package(Boost 1.61.0 COMPONENTS ${LGB_BOOST_COMPONENTS} REQUIRED)
+
+    # Boost's headers can request libraries themselves on MSVC ("auto-linking"), using names
+    # computed from compiler flags rather than the libraries CMake found.
+    #
+    # Turn that off so only 'Boost_LIBRARIES' is linked.
+    #
+    # details: https://www.boost.org/doc/libs/release/more/getting_started/windows.html#auto-linking
     if(WIN32)
-        # disable autolinking in boost
         add_definitions(-DBOOST_ALL_NO_LIB)
     endif()
+
+    # ensure the found sources are used
     include_directories(${Boost_INCLUDE_DIRS})
     add_definitions(-DUSE_GPU)
 endif()

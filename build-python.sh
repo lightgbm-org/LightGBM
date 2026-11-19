@@ -288,15 +288,6 @@ create_isolated_source_dir() {
         external_libs/eigen/Eigen/src/plugins \
         ./lightgbm-python/external_libs/eigen/Eigen/src/plugins/
 
-    ###################
-    # compute (Boost) #
-    ###################
-    mkdir -p ./lightgbm-python/external_libs/compute
-    cp \
-        -R \
-        external_libs/compute/include \
-        ./lightgbm-python/external_libs/compute/include/
-
     #############
     # nanoarrow #
     #############
