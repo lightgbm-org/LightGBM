@@ -220,29 +220,13 @@ if(USE_GPU)
         set(Boost_USE_STATIC_LIBS ON)
     endif()
 
-    # Boost.System availability depends on the version.
+    # Boost.System has been header-only since Boost 1.69, and its stub library
+    # was removed in Boost 1.89 (https://www.boost.org/users/history/version_1_89_0.html),
+    # so it must not be requested as a component. Boost.Filesystem is still a compiled library.
     #
-    #  - pre-1.69  --> regular compiled library
-    #  - 1.69-1.88 --> header-only with a stub library for compatibility (https://www.boost.org/users/history/version_1_69_0.html)
-    #  - 1.89+     --> header-only, no stub library (https://www.boost.org/users/history/version_1_89_0.html)
-
-    # find the current version first
-    find_package(Boost 1.61.0 REQUIRED)
-    if(DEFINED Boost_VERSION_STRING)
-        set(LGB_BOOST_VERSION "${Boost_VERSION_STRING}")
-    else()
-        set(LGB_BOOST_VERSION "${Boost_VERSION}")
-    endif()
-
-    # choose the set of components based on version
-    set(LGB_BOOST_COMPONENTS filesystem)
-    if(LGB_BOOST_VERSION VERSION_LESS 1.69.0)
-        list(APPEND LGB_BOOST_COMPONENTS system)
-    endif()
-    message(STATUS "Boost ${LGB_BOOST_VERSION} found, requesting components: ${LGB_BOOST_COMPONENTS}")
-
-    # require all the necessary components
-    find_package(Boost 1.61.0 COMPONENTS ${LGB_BOOST_COMPONENTS} REQUIRED)
+    # The minimum is 1.69 because older Boost.Compute releases (bundled with Boost)
+    # fail to compile with modern compilers (e.g. 'svm_ptr.hpp' in Boost 1.66).
+    find_package(Boost 1.69.0 COMPONENTS filesystem REQUIRED)
 
     # Boost's headers can request libraries themselves on MSVC ("auto-linking"), using names
     # computed from compiler flags rather than the libraries CMake found.
