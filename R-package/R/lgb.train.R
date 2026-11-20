@@ -344,17 +344,21 @@ lgb.train <- function(params = list(),
     }
 
     scores <- unlist(booster$record_evals[[first_valid_name]][[first_metric]][[.EVAL_KEY()]])
+    # scores starts at iteration begin_iteration, while best_iter counts all iterations
+    # of the model, including those of init_model
+    iteration_offset <- begin_iteration - 1L
     # env$met_early_stop is set by an early stopping callback, also by one in 'callbacks'
     if (using_early_stopping || isTRUE(env$met_early_stop)) {
       .find_best <- which.min
       if (isTRUE(env$eval_list[[1L]]$higher_better[1L])) {
         .find_best <- which.max
       }
-      booster$best_iter <- unname(.find_best(scores))
-      booster$best_score <- scores[[booster$best_iter]]
-    } else if (isTRUE(booster$best_iter > 0L) && booster$best_iter <= length(scores)) {
+      best_index <- unname(.find_best(scores))
+      booster$best_iter <- best_index + iteration_offset
+      booster$best_score <- scores[[best_index]]
+    } else if ((booster$best_iter - iteration_offset) %in% seq_along(scores)) {
       # the best iteration has been set by another callback in 'callbacks'
-      booster$best_score <- scores[[booster$best_iter]]
+      booster$best_score <- scores[[booster$best_iter - iteration_offset]]
     } else {
       booster$best_score <- scores[[length(scores)]]
     }
