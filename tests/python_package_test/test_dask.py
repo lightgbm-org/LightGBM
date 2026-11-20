@@ -570,6 +570,26 @@ def test_regressor(output, boosting_type, tree_learner, cluster):
             assert tree_df.loc[node_uses_cat_col, "decision_type"].unique()[0] == "=="
 
 
+def test_regressor_multi_target(cluster):
+    with Client(cluster) as client:
+        rng = np.random.default_rng(42)
+        X = rng.uniform(size=(1_000, 4))
+        Y = np.column_stack([X[:, 0] + X[:, 1], 2 * X[:, 2] - X[:, 3]])
+        dX = da.from_array(X, chunks=(500, 4))
+        dY = da.from_array(Y, chunks=(500, 2))
+        params = {"n_estimators": 10, "random_state": 42}
+
+        dask_regressor = lgb.DaskLGBMRegressor(client=client, **params).fit(dX, dY)
+        assert dask_regressor.objective_ == "multi_regression"
+        assert dask_regressor.booster_.num_model_per_iteration() == 2
+        p1 = dask_regressor.predict(dX).compute()
+        assert p1.shape == Y.shape
+        assert_eq(p1, dask_regressor.to_local().predict(X))
+
+        local_regressor = lgb.LGBMRegressor(**params).fit(X, Y)
+        assert_eq(dask_regressor.score(dX, dY), local_regressor.score(X, Y), atol=0.01)
+
+
 @pytest.mark.parametrize("output", data_output)
 def test_regressor_pred_contrib(output, cluster):
     with Client(cluster) as client:

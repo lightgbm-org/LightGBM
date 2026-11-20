@@ -525,6 +525,16 @@ def test_multi_regression_metrics_and_early_stopping():
     )
 
 
+def test_multi_regression_cv():
+    X, y = make_synthetic_regression(n_samples=300)
+    Y = np.column_stack([y, -y])
+    params = {"objective": "multi_regression", "num_class": 2, "verbose": -1}
+    cv_res = lgb.cv(params, lgb.Dataset(X, Y), num_boost_round=10, nfold=3, stratified=False, return_cvbooster=True)
+    assert len(cv_res["valid multi_l2-mean"]) == 10
+    for booster in cv_res["cvbooster"].boosters:
+        assert booster.predict(X).shape == Y.shape
+
+
 def test_multi_regression_errors():
     X, y = make_synthetic_regression()
     Y = np.column_stack([y, y, y])
