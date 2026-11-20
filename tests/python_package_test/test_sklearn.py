@@ -445,6 +445,25 @@ def test_multioutput_regressor():
         assert isinstance(regressor.booster_, lgb.Booster)
 
 
+@pytest.mark.parametrize("as_frame", [False, True])
+def test_regressor_multi_target(as_frame):
+    bunch = load_linnerud(as_frame=as_frame)  # returns a Bunch instance
+    X, y = bunch["data"], bunch["target"]
+    params = {"n_estimators": 10, "min_child_samples": 2, "verbose": -1, "deterministic": True, "force_row_wise": True}
+    reg = lgb.LGBMRegressor(**params).fit(X, y)
+    assert reg.objective_ == "multi_regression"
+    assert reg.booster_.num_model_per_iteration() == 3
+    y_pred = reg.predict(X)
+    assert y_pred.shape == (X.shape[0], 3)
+    # identical to one model per target, which is what MultiOutputRegressor does
+    expected = MultiOutputRegressor(lgb.LGBMRegressor(**params)).fit(X, y).predict(X)
+    np.testing.assert_allclose(y_pred, expected)
+    # refitting the same estimator on a 1-D target goes back to single-target regression
+    reg.fit(X, np.asarray(y)[:, 0])
+    assert reg.objective_ == "regression"
+    assert reg.predict(X).shape == (X.shape[0],)
+
+
 def test_classifier_chain():
     n_outputs = 3
     X, y = make_multilabel_classification(n_samples=100, n_features=20, n_classes=n_outputs, random_state=0)

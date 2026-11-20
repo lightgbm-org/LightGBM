@@ -116,7 +116,7 @@ Core Parameters
 
    -  **Note**: can be used only in CLI version; for language-specific packages you can use the correspondent functions
 
--  ``objective`` :raw-html:`<a id="objective" title="Permalink to this parameter" href="#objective">&#x1F517;&#xFE0E;</a>`, default = ``regression``, type = enum, options: ``regression``, ``regression_l1``, ``huber``, ``fair``, ``poisson``, ``quantile``, ``mape``, ``gamma``, ``tweedie``, ``binary``, ``multiclass``, ``multiclassova``, ``cross_entropy``, ``cross_entropy_lambda``, ``lambdarank``, ``rank_xendcg``, aliases: ``objective_type``, ``app``, ``application``, ``loss``
+-  ``objective`` :raw-html:`<a id="objective" title="Permalink to this parameter" href="#objective">&#x1F517;&#xFE0E;</a>`, default = ``regression``, type = enum, options: ``regression``, ``regression_l1``, ``huber``, ``fair``, ``poisson``, ``quantile``, ``mape``, ``gamma``, ``tweedie``, ``binary``, ``multiclass``, ``multiclassova``, ``multi_regression``, ``cross_entropy``, ``cross_entropy_lambda``, ``lambdarank``, ``rank_xendcg``, aliases: ``objective_type``, ``app``, ``application``, ``loss``
 
    -  regression application
 
@@ -151,6 +151,16 @@ Core Parameters
       -  ``multiclassova``, `One-vs-All <https://en.wikipedia.org/wiki/Multiclass_classification#One-vs.-rest>`__ binary objective function, aliases: ``multiclass_ova``, ``ova``, ``ovr``
 
       -  ``num_class`` should be set as well
+
+   -  multi-target regression application
+
+      -  ``multi_regression``, L2 loss on each of ``num_class`` targets, one tree per target per iteration, aliases: ``multi_regression_l2``, ``multi_l2``, ``multi_mse``
+
+      -  label must have ``num_data * num_class`` values, stored column-major (all rows of target 0, then all rows of target 1, ...)
+
+      -  ``num_class`` should be set to the number of targets
+
+      -  **Note**: not supported by the CUDA version, by saving Dataset to binary file, or by loading labels from text files
 
    -  cross-entropy application
 
@@ -1120,7 +1130,7 @@ Objective Parameters
 
 -  ``num_class`` :raw-html:`<a id="num_class" title="Permalink to this parameter" href="#num_class">&#x1F517;&#xFE0E;</a>`, default = ``1``, type = int, aliases: ``num_classes``, constraints: ``num_class > 0``
 
-   -  used only in ``multi-class`` classification application
+   -  used only in ``multi-class`` classification and ``multi_regression`` (number of targets) applications
 
 -  ``is_unbalance`` :raw-html:`<a id="is_unbalance" title="Permalink to this parameter" href="#is_unbalance">&#x1F517;&#xFE0E;</a>`, default = ``false``, type = bool, aliases: ``unbalance``, ``unbalanced_sets``
 
@@ -1274,6 +1284,10 @@ Metric Parameters
       -  ``multi_logloss``, log loss for multi-class classification, aliases: ``multiclass``, ``softmax``, ``multiclassova``, ``multiclass_ova``, ``ova``, ``ovr``
 
       -  ``multi_error``, error rate for multi-class classification
+
+      -  ``multi_l2``, square loss averaged over all targets of multi-target regression, aliases: ``multi_regression``, ``multi_regression_l2``, ``multi_mse``
+
+      -  ``multi_rmse``, root square loss averaged over all targets of multi-target regression
 
       -  ``cross_entropy``, cross-entropy (with optional linear weights), aliases: ``xentropy``
 

@@ -39,6 +39,7 @@ try:
             # 'force_all_finite' was renamed to 'ensure_all_finite' in scikit-learn 1.6
             ensure_all_finite: bool = False,
             ensure_min_samples: int = 1,
+            multi_output: bool = False,
             # trap other keyword arguments that only work on scikit-learn >=1.6, like 'reset'
             **ignored_kwargs: Any,
         ) -> Any:
@@ -77,6 +78,7 @@ try:
                     accept_sparse=accept_sparse,
                     force_all_finite=ensure_all_finite,
                     ensure_min_samples=ensure_min_samples,
+                    multi_output=multi_output,
                 )
 
                 # this only needs to be updated at fit() time

@@ -10,6 +10,7 @@
 
 #include "binary_objective.hpp"
 #include "multiclass_objective.hpp"
+#include "multi_regression_objective.hpp"
 #include "rank_objective.hpp"
 #include "regression_objective.hpp"
 #include "xentropy_objective.hpp"
@@ -47,6 +48,8 @@ ObjectiveFunction* ObjectiveFunction::CreateObjectiveFunctionCUDA(const std::str
     return new CUDAMulticlassSoftmax(config);
   } else if (type == std::string("multiclassova")) {
     return new CUDAMulticlassOVA(config);
+  } else if (type == std::string("multi_regression")) {
+    Log::Fatal("Objective multi_regression is not supported by the CUDA version");
   } else if (type == std::string("cross_entropy")) {
     Log::Warning("Objective cross_entropy is not implemented in cuda version. Fall back to boosting on CPU.");
     return new CrossEntropy(config);
@@ -99,6 +102,8 @@ ObjectiveFunction* ObjectiveFunction::CreateObjectiveFunction(const std::string&
       return new MulticlassSoftmax(config);
     } else if (type == std::string("multiclassova")) {
       return new MulticlassOVA(config);
+    } else if (type == std::string("multi_regression")) {
+      return new MultiRegressionL2loss(config);
     } else if (type == std::string("cross_entropy")) {
       return new CrossEntropy(config);
     } else if (type == std::string("cross_entropy_lambda")) {
@@ -144,6 +149,8 @@ ObjectiveFunction* ObjectiveFunction::CreateObjectiveFunction(const std::string&
     return new MulticlassSoftmax(strs);
   } else if (type == std::string("multiclassova")) {
     return new MulticlassOVA(strs);
+  } else if (type == std::string("multi_regression")) {
+    return new MultiRegressionL2loss(strs);
   } else if (type == std::string("cross_entropy")) {
     return new CrossEntropy(strs);
   } else if (type == std::string("cross_entropy_lambda")) {

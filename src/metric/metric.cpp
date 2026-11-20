@@ -10,6 +10,7 @@
 #include "binary_metric.hpp"
 #include "map_metric.hpp"
 #include "multiclass_metric.hpp"
+#include "multi_regression_metric.hpp"
 #include "rank_metric.hpp"
 #include "regression_metric.hpp"
 #include "xentropy_metric.hpp"
@@ -61,6 +62,10 @@ Metric* Metric::CreateMetric(const std::string& type, const Config& config) {
     } else if (type == std::string("multi_error")) {
       Log::Warning("Metric multi_error is not implemented in cuda version. Fall back to evaluation on CPU.");
       return new MultiErrorMetric(config);
+    } else if (type == std::string("multi_l2")) {
+      return new MultiRegressionL2Metric<false>(config);
+    } else if (type == std::string("multi_rmse")) {
+      return new MultiRegressionL2Metric<true>(config);
     } else if (type == std::string("cross_entropy")) {
       Log::Warning("Metric cross_entropy is not implemented in cuda version. Fall back to evaluation on CPU.");
       return new CrossEntropyMetric(config);
@@ -116,6 +121,10 @@ Metric* Metric::CreateMetric(const std::string& type, const Config& config) {
       return new MultiSoftmaxLoglossMetric(config);
     } else if (type == std::string("multi_error")) {
       return new MultiErrorMetric(config);
+    } else if (type == std::string("multi_l2")) {
+      return new MultiRegressionL2Metric<false>(config);
+    } else if (type == std::string("multi_rmse")) {
+      return new MultiRegressionL2Metric<true>(config);
     } else if (type == std::string("cross_entropy")) {
       return new CrossEntropyMetric(config);
     } else if (type == std::string("cross_entropy_lambda")) {
