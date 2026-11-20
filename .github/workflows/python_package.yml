@@ -129,20 +129,19 @@ jobs:
           #   python_version: '3.12'
           #   in-ubuntu-base-container: 'true'
           - os: ubuntu-latest
-            container: &manylinux_amd64_image ghcr.io/lightgbm-org/lightgbm-vsts-agent:manylinux_2_28_x86_64
-            os-display-name: &manylinux_amd64_display_name 'x86_64_manylinux_2_28'
+            container: *ubuntu_latest_image
+            os-display-name: *ubuntu_latest_display_name
             task: gpu
             method: source
             compiler: gcc
             python_version: '3.15'
-            in-ubuntu-base-container: 'false'
-            setup-conda: 'false'
+            in-ubuntu-base-container: 'true'
           ############
           # MPI jobs #
           ############
           - os: ubuntu-latest
-            container: *manylinux_amd64_image
-            os-display-name: *manylinux_amd64_display_name
+            container: &manylinux_amd64_image ghcr.io/lightgbm-org/lightgbm-vsts-agent:manylinux_2_28_x86_64
+            os-display-name: &manylinux_amd64_display_name 'x86_64_manylinux_2_28'
             task: mpi
             compiler: gcc
             method: source

@@ -642,13 +642,21 @@ Linux
 
 On Linux, a GPU version of LightGBM (``device_type=gpu``) can be built using
 
-- **CMake**, **OpenCL**, **Boost** and **gcc**;
-- **CMake**, **OpenCL**, **Boost** and **Clang**.
+- CMake
+- C and C++ compilers (e.g. ``clang``, ``gcc``)
+- Boost
+- OpenCL
 
-**OpenCL** headers and libraries are usually provided by GPU manufacture.
+**OpenCL** headers and libraries are usually provided by GPU manufacturers.
+
 The generic OpenCL ICD packages (for example, Debian packages ``ocl-icd-libopencl1``, ``ocl-icd-opencl-dev``, ``pocl-opencl-icd``) can also be used.
 
-Required **Boost** libraries (Boost.Align, Boost.System, Boost.Filesystem, Boost.Chrono) should be provided by the following Debian packages: ``libboost-dev``, ``libboost-system-dev``, ``libboost-filesystem-dev``, ``libboost-chrono-dev``.
+Required **Boost** libraries:
+
+- ``Boost.Filesystem``
+- ``Boost.System``
+
+should be provided by the following Debian packages: ``libboost-dev``, ``libboost-system-dev``, ``libboost-filesystem-dev``, ``libboost-chrono-dev``.
 
 After compilation the executable and ``.so`` files will be in ``LightGBM/`` folder.
 

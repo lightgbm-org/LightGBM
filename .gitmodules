@@ -1,6 +1,3 @@
-[submodule "include/boost/compute"]
-	path = external_libs/compute
-	url = https://github.com/boostorg/compute
 [submodule "eigen"]
 	path = external_libs/eigen
 	url = https://gitlab.com/libeigen/eigen.git

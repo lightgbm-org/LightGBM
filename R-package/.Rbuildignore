@@ -21,15 +21,6 @@ AUTOCONF_UBUNTU_VERSION
 ^.*\.so
 ^src/build/.*$
 ^src/CMakeLists.txt$
-^src/external_libs/compute/.appveyor.yml$
-^src/external_libs/compute/.coveralls.yml$
-^src/external_libs/compute/.travis.yml$
-^src/external_libs/compute/test/.*$
-^src/external_libs/compute/index.html$
-^src/external_libs/compute/.git$
-^src/external_libs/compute/.gitignore$
-^src/external_libs/compute/CONTRIBUTING.md$
-^src/external_libs/compute/README.md$
 src/external_libs/fast_double_parser/benchmarks
 src/external_libs/fast_double_parser/Makefile
 src/external_libs/fast_double_parser/.*\.md
