@@ -321,6 +321,12 @@ class Boosting {
   virtual bool IsLinear() const { return false; }
 
   virtual std::string ParserConfigStr() const = 0;
+
+  virtual bool HasPairwiseBinLookup() const { return false; }
+
+  virtual double PairwiseFeatureValue(int /*feature*/, double first, double second) const {
+    return first - second;
+  }
 };
 
 class GBDTBase : public Boosting {
