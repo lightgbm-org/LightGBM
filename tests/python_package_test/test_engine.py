@@ -4056,6 +4056,96 @@ def test_linear_trees(tmp_path, rng_fixed_seed):
     est = lgb.train(params, train_data, num_boost_round=10)
 
 
+@pytest.mark.parametrize("num_threads", [1, 2])
+@pytest.mark.parametrize("missing_feature", [0, 1])
+def test_linear_trees_missing_values_zero_coefficient(tmp_path, num_threads, missing_feature):
+    rng = np.random.default_rng(0)
+    flag = rng.integers(0, 2, 6000).astype(float)
+    other = rng.uniform(0, 1, len(flag))
+    flag[rng.uniform(0, 1, len(flag)) < 0.3] = np.nan
+    y = np.where(np.isnan(flag), 3.0, np.where(flag == 0, 2.0 * other, 10.0 + 2.0 * other))
+    X = np.column_stack([flag, other] if missing_feature == 0 else [other, flag])
+    train_data = lgb.Dataset(X, label=y)
+    params = {
+        "objective": "regression",
+        "linear_tree": True,
+        "num_leaves": 2,
+        "min_data_in_leaf": 20,
+        "learning_rate": 0.5,
+        "seed": 0,
+        "num_threads": num_threads,
+        "verbose": -1,
+    }
+    evaluations = {}
+    booster = lgb.train(
+        params,
+        train_data,
+        num_boost_round=3,
+        valid_sets=[train_data],
+        callbacks=[lgb.record_evaluation(evaluations)],
+    )
+    tree = booster.dump_model()["tree_info"][1]["tree_structure"]
+    assert tree["split_feature"] == missing_feature
+    assert tree["default_left"]
+    leaf = tree["left_child"]
+    missing = np.isnan(flag)
+    assert missing.any()
+    for model in (booster, lgb.Booster(model_str=booster.model_to_string())):
+        for data in (X, csr_matrix(X)):
+            predictions = model.predict(data, start_iteration=1, num_iteration=1, num_threads=num_threads)
+            np.testing.assert_allclose(predictions[missing], leaf["leaf_value"])
+    predictions = booster.predict(X, num_threads=num_threads)
+    expected_error = mean_squared_error(train_data.get_label(), predictions)
+    assert evaluations["training"]["l2"][-1] == pytest.approx(expected_error)
+    model_path = tmp_path / "linear_missing.txt"
+    booster.save_model(model_path)
+    reloaded = lgb.Booster(model_file=model_path)
+    np.testing.assert_allclose(reloaded.predict(X, num_threads=num_threads), predictions)
+
+
+@pytest.mark.parametrize("num_threads", [1, 2])
+@pytest.mark.parametrize("complete_rows", [0, 1, 2])
+def test_linear_trees_missing_values_insufficient_rows(num_threads, complete_rows):
+    rng = np.random.default_rng(1)
+    first = rng.uniform(0, 1, 6000)
+    second = rng.uniform(0, 1, len(first))
+    second[first > 0.6] = np.nan
+    y = np.where(np.isnan(second), 100.0 + 50.0 * (first > 0.8), 100.0 * (second > 0.5))
+    y += rng.normal(0, 1, len(first))
+    second[np.flatnonzero(first > 0.8)[:complete_rows]] = 0.75
+    X = np.column_stack([first, second])
+    params = {
+        "objective": "regression",
+        "linear_tree": True,
+        "num_leaves": 3,
+        "min_data_in_leaf": 20,
+        "learning_rate": 0.5,
+        "seed": 0,
+        "num_threads": num_threads,
+        "verbose": -1,
+    }
+    booster = lgb.train(params, lgb.Dataset(X, label=y), num_boost_round=3)
+    tree = booster.dump_model()["tree_info"][1]["tree_structure"]
+    leaves = [tree]
+    checked_leaf = False
+    leaf_indices = booster.predict(
+        X, start_iteration=1, num_iteration=1, pred_leaf=True, num_threads=num_threads
+    ).ravel()
+    predictions = booster.predict(X, start_iteration=1, num_iteration=1, num_threads=num_threads)
+    while leaves:
+        node = leaves.pop()
+        if "leaf_index" not in node:
+            leaves.extend([node["left_child"], node["right_child"]])
+            continue
+        rows = leaf_indices == node["leaf_index"]
+        if np.count_nonzero(rows & ~np.isnan(X).any(axis=1)) != complete_rows:
+            continue
+        assert rows.sum() > complete_rows
+        np.testing.assert_allclose(predictions[rows], node["leaf_value"])
+        checked_leaf = True
+    assert checked_leaf
+
+
 def test_save_and_load_linear(tmp_path):
     X_train, X_test, y_train, y_test = train_test_split(
         *load_breast_cancer(return_X_y=True), test_size=0.1, random_state=2
