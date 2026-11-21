@@ -84,7 +84,12 @@ printing of evaluation during training}
 training will stop if the evaluation of any metric on any validation set
 fails to improve for \code{early_stopping_rounds} consecutive boosting rounds.
 If training stops early, the returned model will have attribute \code{best_iter}
-set to the iteration number of the best iteration.}
+set to the iteration number of the best iteration, which is used for prediction.
+Without early stopping, models returned by \code{lgb.train} and \code{lightgbm}
+use all iterations for prediction (\code{best_iter = -1}), and their
+\code{best_score} is the score of the last iteration. The individual boosters of
+an \code{lgb.cv} result then use all iterations as well, while its
+\code{best_iter} still gives the best iteration of the cross-validation.}
 
 \item{callbacks}{List of callback functions that are applied at each iteration.}
 

@@ -403,9 +403,13 @@ lgb.cv <- function(params = list()
     )
     cv_booster$best_score <- cv_booster$record_evals[["valid"]][[first_metric]][[.EVAL_KEY()]][[cv_booster$best_iter]]
   }
-  # Propagate the best_iter attribute from the cv_booster to the individual boosters
-  for (bst in cv_booster$boosters) {
-    bst$booster$best_iter <- cv_booster$best_iter
+  # With early stopping (also by a callback in 'callbacks'), propagate the best_iter attribute from the
+  # cv_booster to the individual boosters. Without early stopping, they use all iterations for prediction,
+  # as in lgb.train()
+  if (using_early_stopping || isTRUE(env$met_early_stop)) {
+    for (bst in cv_booster$boosters) {
+      bst$booster$best_iter <- cv_booster$best_iter
+    }
   }
 
   if (reset_data) {

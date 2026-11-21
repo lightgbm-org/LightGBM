@@ -1188,9 +1188,9 @@ test_that("lgb.train() works with early stopping for classification", {
   )
 
   # a perfect model should be trivial to obtain, but all 10 rounds
-  # should happen
+  # should happen, and all of them are used (best_score is the score of the last one)
   expect_equal(bst$best_score, 0.0)
-  expect_equal(bst$best_iter, 1L)
+  expect_equal(bst$best_iter, -1L)
   expect_equal(length(bst$record_evals[["valid1"]][["binary_error"]][["eval"]]), nrounds)
 
   #############################
@@ -1213,7 +1213,7 @@ test_that("lgb.train() works with early stopping for classification", {
   )
 
   # a perfect model should be trivial to obtain, and only 6 rounds
-  # should have happen (1 with improvement, 5 consecutive with no improvement)
+  # should have happened (1 with improvement, 5 consecutive with no improvement)
   expect_equal(bst$best_score, 0.0)
   expect_equal(bst$best_iter, 1L)
   expect_equal(
@@ -1266,9 +1266,9 @@ test_that("lgb.train() treats early_stopping_rounds<=0 as disabling early stoppi
     )
 
     # a perfect model should be trivial to obtain, but all 10 rounds
-    # should happen
+    # should happen, and all of them are used (best_score is the score of the last one)
     expect_equal(bst$best_score, 0.0)
-    expect_equal(bst$best_iter, 1L)
+    expect_equal(bst$best_iter, -1L)
     expect_equal(length(bst$record_evals[["valid1"]][["binary_error"]][["eval"]]), nrounds)
 
     #---------------------------#
@@ -1290,9 +1290,9 @@ test_that("lgb.train() treats early_stopping_rounds<=0 as disabling early stoppi
     )
 
     # a perfect model should be trivial to obtain, but all 10 rounds
-    # should happen
+    # should happen, and all of them are used (best_score is the score of the last one)
     expect_equal(bst$best_score, 0.0)
-    expect_equal(bst$best_iter, 1L)
+    expect_equal(bst$best_iter, -1L)
     expect_equal(length(bst$record_evals[["valid1"]][["binary_error"]][["eval"]]), nrounds)
   }
 })
@@ -1410,9 +1410,10 @@ test_that("lgb.train() works with early stopping for regression", {
   )
 
   # the best possible model should come from the first iteration, but
-  # all 10 training iterations should happen
-  expect_equal(bst$best_score, 55.0)
-  expect_equal(bst$best_iter, 1L)
+  # all 10 training iterations should happen, and all of them are used
+  # (best_score is the score of the last one)
+  expect_equal(bst$best_score, 82.566078, tolerance = .LGB_NUMERIC_TOLERANCE)
+  expect_equal(bst$best_iter, -1L)
   expect_equal(length(bst$record_evals[["valid1"]][["rmse"]][["eval"]]), nrounds)
 
   #############################
@@ -1435,13 +1436,71 @@ test_that("lgb.train() works with early stopping for regression", {
   )
 
   # the best model should be from the first iteration, and only 6 rounds
-  # should have happen (1 with improvement, 5 consecutive with no improvement)
+  # should have happened (1 with improvement, 5 consecutive with no improvement)
   expect_equal(bst$best_score, 55.0)
   expect_equal(bst$best_iter, 1L)
   expect_equal(
     length(bst$record_evals[["valid1"]][["rmse"]][["eval"]])
     , early_stopping_rounds + 1L
   )
+})
+
+test_that("with init_model, best_iter of lgb.train() counts the iterations of init_model", {
+  set.seed(708L)
+  trainDF <- data.frame(
+    "feat1" = rep(c(10.0, 100.0), 500L)
+    , "target" = rep(c(-50.0, 50.0), 500L)
+  )
+  X_valid <- matrix(50.0, nrow = 4L, ncol = 1L)
+  y_valid <- rep(50.0, 4L)
+  # training continuation sets init_model as the predictor of dtrain, which needs the raw data
+  dtrain <- lgb.Dataset(
+    data = as.matrix(trainDF[["feat1"]], drop = FALSE)
+    , label = trainDF[["target"]]
+    , free_raw_data = FALSE
+    , params = list(num_threads = .LGB_MAX_THREADS)
+  )
+  params <- list(
+    objective = "regression"
+    , metric = "rmse"
+    , verbose = .LGB_VERBOSITY
+    , num_threads = .LGB_MAX_THREADS
+  )
+  init_iterations <- 5L
+  init_bst <- lgb.train(params = params, data = dtrain, nrounds = init_iterations)
+  nrounds <- 10L
+
+  # as in the test above, the validation error increases in every iteration, so the best
+  # iteration is the first one after those of init_model. Each call gets a new validation
+  # Dataset, since lgb.train() keeps the predictor of a Dataset whose reference is unchanged
+  early_stopping_rounds <- 5L
+  bst <- lgb.train(
+    params = params
+    , data = dtrain
+    , nrounds = nrounds
+    , valids = list("valid1" = lgb.Dataset(X_valid, label = y_valid))
+    , init_model = init_bst
+    , early_stopping_rounds = early_stopping_rounds
+  )
+  expect_length(bst$record_evals[["valid1"]][["rmse"]][["eval"]], early_stopping_rounds + 1L)
+  expect_equal(bst$current_iter(), init_iterations + early_stopping_rounds + 1L)
+  expect_equal(bst$best_iter, init_iterations + 1L)
+  expect_equal(bst$best_score, 73.42795, tolerance = .LGB_NUMERIC_TOLERANCE)
+  expect_equal(predict(bst, X_valid), predict(bst, X_valid, num_iteration = init_iterations + 1L))
+
+  # without early stopping, all iterations are used
+  bst <- lgb.train(
+    params = params
+    , data = dtrain
+    , nrounds = nrounds
+    , valids = list("valid1" = lgb.Dataset(X_valid, label = y_valid))
+    , init_model = init_bst
+  )
+  expect_length(bst$record_evals[["valid1"]][["rmse"]][["eval"]], nrounds)
+  expect_equal(bst$current_iter(), init_iterations + nrounds)
+  expect_equal(bst$best_iter, -1L)
+  expect_equal(bst$best_score, 89.705444, tolerance = .LGB_NUMERIC_TOLERANCE)
+  expect_equal(predict(bst, X_valid), predict(bst, X_valid, num_iteration = init_iterations + nrounds))
 })
 
 test_that("lgb.train() does not stop early if early_stopping_rounds is not given", {
@@ -1472,15 +1531,14 @@ test_that("lgb.train() does not stop early if early_stopping_rounds is not given
   # Only the two functions provided to "eval" should have been evaluated
   expect_equal(length(bst$record_evals[["valid1"]]), 2L)
 
-  # all 10 iterations should have happen, and the best_iter should be
-  # the first one (based on constant_metric)
-  best_iter <- 1L
-  expect_equal(bst$best_iter, best_iter)
+  # all 10 iterations should have happened, and without early stopping,
+  # all of them are used
+  expect_equal(bst$best_iter, -1L)
 
-  # best_score should be taken from the first metric
+  # best_score should be the score of the last iteration for the first metric
   expect_equal(
     bst$best_score
-    , bst$record_evals[["valid1"]][["constant_metric"]][["eval"]][[best_iter]]
+    , bst$record_evals[["valid1"]][["constant_metric"]][["eval"]][[nrounds]]
   )
 
   # early stopping should not have happened. Even though constant_metric
@@ -1972,7 +2030,7 @@ test_that("lgb.train() updates params based on keyword arguments", {
   expect_false("num_boost_round" %in% bst$params)
 })
 
-test_that("when early stopping is not activated, best_iter and best_score come from valids and not training data", {
+test_that("without early stopping, lgb.train() uses all iterations and takes best_score from valids, not train", {
   set.seed(708L)
   trainDF <- data.frame(
     "feat1" = rep(c(10.0, 100.0), 500L)
@@ -2025,8 +2083,10 @@ test_that("when early stopping is not activated, best_iter and best_score come f
   )
   rmse_scores <- unlist(bst$record_evals[["valid1"]][["rmse"]][["eval"]])
   expect_length(rmse_scores, nrounds)
-  expect_identical(bst$best_iter, which.min(rmse_scores))
-  expect_identical(bst$best_score, rmse_scores[which.min(rmse_scores)])
+  expect_identical(bst$best_iter, -1L)
+  expect_identical(bst$best_score, rmse_scores[[nrounds]])
+  X_valid <- as.matrix(validDF[["feat1"]], drop = FALSE)
+  expect_equal(predict(bst, X_valid), predict(bst, X_valid, num_iteration = nrounds))
 
   # example 2: train first (called "train") and two valids
   bst <- lgb.train(
@@ -2047,8 +2107,8 @@ test_that("when early stopping is not activated, best_iter and best_score come f
   )
   rmse_scores <- unlist(bst$record_evals[["valid1"]][["rmse"]][["eval"]])
   expect_length(rmse_scores, nrounds)
-  expect_identical(bst$best_iter, which.min(rmse_scores))
-  expect_identical(bst$best_score, rmse_scores[which.min(rmse_scores)])
+  expect_identical(bst$best_iter, -1L)
+  expect_identical(bst$best_score, rmse_scores[[nrounds]])
 
   # example 3: train second (called "train") and two valids
   bst <- lgb.train(
@@ -2070,8 +2130,8 @@ test_that("when early stopping is not activated, best_iter and best_score come f
   )
   rmse_scores <- unlist(bst$record_evals[["valid1"]][["rmse"]][["eval"]])
   expect_length(rmse_scores, nrounds)
-  expect_identical(bst$best_iter, which.min(rmse_scores))
-  expect_identical(bst$best_score, rmse_scores[which.min(rmse_scores)])
+  expect_identical(bst$best_iter, -1L)
+  expect_identical(bst$best_score, rmse_scores[[nrounds]])
 
   # example 4: train third (called "train") and two valids
   bst <- lgb.train(
@@ -2093,8 +2153,8 @@ test_that("when early stopping is not activated, best_iter and best_score come f
   )
   rmse_scores <- unlist(bst$record_evals[["valid1"]][["rmse"]][["eval"]])
   expect_length(rmse_scores, nrounds)
-  expect_identical(bst$best_iter, which.min(rmse_scores))
-  expect_identical(bst$best_score, rmse_scores[which.min(rmse_scores)])
+  expect_identical(bst$best_iter, -1L)
+  expect_identical(bst$best_score, rmse_scores[[nrounds]])
 
   # example 5: train second (called "something-random-we-would-not-hardcode") and two valids
   bst <- lgb.train(
@@ -2117,8 +2177,8 @@ test_that("when early stopping is not activated, best_iter and best_score come f
   )
   rmse_scores <- unlist(bst$record_evals[["valid1"]][["rmse"]][["eval"]])
   expect_length(rmse_scores, nrounds)
-  expect_identical(bst$best_iter, which.min(rmse_scores))
-  expect_identical(bst$best_score, rmse_scores[which.min(rmse_scores)])
+  expect_identical(bst$best_iter, -1L)
+  expect_identical(bst$best_score, rmse_scores[[nrounds]])
 
   # example 6: the only valid supplied is the training data
   bst <- lgb.train(
@@ -2133,7 +2193,7 @@ test_that("when early stopping is not activated, best_iter and best_score come f
   expect_identical(bst$best_score, NA_real_)
 })
 
-test_that("lightgbm.train() gives the correct best_score and best_iter for a metric where higher values are better", {
+test_that("without early stopping, lgb.train() gives the last best_score for a metric where higher is better", {
   set.seed(708L)
   trainDF <- data.frame(
     "feat1" = runif(n = 500L, min = 0.0, max = 15.0)
@@ -2180,11 +2240,11 @@ test_that("lightgbm.train() gives the correct best_score and best_iter for a met
   )
   auc_scores <- unlist(bst$record_evals[["valid1"]][["auc"]][["eval"]])
   expect_length(auc_scores, nrounds)
-  expect_identical(bst$best_iter, which.max(auc_scores))
-  expect_identical(bst$best_score, auc_scores[which.max(auc_scores)])
+  expect_identical(bst$best_iter, -1L)
+  expect_identical(bst$best_score, auc_scores[[nrounds]])
 })
 
-test_that("using lightgbm() without early stopping, best_iter and best_score come from valids and not training data", {
+test_that("using lightgbm() without early stopping, all iterations are used and best_score comes from valids", {
   set.seed(708L)
   # example: train second (called "something-random-we-would-not-hardcode"), two valids,
   #          and a metric where higher values are better ("auc")
@@ -2239,8 +2299,8 @@ test_that("using lightgbm() without early stopping, best_iter and best_score com
   )
   auc_scores <- unlist(bst$record_evals[["valid1"]][["auc"]][["eval"]])
   expect_length(auc_scores, nrounds)
-  expect_identical(bst$best_iter, which.max(auc_scores))
-  expect_identical(bst$best_score, auc_scores[which.max(auc_scores)])
+  expect_identical(bst$best_iter, -1L)
+  expect_identical(bst$best_score, auc_scores[[nrounds]])
 })
 
 test_that("lgb.cv() works when you specify both 'metric' and 'eval' with strings", {
@@ -2416,6 +2476,109 @@ test_that("early stopping works with lgb.cv()", {
     preds_iter <- predict(x$booster, random_data, num_iteration = bst$best_iter)
     preds_no_iter <- predict(x$booster, random_data)
     expect_equal(preds_iter, preds_no_iter)
+  }
+})
+
+test_that("without early stopping, the boosters of lgb.cv() use all iterations", {
+  set.seed(708L)
+  nrounds <- 10L
+  nfolds <- 5L
+  bst <- lgb.cv(
+    params = list(
+      objective = "regression"
+      , metric = "None"
+      , verbose = .LGB_VERBOSITY
+      , num_threads = .LGB_MAX_THREADS
+    )
+    , data = DTRAIN_RANDOM_REGRESSION
+    , nfold = nfolds
+    , nrounds = nrounds
+    , eval = list(.constant_metric)
+  )
+
+  # all iterations should have happened, and best_iter should still be the best
+  # iteration of the cross-validation. Since constant_metric never changes, its
+  # first iteration was the best one
+  expect_equal(length(bst$record_evals[["valid"]][["constant_metric"]][["eval"]]), nrounds)
+  expect_equal(bst$best_iter, 1L)
+  expect_equal(bst$best_score, 0.2)
+
+  # every booster's predict method should use all iterations
+  random_data <- as.matrix(rnorm(10L), ncol = 1L, drop = FALSE)
+  for (x in bst$boosters) {
+    expect_equal(x$booster$best_iter, -1L)
+    expect_equal(x$booster$current_iter(), nrounds)
+    preds_all_iter <- predict(x$booster, random_data, num_iteration = nrounds)
+    preds_no_iter <- predict(x$booster, random_data)
+    expect_equal(preds_all_iter, preds_no_iter)
+  }
+})
+
+test_that("early stopping by a callback in 'callbacks' is used by lgb.train() and lgb.cv()", {
+  set.seed(708L)
+  nrounds <- 10L
+  nfolds <- 5L
+  early_stopping_rounds <- 3L
+  params <- list(
+    objective = "regression"
+    , metric = "None"
+    , verbose = .LGB_VERBOSITY
+    , num_threads = .LGB_MAX_THREADS
+  )
+  # a metric that gets worse in every evaluation, so that the first iteration is the best one
+  # and the score of the last iteration differs from the best score
+  metric_state <- new.env()
+  metric_state[["value"]] <- 0.0
+  .worsening_metric <- function(preds, dtrain) {
+    metric_state[["value"]] <- metric_state[["value"]] + 1.0
+    return(list(
+      name = "worsening_metric"
+      , value = metric_state[["value"]]
+      , higher_better = FALSE
+    ))
+  }
+  random_data <- as.matrix(rnorm(10L), ncol = 1L, drop = FALSE)
+
+  bst <- lgb.train(
+    params = params
+    , data = DTRAIN_RANDOM_REGRESSION
+    , nrounds = nrounds
+    , valids = list("valid1" = DVALID_RANDOM_REGRESSION)
+    , eval = .worsening_metric
+    , callbacks = list(
+      lightgbm:::cb_early_stop(
+        stopping_rounds = early_stopping_rounds
+        , first_metric_only = FALSE
+        , verbose = FALSE
+      )
+    )
+  )
+  scores <- unlist(bst$record_evals[["valid1"]][["worsening_metric"]][["eval"]])
+  expect_length(scores, early_stopping_rounds + 1L)
+  expect_identical(bst$best_iter, 1L)
+  expect_identical(bst$best_score, scores[[1L]])
+  expect_equal(predict(bst, random_data), predict(bst, random_data, num_iteration = 1L))
+
+  cv_bst <- lgb.cv(
+    params = params
+    , data = DTRAIN_RANDOM_REGRESSION
+    , nfold = nfolds
+    , nrounds = nrounds
+    , eval = .worsening_metric
+    , callbacks = list(
+      lightgbm:::cb_early_stop(
+        stopping_rounds = early_stopping_rounds
+        , first_metric_only = FALSE
+        , verbose = FALSE
+      )
+    )
+  )
+  expect_length(cv_bst$record_evals[["valid"]][["worsening_metric"]][["eval"]], early_stopping_rounds + 1L)
+  expect_identical(cv_bst$best_iter, 1L)
+  for (x in cv_bst$boosters) {
+    expect_equal(x$booster$best_iter, cv_bst$best_iter)
+    expect_gt(x$booster$current_iter(), cv_bst$best_iter)
+    expect_equal(predict(x$booster, random_data), predict(x$booster, random_data, num_iteration = 1L))
   }
 })
 
