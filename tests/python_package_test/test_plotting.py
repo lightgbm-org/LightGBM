@@ -272,6 +272,12 @@ def test_create_tree_digraph(tmp_path, breast_cancer_split):
     with pytest.raises(IndexError, match="tree_index is out of range."):
         lgb.create_tree_digraph(gbm, tree_index=83)
 
+    for example_case in (X_train[0], X_train[:1].tolist()):
+        with pytest.raises(
+            ValueError, match="example_case must be a numpy 2-D array or a Narwhals-supported DataFrame"
+        ):
+            lgb.create_tree_digraph(gbm, example_case=example_case)
+
     graph = lgb.create_tree_digraph(
         gbm,
         tree_index=3,
@@ -507,16 +513,44 @@ def test_example_case_in_tree_digraph():
     assert makes_categorical_splits
 
 
-@pytest.mark.parametrize("input_type", ["array", "dataframe"])
-def test_empty_example_case_on_tree_digraph_raises_error(input_type):
+@pytest.mark.parametrize("input_type", ["pd_DataFrame", "pl_DataFrame", "pa_Table"])
+def test_dataframe_example_case_in_tree_digraph(input_type):
     pytest.importorskip("graphviz")
     X, y = make_synthetic_regression()
-    if input_type == "dataframe":
-        pd = pytest.importorskip("pandas")
-        X = pd.DataFrame(X)
-        example_case = pd.DataFrame(X[:0])
+    X = pd.DataFrame(X, columns=[f"x{i}" for i in range(X.shape[1])])
+    X["cat"] = pd.Categorical(np.where(y > np.median(y), "high", "low"))
+    bst = lgb.train({"num_leaves": 3, "verbose": -1}, lgb.Dataset(X, y), num_boost_round=1)
+    dataframe = X.iloc[[0]]
+    example_case = dataframe.assign(cat=dataframe["cat"].cat.codes).to_numpy(dtype=np.float64)
+
+    if input_type == "pl_DataFrame":
+        pl = pytest.importorskip("polars")
+        dataframe = pl.from_pandas(dataframe)
+    elif input_type == "pa_Table":
+        pa = pytest.importorskip("pyarrow")
+        dataframe = pa.Table.from_pandas(dataframe, preserve_index=False)
+
+    expected = lgb.create_tree_digraph(bst, example_case=example_case)
+    actual = lgb.create_tree_digraph(bst, example_case=dataframe)
+    assert actual.body == expected.body
+    assert "cat" in "".join(actual.body)
+
+
+@pytest.mark.parametrize("input_type", ["numpy", "pd_DataFrame", "pl_DataFrame", "pa_Table"])
+@pytest.mark.parametrize("n_rows", [0, 2])
+def test_example_case_with_wrong_number_of_rows_raises_error(input_type, n_rows):
+    pytest.importorskip("graphviz")
+    X, y = make_synthetic_regression()
+    if input_type == "numpy":
+        example_case = X[:n_rows]
+    elif input_type == "pd_DataFrame":
+        example_case = pd.DataFrame(X[:n_rows])
+    elif input_type == "pl_DataFrame":
+        pl = pytest.importorskip("polars")
+        example_case = pl.DataFrame({str(i): X[:n_rows, i] for i in range(X.shape[1])})
     else:
-        example_case = X[:0]
+        pa = pytest.importorskip("pyarrow")
+        example_case = pa.table({str(i): X[:n_rows, i] for i in range(X.shape[1])})
     ds = lgb.Dataset(X, y)
     bst = lgb.train({"num_leaves": 3}, ds, num_boost_round=1)
     with pytest.raises(ValueError, match="example_case must have a single row."):
