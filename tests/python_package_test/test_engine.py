@@ -534,7 +534,8 @@ def test_multi_target_regression_custom_objective():
     params = {"num_target": 2, "boost_from_average": False, "verbose": -1, "deterministic": True, "num_threads": 1}
     builtin = lgb.train(params, lgb.Dataset(X, Y), num_boost_round=10)
     custom = lgb.train({**params, "objective": l2_objective}, lgb.Dataset(X, Y), num_boost_round=10)
-    np.testing.assert_allclose(custom.predict(X), builtin.predict(X))
+    # allow float32-level differences, e.g. with the GPU version
+    np.testing.assert_allclose(custom.predict(X), builtin.predict(X), rtol=1e-5)
 
 
 def test_multi_target_regression_cv():
