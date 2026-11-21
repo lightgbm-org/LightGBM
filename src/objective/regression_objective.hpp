@@ -53,13 +53,15 @@ namespace LightGBM {
     if (cnt_data <= 1) {                                                      \
       return data_reader(0);                                                  \
     }                                                                         \
+    std::vector<T> values(cnt_data);                                          \
     std::vector<data_size_t> sorted_idx(cnt_data);                            \
     for (data_size_t i = 0; i < cnt_data; ++i) {                              \
+      values[i] = data_reader(i);                                             \
       sorted_idx[i] = i;                                                      \
     }                                                                         \
     std::stable_sort(sorted_idx.begin(), sorted_idx.end(),                    \
                      [&](data_size_t a, data_size_t b) {                      \
-                       return data_reader(a) < data_reader(b);                \
+                       return values[a] < values[b];                          \
                      });                                                      \
     std::vector<double> weighted_cdf(cnt_data);                               \
     weighted_cdf[0] = weight_reader(sorted_idx[0]);                           \
@@ -72,12 +74,12 @@ namespace LightGBM {
                  weighted_cdf.begin();                                        \
     pos = std::min(pos, static_cast<size_t>(cnt_data - 1));                   \
     if (pos == 0 || pos == static_cast<size_t>(cnt_data - 1)) {               \
-      return data_reader(sorted_idx[pos]);                                    \
+      return values[sorted_idx[pos]];                                         \
     }                                                                         \
     CHECK_GE(threshold, weighted_cdf[pos - 1]);                               \
     CHECK_LT(threshold, weighted_cdf[pos]);                                   \
-    T v1 = data_reader(sorted_idx[pos - 1]);                                  \
-    T v2 = data_reader(sorted_idx[pos]);                                      \
+    T v1 = values[sorted_idx[pos - 1]];                                       \
+    T v2 = values[sorted_idx[pos]];                                           \
     if (weighted_cdf[pos] - weighted_cdf[pos - 1] >= 1.0) {                   \
       return static_cast<T>((threshold - weighted_cdf[pos - 1]) /             \
                                 (weighted_cdf[pos] - weighted_cdf[pos - 1]) * \
