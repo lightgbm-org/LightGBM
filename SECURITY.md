@@ -28,3 +28,23 @@ This project is staffed exclusively by volunteers.
 Please be patient and allow us time to respond before disclosing vulnerabilities.
 
 We prefer to coordinate disclosure privately, and are committed to giving credit for confirmed vulnerabilities.
+
+## Security Model
+
+### Data Formats
+
+Binary `Dataset` files (`.bin`) are considered trusted inputs.
+I/O issues related to the handling of these files should be treated as normal bugs and reported publicly.
+Do not accept untrusted LightGBM `.bin` files.
+
+The Python package supports the `pickle` serialization format, and data in that format are considered trusted inputs.
+The security risks related to `pickle` are well known and well-documented, including in the Python standard library's documentation (https://docs.python.org/3/library/pickle.html).
+
+LightGBM-custom model text files (`.json` and `.txt`) are generally considered untrusted inputs.
+Reading/writing these files and using the resulting in-memory model objects is expected to be safe.
+
+### Network
+
+LightGBM supports distributed training, in which multiple processes communicate over a network to coordinate model training.
+All participants in such networks (indicated by parameters like `machine_list` or `machines`) are trusted.
+Do not include untrusted machines in distributed training networks.
