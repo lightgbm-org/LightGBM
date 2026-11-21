@@ -135,7 +135,7 @@ struct Config {
   // options = regression, regression_l1, huber, fair, poisson, quantile, mape, gamma, tweedie, binary, multiclass, multiclassova, cross_entropy, cross_entropy_lambda, lambdarank, rank_xendcg
   // alias = objective_type, app, application, loss
   // desc = regression application
-  // descl2 = ``regression``, L2 loss, aliases: ``regression_l2``, ``l2``, ``mean_squared_error``, ``mse``, ``l2_root``, ``root_mean_squared_error``, ``rmse``
+  // descl2 = ``regression``, L2 loss, aliases: ``regression_l2``, ``l2``, ``mean_squared_error``, ``mse``, ``l2_root``, ``root_mean_squared_error``, ``rmse``. Supports multi-target regression, see ``num_target``
   // descl2 = ``regression_l1``, L1 loss, aliases: ``l1``, ``mean_absolute_error``, ``mae``
   // descl2 = ``huber``, `Huber loss <https://en.wikipedia.org/wiki/Huber_loss>`__
   // descl2 = ``fair``, `Fair loss <https://www.kaggle.com/c/allstate-claims-severity/discussion/24520>`__
@@ -926,6 +926,14 @@ struct Config {
   // alias = num_classes
   // desc = used only in ``multi-class`` classification application
   int num_class = 1;
+
+  // check = >0
+  // alias = num_targets
+  // desc = number of targets, used only in ``regression`` application
+  // desc = when ``num_target > 1``, label must have ``num_data * num_target`` values, stored column-major (all rows of target 0, then all rows of target 1, ...), and ``num_target`` trees are trained per iteration, one per target
+  // desc = when ``num_target > 1``, only ``l2`` and ``rmse`` metrics are supported, computed over all samples and targets
+  // desc = **Note**: ``num_target > 1`` is not supported by the CUDA version or by saving Dataset to binary file
+  int num_target = 1;
 
   // alias = unbalance, unbalanced_sets
   // desc = used only in ``binary`` and ``multiclassova`` applications

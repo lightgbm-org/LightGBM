@@ -348,6 +348,24 @@ def test_save_binary_raises_on_truncated_write(tmp_path, rng):
         signal.signal(signal.SIGXFSZ, original_signal_handler)
 
 
+@pytest.mark.parametrize("label_type", ["numpy", "list", "pandas"])
+def test_multi_target_label_set_get_and_subset(label_type, tmp_path):
+    to_label = {
+        "numpy": np.asarray,
+        "list": lambda y: y.tolist(),
+        "pandas": lambda y: pytest.importorskip("pandas").DataFrame(y),
+    }[label_type]
+    rng = np.random.default_rng(0)
+    X = rng.uniform(size=(50, 3))
+    Y = rng.uniform(size=(50, 2))
+    ds = lgb.Dataset(X, to_label(Y), params={"verbose": -1}).construct()
+    np.testing.assert_allclose(ds.get_field("label"), Y.astype(np.float32))
+    used_indices = [3, 10, 11, 40]
+    np.testing.assert_allclose(ds.subset(used_indices).construct().get_label(), Y[used_indices].astype(np.float32))
+    with pytest.raises(lgb.basic.LightGBMError, match="multi-target labels to a binary file is not supported"):
+        ds.save_binary(tmp_path / "multi_target.bin")
+
+
 def test_subset_group():
     sklearn = pytest.importorskip("sklearn")
     rank_example_dir = Path(__file__).absolute().parents[2] / "examples" / "lambdarank"

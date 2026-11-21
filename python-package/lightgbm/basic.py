@@ -2968,7 +2968,7 @@ class Dataset:
             )
         else:
             raise TypeError("Unknown type")
-        if field_name == "init_score":
+        if field_name in {"init_score", "label"}:
             num_data = self.num_data()
             num_classes = arr.size // num_data
             if num_classes > 1:
@@ -3118,6 +3118,11 @@ class Dataset:
         ----------
         label : list, numpy 1-D array, pandas Series / one-column DataFrame, pyarrow ChunkedArray, polars Series or None
             The label information to be set into Dataset.
+            For multi-target regression (``num_target`` > 1), this can also be
+            a numpy 2-D array, list of lists or pandas DataFrame of shape = [n_samples, n_targets].
+
+            .. versionadded:: 4.8.0
+                Support for multi-target labels
 
             .. versionadded:: 4.2.0
                 Support for ``pyarrow`` inputs
@@ -3132,9 +3137,13 @@ class Dataset:
         """  # noqa: DOC105
         self.label = label
         if self._handle is not None:
-            if isinstance(label, pd_DataFrame):
-                if len(label.columns) > 1:
-                    raise ValueError("DataFrame for label cannot have multiple columns")
+            label_2d = (
+                _data_to_2d_numpy(data=label, dtype=np.float32, name="label") if _is_2d_collection(label) else None
+            )
+            if label_2d is not None and label_2d.shape[1] > 1:
+                # multi-target regression: column-major, like multi-class init_score
+                label_array = label_2d.ravel(order="F")
+            elif isinstance(label, pd_DataFrame):
                 label_array = np.ravel(_pandas_to_numpy(label, target_dtype=np.float32))
             elif (nwd.is_into_dataframe(label) or nwd.is_into_series(label)) and not isinstance(label, pd_Series):
                 label_array = label

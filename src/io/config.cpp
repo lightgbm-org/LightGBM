@@ -343,6 +343,22 @@ void Config::CheckParamConflict(const std::unordered_map<std::string, std::strin
       Log::Fatal("Multiclass objective and metrics don't match");
     }
   }
+  if (num_target > 1) {
+    if (num_class > 1) {
+      Log::Fatal("num_class and num_target cannot both be greater than 1");
+    }
+    if (objective != std::string("regression") && objective != std::string("custom")) {
+      Log::Fatal("Objective %s does not support num_target > 1, use regression for multi-target regression", objective.c_str());
+    }
+    if (reg_sqrt) {
+      Log::Fatal("reg_sqrt is not supported with num_target > 1");
+    }
+    for (const std::string& metric_type : metric) {
+      if (metric_type != std::string("l2") && metric_type != std::string("rmse") && metric_type != std::string("custom")) {
+        Log::Fatal("Metric %s does not support num_target > 1, use l2 or rmse for multi-target regression", metric_type.c_str());
+      }
+    }
+  }
 
   if (num_machines > 1) {
     is_parallel = true;

@@ -108,10 +108,15 @@ void Metadata::Init(data_size_t num_data, int32_t has_weights, int32_t has_init_
 void Metadata::Init(const Metadata& fullset, const data_size_t* used_indices, data_size_t num_used_indices) {
   num_data_ = num_used_indices;
 
-  label_.resize(num_used_indices);
+  const int num_label_columns = fullset.num_label_columns();
+  label_.resize(static_cast<size_t>(num_used_indices) * num_label_columns);
+  for (int k = 0; k < num_label_columns; ++k) {
+    const size_t offset_dest = static_cast<size_t>(k) * num_used_indices;
+    const size_t offset_src = static_cast<size_t>(k) * fullset.num_data_;
 #pragma omp parallel for num_threads(OMP_NUM_THREADS()) schedule(static, 512) if (num_used_indices >= 1024)
-  for (data_size_t i = 0; i < num_used_indices; ++i) {
-    label_[i] = fullset.label_[used_indices[i]];
+    for (data_size_t i = 0; i < num_used_indices; ++i) {
+      label_[offset_dest + i] = fullset.label_[offset_src + used_indices[i]];
+    }
   }
 
   if (!fullset.weights_.empty()) {
@@ -179,11 +184,17 @@ void Metadata::PartitionLabel(const std::vector<data_size_t>& used_indices) {
     return;
   }
   auto old_label = label_;
+  const int num_label_columns = this->num_label_columns();
+  const data_size_t old_num_data = num_data_;
   num_data_ = static_cast<data_size_t>(used_indices.size());
-  label_ = std::vector<label_t>(num_data_);
+  label_ = std::vector<label_t>(static_cast<size_t>(num_data_) * num_label_columns);
+  for (int k = 0; k < num_label_columns; ++k) {
+    const size_t offset_dest = static_cast<size_t>(k) * num_data_;
+    const size_t offset_src = static_cast<size_t>(k) * old_num_data;
 #pragma omp parallel for num_threads(OMP_NUM_THREADS()) schedule(static, 512) if (num_data_ >= 1024)
-  for (data_size_t i = 0; i < num_data_; ++i) {
-    label_[i] = old_label[used_indices[i]];
+    for (data_size_t i = 0; i < num_data_; ++i) {
+      label_[offset_dest + i] = old_label[offset_src + used_indices[i]];
+    }
   }
   old_label.clear();
 }
@@ -458,15 +469,15 @@ void Metadata::InsertInitScores(const double* init_scores, data_size_t start_ind
 template <typename It>
 void Metadata::SetLabelsFromIterator(It first, It last) {
   std::lock_guard<std::mutex> lock(mutex_);
-  if (num_data_ != last - first) {
+  const int64_t len = last - first;
+  // multi-target regression: len == num_data * num_label_columns, stored column-major
+  if (num_data_ <= 0 || len <= 0 || len % num_data_ != 0) {
     Log::Fatal("Length of labels differs from the length of #data");
   }
-  if (label_.empty()) {
-    label_.resize(num_data_);
-  }
+  label_.resize(static_cast<size_t>(len));
 
-  #pragma omp parallel for num_threads(OMP_NUM_THREADS()) schedule(static, 512) if (num_data_ >= 1024)
-  for (data_size_t i = 0; i < num_data_; ++i) {
+  #pragma omp parallel for num_threads(OMP_NUM_THREADS()) schedule(static, 512) if (len >= 1024)
+  for (int64_t i = 0; i < len; ++i) {
     label_[i] = Common::AvoidInf(first[i]);
   }
 
@@ -892,6 +903,9 @@ void Metadata::FinishLoad() {
 
 #ifdef USE_CUDA
 void Metadata::CreateCUDAMetadata(const int gpu_device_id) {
+  if (num_label_columns() > 1) {
+    Log::Fatal("Multi-target labels are not supported by the CUDA version");
+  }
   cuda_metadata_.reset(new CUDAMetadata(gpu_device_id));
   cuda_metadata_->Init(label_, weights_, query_boundaries_, query_weights_, init_score_);
 }
@@ -937,6 +951,9 @@ void Metadata::LoadFromMemory(const void* memory) {
 }
 
 void Metadata::SaveBinaryToFile(BinaryWriter* writer) const {
+  if (num_label_columns() > 1) {
+    Log::Fatal("Saving a Dataset with multi-target labels to a binary file is not supported");
+  }
   writer->AlignedWrite(&num_data_, sizeof(num_data_));
   writer->AlignedWrite(&num_weights_, sizeof(num_weights_));
   writer->AlignedWrite(&num_queries_, sizeof(num_queries_));
