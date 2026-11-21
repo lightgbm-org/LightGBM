@@ -132,10 +132,10 @@ struct Config {
   // [no-automatically-extract]
   // [no-save]
   // type = enum
-  // options = regression, regression_l1, huber, fair, poisson, quantile, mape, gamma, tweedie, binary, multiclass, multiclassova, multi_regression, cross_entropy, cross_entropy_lambda, lambdarank, rank_xendcg
+  // options = regression, regression_l1, huber, fair, poisson, quantile, mape, gamma, tweedie, binary, multiclass, multiclassova, cross_entropy, cross_entropy_lambda, lambdarank, rank_xendcg
   // alias = objective_type, app, application, loss
   // desc = regression application
-  // descl2 = ``regression``, L2 loss, aliases: ``regression_l2``, ``l2``, ``mean_squared_error``, ``mse``, ``l2_root``, ``root_mean_squared_error``, ``rmse``
+  // descl2 = ``regression``, L2 loss, aliases: ``regression_l2``, ``l2``, ``mean_squared_error``, ``mse``, ``l2_root``, ``root_mean_squared_error``, ``rmse``. Supports multi-target regression, see ``num_target``
   // descl2 = ``regression_l1``, L1 loss, aliases: ``l1``, ``mean_absolute_error``, ``mae``
   // descl2 = ``huber``, `Huber loss <https://en.wikipedia.org/wiki/Huber_loss>`__
   // descl2 = ``fair``, `Fair loss <https://www.kaggle.com/c/allstate-claims-severity/discussion/24520>`__
@@ -151,11 +151,6 @@ struct Config {
   // descl2 = ``multiclass``, `softmax <https://en.wikipedia.org/wiki/Softmax_function>`__ objective function, aliases: ``softmax``
   // descl2 = ``multiclassova``, `One-vs-All <https://en.wikipedia.org/wiki/Multiclass_classification#One-vs.-rest>`__ binary objective function, aliases: ``multiclass_ova``, ``ova``, ``ovr``
   // descl2 = ``num_class`` should be set as well
-  // desc = multi-target regression application
-  // descl2 = ``multi_regression``, L2 loss on each of ``num_class`` targets, one tree per target per iteration, aliases: ``multi_regression_l2``, ``multi_l2``, ``multi_mse``
-  // descl2 = label must have ``num_data * num_class`` values, stored column-major (all rows of target 0, then all rows of target 1, ...)
-  // descl2 = ``num_class`` should be set to the number of targets
-  // descl2 = **Note**: not supported by the CUDA version, by saving Dataset to binary file, or by loading labels from text files
   // desc = cross-entropy application
   // descl2 = ``cross_entropy``, objective function for cross-entropy (with optional linear weights), aliases: ``xentropy``
   // descl2 = ``cross_entropy_lambda``, alternative parameterization of cross-entropy, aliases: ``xentlambda``
@@ -929,8 +924,16 @@ struct Config {
 
   // check = >0
   // alias = num_classes
-  // desc = used only in ``multi-class`` classification and ``multi_regression`` (number of targets) applications
+  // desc = used only in ``multi-class`` classification application
   int num_class = 1;
+
+  // check = >0
+  // alias = num_targets
+  // desc = number of targets, used only in ``regression`` application
+  // desc = when ``num_target > 1``, label must have ``num_data * num_target`` values, stored column-major (all rows of target 0, then all rows of target 1, ...), and ``num_target`` trees are trained per iteration, one per target
+  // desc = when ``num_target > 1``, only ``l2`` and ``rmse`` metrics are supported, computed over all samples and targets
+  // desc = **Note**: ``num_target > 1`` is not supported by the CUDA version or by saving Dataset to binary file
+  int num_target = 1;
 
   // alias = unbalance, unbalanced_sets
   // desc = used only in ``binary`` and ``multiclassova`` applications
@@ -1042,8 +1045,6 @@ struct Config {
   // descl2 = ``auc_mu``, `AUC-mu <https://proceedings.mlr.press/v97/kleiman19a.html>`__
   // descl2 = ``multi_logloss``, log loss for multi-class classification, aliases: ``multiclass``, ``softmax``, ``multiclassova``, ``multiclass_ova``, ``ova``, ``ovr``
   // descl2 = ``multi_error``, error rate for multi-class classification
-  // descl2 = ``multi_l2``, square loss averaged over all targets of multi-target regression, aliases: ``multi_regression``, ``multi_regression_l2``, ``multi_mse``
-  // descl2 = ``multi_rmse``, root square loss averaged over all targets of multi-target regression
   // descl2 = ``cross_entropy``, cross-entropy (with optional linear weights), aliases: ``xentropy``
   // descl2 = ``cross_entropy_lambda``, "intensity-weighted" cross-entropy, aliases: ``xentlambda``
   // descl2 = ``kullback_leibler``, `Kullback-Leibler divergence <https://en.wikipedia.org/wiki/Kullback%E2%80%93Leibler_divergence>`__, aliases: ``kldiv``
@@ -1293,9 +1294,6 @@ inline std::string ParseObjectiveAlias(const std::string& type) {
     return "multiclass";
   } else if (type == std::string("multiclassova") || type == std::string("multiclass_ova") || type == std::string("ova") || type == std::string("ovr")) {
     return "multiclassova";
-  } else if (type == std::string("multi_regression") || type == std::string("multi_regression_l2")
-             || type == std::string("multi_l2") || type == std::string("multi_mse")) {
-    return "multi_regression";
   } else if (type == std::string("xentropy") || type == std::string("cross_entropy")) {
     return "cross_entropy";
   } else if (type == std::string("xentlambda") || type == std::string("cross_entropy_lambda")) {
@@ -1327,9 +1325,6 @@ inline std::string ParseMetricAlias(const std::string& type) {
     return "map";
   } else if (type == std::string("multi_logloss") || type == std::string("multiclass") || type == std::string("softmax") || type == std::string("multiclassova") || type == std::string("multiclass_ova") || type == std::string("ova") || type == std::string("ovr")) {
     return "multi_logloss";
-  } else if (type == std::string("multi_l2") || type == std::string("multi_regression")
-             || type == std::string("multi_regression_l2") || type == std::string("multi_mse")) {
-    return "multi_l2";
   } else if (type == std::string("xentropy") || type == std::string("cross_entropy")) {
     return "cross_entropy";
   } else if (type == std::string("xentlambda") || type == std::string("cross_entropy_lambda")) {

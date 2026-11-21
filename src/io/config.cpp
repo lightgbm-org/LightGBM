@@ -321,15 +321,10 @@ bool CheckMultiClassObjective(const std::string& objective) {
 void Config::CheckParamConflict(const std::unordered_map<std::string, std::string>& params) {
   // check if objective, metric, and num_class match
   int num_class_check = num_class;
-  const bool objective_multi_regression = (objective == std::string("multi_regression"));
-  bool objective_type_multiclass = CheckMultiClassObjective(objective) || objective_multi_regression
-                                   || (objective == std::string("custom") && num_class_check > 1);
+  bool objective_type_multiclass = CheckMultiClassObjective(objective) || (objective == std::string("custom") && num_class_check > 1);
 
   if (objective_type_multiclass) {
     if (num_class_check <= 1) {
-      if (objective_multi_regression) {
-        Log::Fatal("num_class should be set to the number of targets (greater than 1) for multi_regression training");
-      }
       Log::Fatal("Number of classes should be specified and greater than 1 for multiclass training");
     }
   } else {
@@ -338,21 +333,30 @@ void Config::CheckParamConflict(const std::unordered_map<std::string, std::strin
     }
   }
   for (std::string metric_type : metric) {
-    const bool metric_multi_regression = (metric_type == std::string("multi_l2")
-                                          || metric_type == std::string("multi_rmse"));
     bool metric_type_multiclass = (CheckMultiClassObjective(metric_type)
                                    || metric_type == std::string("multi_logloss")
                                    || metric_type == std::string("multi_error")
                                    || metric_type == std::string("auc_mu")
-                                   || metric_multi_regression
                                    || (metric_type == std::string("custom") && num_class_check > 1));
     if ((objective_type_multiclass && !metric_type_multiclass)
         || (!objective_type_multiclass && metric_type_multiclass)) {
       Log::Fatal("Multiclass objective and metrics don't match");
     }
-    if ((objective_multi_regression && metric_type_multiclass && !metric_multi_regression && metric_type != std::string("custom"))
-        || (metric_multi_regression && CheckMultiClassObjective(objective))) {
-      Log::Fatal("Multi-target regression objective and metrics don't match");
+  }
+  if (num_target > 1) {
+    if (num_class > 1) {
+      Log::Fatal("num_class and num_target cannot both be greater than 1");
+    }
+    if (objective != std::string("regression") && objective != std::string("custom")) {
+      Log::Fatal("Objective %s does not support num_target > 1, use regression for multi-target regression", objective.c_str());
+    }
+    if (reg_sqrt) {
+      Log::Fatal("reg_sqrt is not supported with num_target > 1");
+    }
+    for (const std::string& metric_type : metric) {
+      if (metric_type != std::string("l2") && metric_type != std::string("rmse") && metric_type != std::string("custom")) {
+        Log::Fatal("Metric %s does not support num_target > 1, use l2 or rmse for multi-target regression", metric_type.c_str());
+      }
     }
   }
 

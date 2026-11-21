@@ -57,13 +57,12 @@ GBDT::GBDT()
 GBDT::~GBDT() {
 }
 
-// Only multi_regression understands multi-column labels; every other objective would silently use the first column.
-static void CheckLabelColumns(const Dataset* train_data, const ObjectiveFunction* objective_function) {
-  const int num_label_columns = train_data->metadata().num_label_columns();
-  if (num_label_columns > 1 && objective_function != nullptr
-      && std::string(objective_function->GetName()) != std::string("multi_regression")) {
-    Log::Fatal("Label has %d columns, but objective %s supports only one. Use objective multi_regression for multi-target regression",
-               num_label_columns, objective_function->GetName());
+// Multi-column labels are only for multi-target regression; otherwise only the first column would be used silently.
+static void CheckLabelColumns(const Dataset* data, int num_target) {
+  const int num_label_columns = data->metadata().num_label_columns();
+  if (num_label_columns > 1 && num_label_columns != num_target) {
+    Log::Fatal("Label has %d columns, but num_target is %d. Set num_target to the number of label columns for multi-target regression",
+               num_label_columns, num_target);
   }
 }
 
@@ -80,7 +79,8 @@ void GBDT::Init(const Config* config, const Dataset* train_data, const Objective
   iter_ = 0;
   num_iteration_for_pred_ = 0;
   max_feature_idx_ = 0;
-  num_class_ = config->num_class;
+  // number of outputs per row: classes for multiclass, targets for multi-target regression
+  num_class_ = std::max(config->num_class, config->num_target);
   config_ = std::unique_ptr<Config>(new Config(*config));
   early_stopping_round_ = config_->early_stopping_round;
   early_stopping_min_delta_ = config->early_stopping_min_delta;
@@ -107,7 +107,7 @@ void GBDT::Init(const Config* config, const Dataset* train_data, const Objective
   }
 
   objective_function_ = objective_function;
-  CheckLabelColumns(train_data_, objective_function_);
+  CheckLabelColumns(train_data_, config->num_target);
   num_tree_per_iteration_ = num_class_;
   if (objective_function_ != nullptr) {
     num_tree_per_iteration_ = objective_function_->NumModelPerIteration();
@@ -204,6 +204,7 @@ void GBDT::AddValidDataset(const Dataset* valid_data,
   if (!train_data_->CheckAlign(*valid_data)) {
     Log::Fatal("Cannot add validation data, since it has different bin mappers with training data");
   }
+  CheckLabelColumns(valid_data, config_->num_target);
   // for a validation dataset, we need its score and metric
   auto new_score_updater =
     #ifdef USE_CUDA
@@ -758,7 +759,7 @@ void GBDT::ResetTrainingData(const Dataset* train_data, const ObjectiveFunction*
   }
 
   objective_function_ = objective_function;
-  CheckLabelColumns(train_data, objective_function_);
+  CheckLabelColumns(train_data, config_->num_target);
   data_sample_strategy_->UpdateObjectiveFunction(objective_function);
   if (objective_function_ != nullptr) {
     CHECK_EQ(num_tree_per_iteration_, objective_function_->NumModelPerIteration());

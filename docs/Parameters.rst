@@ -116,11 +116,11 @@ Core Parameters
 
    -  **Note**: can be used only in CLI version; for language-specific packages you can use the correspondent functions
 
--  ``objective`` :raw-html:`<a id="objective" title="Permalink to this parameter" href="#objective">&#x1F517;&#xFE0E;</a>`, default = ``regression``, type = enum, options: ``regression``, ``regression_l1``, ``huber``, ``fair``, ``poisson``, ``quantile``, ``mape``, ``gamma``, ``tweedie``, ``binary``, ``multiclass``, ``multiclassova``, ``multi_regression``, ``cross_entropy``, ``cross_entropy_lambda``, ``lambdarank``, ``rank_xendcg``, aliases: ``objective_type``, ``app``, ``application``, ``loss``
+-  ``objective`` :raw-html:`<a id="objective" title="Permalink to this parameter" href="#objective">&#x1F517;&#xFE0E;</a>`, default = ``regression``, type = enum, options: ``regression``, ``regression_l1``, ``huber``, ``fair``, ``poisson``, ``quantile``, ``mape``, ``gamma``, ``tweedie``, ``binary``, ``multiclass``, ``multiclassova``, ``cross_entropy``, ``cross_entropy_lambda``, ``lambdarank``, ``rank_xendcg``, aliases: ``objective_type``, ``app``, ``application``, ``loss``
 
    -  regression application
 
-      -  ``regression``, L2 loss, aliases: ``regression_l2``, ``l2``, ``mean_squared_error``, ``mse``, ``l2_root``, ``root_mean_squared_error``, ``rmse``
+      -  ``regression``, L2 loss, aliases: ``regression_l2``, ``l2``, ``mean_squared_error``, ``mse``, ``l2_root``, ``root_mean_squared_error``, ``rmse``. Supports multi-target regression, see ``num_target``
 
       -  ``regression_l1``, L1 loss, aliases: ``l1``, ``mean_absolute_error``, ``mae``
 
@@ -151,16 +151,6 @@ Core Parameters
       -  ``multiclassova``, `One-vs-All <https://en.wikipedia.org/wiki/Multiclass_classification#One-vs.-rest>`__ binary objective function, aliases: ``multiclass_ova``, ``ova``, ``ovr``
 
       -  ``num_class`` should be set as well
-
-   -  multi-target regression application
-
-      -  ``multi_regression``, L2 loss on each of ``num_class`` targets, one tree per target per iteration, aliases: ``multi_regression_l2``, ``multi_l2``, ``multi_mse``
-
-      -  label must have ``num_data * num_class`` values, stored column-major (all rows of target 0, then all rows of target 1, ...)
-
-      -  ``num_class`` should be set to the number of targets
-
-      -  **Note**: not supported by the CUDA version, by saving Dataset to binary file, or by loading labels from text files
 
    -  cross-entropy application
 
@@ -1130,7 +1120,17 @@ Objective Parameters
 
 -  ``num_class`` :raw-html:`<a id="num_class" title="Permalink to this parameter" href="#num_class">&#x1F517;&#xFE0E;</a>`, default = ``1``, type = int, aliases: ``num_classes``, constraints: ``num_class > 0``
 
-   -  used only in ``multi-class`` classification and ``multi_regression`` (number of targets) applications
+   -  used only in ``multi-class`` classification application
+
+-  ``num_target`` :raw-html:`<a id="num_target" title="Permalink to this parameter" href="#num_target">&#x1F517;&#xFE0E;</a>`, default = ``1``, type = int, aliases: ``num_targets``, constraints: ``num_target > 0``
+
+   -  number of targets, used only in ``regression`` application
+
+   -  when ``num_target > 1``, label must have ``num_data * num_target`` values, stored column-major (all rows of target 0, then all rows of target 1, ...), and ``num_target`` trees are trained per iteration, one per target
+
+   -  when ``num_target > 1``, only ``l2`` and ``rmse`` metrics are supported, computed over all samples and targets
+
+   -  **Note**: ``num_target > 1`` is not supported by the CUDA version or by saving Dataset to binary file
 
 -  ``is_unbalance`` :raw-html:`<a id="is_unbalance" title="Permalink to this parameter" href="#is_unbalance">&#x1F517;&#xFE0E;</a>`, default = ``false``, type = bool, aliases: ``unbalance``, ``unbalanced_sets``
 
@@ -1284,10 +1284,6 @@ Metric Parameters
       -  ``multi_logloss``, log loss for multi-class classification, aliases: ``multiclass``, ``softmax``, ``multiclassova``, ``multiclass_ova``, ``ova``, ``ovr``
 
       -  ``multi_error``, error rate for multi-class classification
-
-      -  ``multi_l2``, square loss averaged over all targets of multi-target regression, aliases: ``multi_regression``, ``multi_regression_l2``, ``multi_mse``
-
-      -  ``multi_rmse``, root square loss averaged over all targets of multi-target regression
 
       -  ``cross_entropy``, cross-entropy (with optional linear weights), aliases: ``xentropy``
 

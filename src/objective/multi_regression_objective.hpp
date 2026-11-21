@@ -13,38 +13,40 @@
 
 namespace LightGBM {
 /*!
-* \brief Multi-target L2 regression, one tree per target per iteration.
+* \brief L2 regression with num_target > 1, one tree per target per iteration.
 *        Labels and scores are column-major: index = num_data * target + row.
 *        Per target, this is identical to RegressionL2loss.
 */
 class MultiRegressionL2loss: public ObjectiveFunction {
  public:
   explicit MultiRegressionL2loss(const Config& config)
-      : num_target_(config.num_class), deterministic_(config.deterministic) {
+      : num_target_(config.num_target), deterministic_(config.deterministic) {
   }
 
   explicit MultiRegressionL2loss(const std::vector<std::string>& strs)
-      : num_target_(-1), deterministic_(false) {
-    for (auto str : strs) {
-      auto tokens = Common::Split(str.c_str(), ':');
-      if (tokens.size() == 2 && tokens[0] == std::string("num_class")) {
-        Common::Atoi(tokens[1].c_str(), &num_target_);
-      }
-    }
-    if (num_target_ < 0) {
-      Log::Fatal("Objective should contain num_class field");
-    }
+      : num_target_(ParseNumTarget(strs)), deterministic_(false) {
   }
 
   ~MultiRegressionL2loss() {}
+
+  /*! \brief Number of targets stored in a model string, 1 if absent */
+  static int ParseNumTarget(const std::vector<std::string>& strs) {
+    int num_target = 1;
+    for (auto str : strs) {
+      auto tokens = Common::Split(str.c_str(), ':');
+      if (tokens.size() == 2 && tokens[0] == std::string("num_target")) {
+        Common::Atoi(tokens[1].c_str(), &num_target);
+      }
+    }
+    return num_target;
+  }
 
   void Init(const Metadata& metadata, data_size_t num_data) override {
     num_data_ = num_data;
     label_ = metadata.label();
     weights_ = metadata.weights();
     if (metadata.num_label_columns() != num_target_) {
-      Log::Fatal("Objective %s expects %d label columns (num_class), but found %d",
-                 GetName(), num_target_, metadata.num_label_columns());
+      Log::Fatal("num_target is %d, but label has %d columns", num_target_, metadata.num_label_columns());
     }
   }
 
@@ -68,7 +70,7 @@ class MultiRegressionL2loss: public ObjectiveFunction {
   }
 
   const char* GetName() const override {
-    return "multi_regression";
+    return "regression";
   }
 
   void ConvertOutput(const double* input, double* output) const override {
@@ -79,7 +81,7 @@ class MultiRegressionL2loss: public ObjectiveFunction {
 
   std::string ToString() const override {
     std::stringstream str_buf;
-    str_buf << GetName() << " num_class:" << num_target_;
+    str_buf << GetName() << " num_target:" << num_target_;
     return str_buf.str();
   }
 
@@ -110,7 +112,7 @@ class MultiRegressionL2loss: public ObjectiveFunction {
   }
 
  private:
-  int num_target_;
+  const int num_target_;
   const bool deterministic_;
   data_size_t num_data_;
   const label_t* label_;

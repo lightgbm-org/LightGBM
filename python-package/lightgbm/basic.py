@@ -3118,7 +3118,7 @@ class Dataset:
         ----------
         label : list, numpy 1-D array, pandas Series / one-column DataFrame, pyarrow ChunkedArray, polars Series or None
             The label information to be set into Dataset.
-            For multi-target regression (``objective="multi_regression"``), this can also be
+            For multi-target regression (``num_target`` > 1), this can also be
             a numpy 2-D array, list of lists or pandas DataFrame of shape = [n_samples, n_targets].
 
             .. versionadded:: 4.8.0

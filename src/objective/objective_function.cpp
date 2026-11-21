@@ -26,6 +26,9 @@ namespace LightGBM {
 
 #ifdef USE_CUDA
 ObjectiveFunction* ObjectiveFunction::CreateObjectiveFunctionCUDA(const std::string& type, const Config& config) {
+  if (config.num_target > 1) {
+    Log::Fatal("num_target > 1 is not supported by the CUDA version");
+  }
   if (type == std::string("regression")) {
     return new CUDARegressionL2loss(config);
   } else if (type == std::string("regression_l1")) {
@@ -48,8 +51,6 @@ ObjectiveFunction* ObjectiveFunction::CreateObjectiveFunctionCUDA(const std::str
     return new CUDAMulticlassSoftmax(config);
   } else if (type == std::string("multiclassova")) {
     return new CUDAMulticlassOVA(config);
-  } else if (type == std::string("multi_regression")) {
-    Log::Fatal("Objective multi_regression is not supported by the CUDA version");
   } else if (type == std::string("cross_entropy")) {
     Log::Warning("Objective cross_entropy is not implemented in cuda version. Fall back to boosting on CPU.");
     return new CrossEntropy(config);
@@ -81,6 +82,9 @@ ObjectiveFunction* ObjectiveFunction::CreateObjectiveFunction(const std::string&
   } else {
   #endif  // USE_CUDA
     if (type == std::string("regression")) {
+      if (config.num_target > 1) {
+        return new MultiRegressionL2loss(config);
+      }
       return new RegressionL2loss(config);
     } else if (type == std::string("regression_l1")) {
       return new RegressionL1loss(config);
@@ -102,8 +106,6 @@ ObjectiveFunction* ObjectiveFunction::CreateObjectiveFunction(const std::string&
       return new MulticlassSoftmax(config);
     } else if (type == std::string("multiclassova")) {
       return new MulticlassOVA(config);
-    } else if (type == std::string("multi_regression")) {
-      return new MultiRegressionL2loss(config);
     } else if (type == std::string("cross_entropy")) {
       return new CrossEntropy(config);
     } else if (type == std::string("cross_entropy_lambda")) {
@@ -128,6 +130,9 @@ ObjectiveFunction* ObjectiveFunction::CreateObjectiveFunction(const std::string&
   auto strs = Common::Split(str.c_str(), ' ');
   auto type = strs[0];
   if (type == std::string("regression")) {
+    if (MultiRegressionL2loss::ParseNumTarget(strs) > 1) {
+      return new MultiRegressionL2loss(strs);
+    }
     return new RegressionL2loss(strs);
   } else if (type == std::string("regression_l1")) {
     return new RegressionL1loss(strs);
@@ -149,8 +154,6 @@ ObjectiveFunction* ObjectiveFunction::CreateObjectiveFunction(const std::string&
     return new MulticlassSoftmax(strs);
   } else if (type == std::string("multiclassova")) {
     return new MulticlassOVA(strs);
-  } else if (type == std::string("multi_regression")) {
-    return new MultiRegressionL2loss(strs);
   } else if (type == std::string("cross_entropy")) {
     return new CrossEntropy(strs);
   } else if (type == std::string("cross_entropy_lambda")) {

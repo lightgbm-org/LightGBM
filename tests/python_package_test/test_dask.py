@@ -580,7 +580,7 @@ def test_regressor_multi_target(cluster):
         params = {"n_estimators": 10, "random_state": 42}
 
         dask_regressor = lgb.DaskLGBMRegressor(client=client, **params).fit(dX, dY)
-        assert dask_regressor.objective_ == "multi_regression"
+        assert dask_regressor.objective_ == "regression"
         assert dask_regressor.booster_.num_model_per_iteration() == 2
         p1 = dask_regressor.predict(dX).compute()
         assert p1.shape == Y.shape

@@ -21,6 +21,14 @@
 namespace LightGBM {
 
 Metric* Metric::CreateMetric(const std::string& type, const Config& config) {
+  // Config::CheckParamConflict allows only l2 and rmse when num_target > 1
+  if (config.num_target > 1) {
+    if (type == std::string("l2")) {
+      return new MultiRegressionL2Metric<false>(config);
+    } else if (type == std::string("rmse")) {
+      return new MultiRegressionL2Metric<true>(config);
+    }
+  }
   #ifdef USE_CUDA
   if (config.device_type == std::string("cuda") && config.boosting == std::string("gbdt")) {
     if (type == std::string("l2")) {
@@ -62,10 +70,6 @@ Metric* Metric::CreateMetric(const std::string& type, const Config& config) {
     } else if (type == std::string("multi_error")) {
       Log::Warning("Metric multi_error is not implemented in cuda version. Fall back to evaluation on CPU.");
       return new MultiErrorMetric(config);
-    } else if (type == std::string("multi_l2")) {
-      return new MultiRegressionL2Metric<false>(config);
-    } else if (type == std::string("multi_rmse")) {
-      return new MultiRegressionL2Metric<true>(config);
     } else if (type == std::string("cross_entropy")) {
       Log::Warning("Metric cross_entropy is not implemented in cuda version. Fall back to evaluation on CPU.");
       return new CrossEntropyMetric(config);
@@ -121,10 +125,6 @@ Metric* Metric::CreateMetric(const std::string& type, const Config& config) {
       return new MultiSoftmaxLoglossMetric(config);
     } else if (type == std::string("multi_error")) {
       return new MultiErrorMetric(config);
-    } else if (type == std::string("multi_l2")) {
-      return new MultiRegressionL2Metric<false>(config);
-    } else if (type == std::string("multi_rmse")) {
-      return new MultiRegressionL2Metric<true>(config);
     } else if (type == std::string("cross_entropy")) {
       return new CrossEntropyMetric(config);
     } else if (type == std::string("cross_entropy_lambda")) {

@@ -451,7 +451,8 @@ def test_regressor_multi_target(as_frame):
     X, y = bunch["data"], bunch["target"]
     params = {"n_estimators": 10, "min_child_samples": 2, "verbose": -1, "deterministic": True, "force_row_wise": True}
     reg = lgb.LGBMRegressor(**params).fit(X, y)
-    assert reg.objective_ == "multi_regression"
+    assert reg.objective_ == "regression"
+    assert reg.booster_.params["num_target"] == 3
     assert reg.booster_.num_model_per_iteration() == 3
     y_pred = reg.predict(X)
     assert y_pred.shape == (X.shape[0], 3)
@@ -460,7 +461,7 @@ def test_regressor_multi_target(as_frame):
     np.testing.assert_allclose(y_pred, expected)
     # refitting the same estimator on a 1-D target goes back to single-target regression
     reg.fit(X, np.asarray(y)[:, 0])
-    assert reg.objective_ == "regression"
+    assert "num_target" not in reg.booster_.params
     assert reg.predict(X).shape == (X.shape[0],)
 
 

@@ -482,74 +482,96 @@ def test_categorical_non_zero_inputs(use_quantized_grad):
 
 
 @pytest.mark.parametrize("use_weight", [False, True])
-def test_multi_regression_matches_independent_regressions(use_weight):
+def test_multi_target_regression_matches_independent_regressions(use_weight):
     X, y = make_synthetic_regression(n_samples=500)
     Y = np.column_stack([y, -2 * y + 3, np.sin(y)])
     weight = np.random.default_rng(0).uniform(size=X.shape[0]) if use_weight else None
     params = {"verbose": -1, "deterministic": True, "force_row_wise": True, "num_threads": 1}
-    multi = lgb.train(
-        {**params, "objective": "multi_regression", "num_class": 3},
-        lgb.Dataset(X, Y, weight=weight),
-        num_boost_round=20,
-    )
+    multi = lgb.train({**params, "num_target": 3}, lgb.Dataset(X, Y, weight=weight), num_boost_round=20)
+    assert multi.num_model_per_iteration() == 3
     preds = multi.predict(X)
     assert preds.shape == (X.shape[0], 3)
     for k in range(3):
-        single = lgb.train({**params, "objective": "regression"}, lgb.Dataset(X, Y[:, k], weight=weight), 20)
+        single = lgb.train(params, lgb.Dataset(X, Y[:, k], weight=weight), num_boost_round=20)
         np.testing.assert_allclose(preds[:, k], single.predict(X))
-    reloaded = lgb.Booster(model_str=multi.model_to_string())
-    np.testing.assert_allclose(reloaded.predict(X), preds)
+    model_str = multi.model_to_string()
+    assert "objective=regression num_target:3" in model_str
+    np.testing.assert_allclose(lgb.Booster(model_str=model_str).predict(X), preds)
 
 
-def test_multi_regression_metrics_and_early_stopping():
+def test_multi_target_regression_metrics_and_early_stopping():
     X, y = make_synthetic_regression(n_samples=500)
     Y = np.column_stack([y, 2 * y])
     X_train, X_test, Y_train, Y_test = train_test_split(X, Y, test_size=0.2, random_state=42)
-    params = {"objective": "multi_regression", "num_class": 2, "metric": ["multi_l2", "multi_rmse"], "verbose": -1}
+    weight = np.random.default_rng(0).uniform(size=X_test.shape[0])
     lgb_train = lgb.Dataset(X_train, Y_train)
-    lgb_eval = lgb.Dataset(X_test, Y_test, reference=lgb_train)
+    lgb_eval = lgb.Dataset(X_test, Y_test, weight=weight, reference=lgb_train)
     evals_result = {}
     gbm = lgb.train(
-        params,
+        {"num_target": 2, "metric": ["l2", "rmse"], "verbose": -1},
         lgb_train,
         num_boost_round=200,
         valid_sets=lgb_eval,
         callbacks=[lgb.early_stopping(5, verbose=False), lgb.record_evaluation(evals_result)],
     )
+    assert gbm.best_iteration < 200
     assert lgb_train.get_label().shape == Y_train.shape
     pred = gbm.predict(X_test, num_iteration=gbm.best_iteration)
-    per_target_mse = ((pred - Y_test) ** 2).mean(axis=0)
-    assert evals_result["valid_0"]["multi_l2"][gbm.best_iteration - 1] == pytest.approx(per_target_mse.mean())
-    assert evals_result["valid_0"]["multi_rmse"][gbm.best_iteration - 1] == pytest.approx(
-        np.sqrt(per_target_mse).mean()
-    )
+    # weighted squared error over all samples and targets, as in XGBoost
+    expected_l2 = (weight[:, np.newaxis] * (pred - Y_test) ** 2).sum() / (weight.sum() * Y_test.shape[1])
+    assert evals_result["valid_0"]["l2"][gbm.best_iteration - 1] == pytest.approx(expected_l2)
+    assert evals_result["valid_0"]["rmse"][gbm.best_iteration - 1] == pytest.approx(np.sqrt(expected_l2))
 
 
-def test_multi_regression_cv():
+def test_multi_target_regression_custom_objective():
     X, y = make_synthetic_regression(n_samples=300)
     Y = np.column_stack([y, -y])
-    params = {"objective": "multi_regression", "num_class": 2, "verbose": -1}
+
+    def l2_objective(preds, train_data):
+        assert preds.shape == Y.shape
+        return preds - train_data.get_label(), np.ones_like(preds)
+
+    params = {"num_target": 2, "boost_from_average": False, "verbose": -1, "deterministic": True, "num_threads": 1}
+    builtin = lgb.train(params, lgb.Dataset(X, Y), num_boost_round=10)
+    custom = lgb.train({**params, "objective": l2_objective}, lgb.Dataset(X, Y), num_boost_round=10)
+    np.testing.assert_allclose(custom.predict(X), builtin.predict(X))
+
+
+def test_multi_target_regression_cv():
+    X, y = make_synthetic_regression(n_samples=300)
+    Y = np.column_stack([y, -y])
+    params = {"num_target": 2, "verbose": -1}
     cv_res = lgb.cv(params, lgb.Dataset(X, Y), num_boost_round=10, nfold=3, stratified=False, return_cvbooster=True)
-    assert len(cv_res["valid multi_l2-mean"]) == 10
+    assert len(cv_res["valid l2-mean"]) == 10
     for booster in cv_res["cvbooster"].boosters:
         assert booster.predict(X).shape == Y.shape
 
 
-def test_multi_regression_errors():
+def test_multi_target_regression_errors():
     X, y = make_synthetic_regression()
     Y = np.column_stack([y, y, y])
-    with pytest.raises(lgb.basic.LightGBMError, match="Label has 3 columns, but objective regression"):
-        lgb.train({"objective": "regression", "verbose": -1}, lgb.Dataset(X, Y), num_boost_round=1)
-    with pytest.raises(lgb.basic.LightGBMError, match="expects 2 label columns"):
-        lgb.train({"objective": "multi_regression", "num_class": 2, "verbose": -1}, lgb.Dataset(X, Y), 1)
-    with pytest.raises(lgb.basic.LightGBMError, match="num_class should be set to the number of targets"):
-        lgb.train({"objective": "multi_regression", "verbose": -1}, lgb.Dataset(X, Y), num_boost_round=1)
-    with pytest.raises(lgb.basic.LightGBMError, match="Multi-target regression objective and metrics don't match"):
-        lgb.train(
-            {"objective": "multi_regression", "num_class": 3, "metric": "multi_logloss", "verbose": -1},
-            lgb.Dataset(X, Y),
-            num_boost_round=1,
-        )
+
+    def train(params, label=Y, valid_label=None):
+        train_set = lgb.Dataset(X, label)
+        valid_sets = [lgb.Dataset(X, valid_label, reference=train_set)] if valid_label is not None else None
+        lgb.train({"verbose": -1, **params}, train_set, num_boost_round=1, valid_sets=valid_sets)
+
+    with pytest.raises(lgb.basic.LightGBMError, match="Label has 3 columns, but num_target is 1"):
+        train({})
+    with pytest.raises(lgb.basic.LightGBMError, match="Label has 3 columns, but num_target is 1"):
+        train({}, label=y, valid_label=Y)
+    with pytest.raises(lgb.basic.LightGBMError, match="num_target is 2, but label has 3 columns"):
+        train({"num_target": 2})
+    with pytest.raises(lgb.basic.LightGBMError, match="num_target is 3, but label has 1 columns"):
+        train({"num_target": 3}, label=y)
+    with pytest.raises(lgb.basic.LightGBMError, match="Objective regression_l1 does not support num_target > 1"):
+        train({"num_target": 3, "objective": "l1"})
+    with pytest.raises(lgb.basic.LightGBMError, match="Metric auc does not support num_target > 1"):
+        train({"num_target": 3, "metric": "auc"})
+    with pytest.raises(lgb.basic.LightGBMError, match="reg_sqrt is not supported with num_target > 1"):
+        train({"num_target": 3, "reg_sqrt": True})
+    with pytest.raises(lgb.basic.LightGBMError, match="num_class and num_target cannot both be greater than 1"):
+        train({"num_target": 3, "objective": "multiclass", "num_class": 3})
 
 
 def test_multiclass():

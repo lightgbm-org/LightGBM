@@ -753,7 +753,7 @@ class LGBMModel(_LGBMModelBase):
         if stage == "fit":
             if self._objective is None:
                 if isinstance(self, LGBMRegressor):
-                    self._objective = "multi_regression" if self._n_targets > 1 else "regression"
+                    self._objective = "regression"
                 elif isinstance(self, LGBMClassifier):
                     if self._n_classes > 2:
                         self._objective = "multiclass"
@@ -784,9 +784,9 @@ class LGBMModel(_LGBMModelBase):
                 params.pop(alias, None)
             params["num_class"] = self._n_classes
         if self._n_targets > 1:
-            for alias in _ConfigAliases.get("num_class"):
+            for alias in _ConfigAliases.get("num_target"):
                 params.pop(alias, None)
-            params["num_class"] = self._n_targets
+            params["num_target"] = self._n_targets
         if hasattr(self, "_eval_at"):
             eval_at = self._eval_at
             for alias in _ConfigAliases.get("eval_at"):
@@ -1761,8 +1761,6 @@ class LGBMRegressor(_LGBMRegressorBase, LGBMModel):
         """  # noqa: DOC105
         y_shape: Tuple[int, ...] = np.shape(y) if isinstance(y, list) else getattr(y, "shape", ())
         self._n_targets = y_shape[1] if len(y_shape) == 2 else 1
-        if self.objective is None:
-            self._objective = None
         super().fit(
             X,
             y,
