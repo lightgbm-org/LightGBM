@@ -77,7 +77,8 @@ RUN pip install --no-cache-dir build numpy scipy scikit-learn jupyter notebook i
 RUN cd /usr/local/src && mkdir lightgbm && cd lightgbm && \
     git clone \
         --recursive \
-        "${LIGHTGBM_GIT_URL}" && \
+        "${LIGHTGBM_GIT_URL}" \
+        LightGBM && \
     git -C ./LightGBM checkout "${LIGHTGBM_GIT_REF}" && \
     cd LightGBM && \
     cmake -B build -S . \
