@@ -2116,6 +2116,7 @@ class Dataset:
         if data is None:
             self._handle = None
             return self
+        raw_data = data
         if reference is not None:
             self.pandas_categorical = reference.pandas_categorical
             categorical_feature = reference.categorical_feature
@@ -2220,7 +2221,7 @@ class Dataset:
         if isinstance(predictor, _InnerPredictor):
             if self._predictor is None and init_score is not None:
                 _log_warning("The init_score will be overridden by the prediction of init_model.")
-            self._set_init_score_by_predictor(predictor=predictor, data=data, used_indices=None)
+            self._set_init_score_by_predictor(predictor=predictor, data=raw_data, used_indices=None)
         elif init_score is not None:
             self.set_init_score(init_score)
         elif predictor is not None:
