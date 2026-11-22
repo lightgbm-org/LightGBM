@@ -25,7 +25,6 @@ from typing import TYPE_CHECKING, Any, Callable, Dict, Iterable, Iterator, List,
 
 import narwhals.stable.v2 as nw
 import narwhals.stable.v2.dependencies as nwd
-import narwhals.stable.v2.dtypes as nw_dtypes
 import narwhals.stable.v2.selectors as ncs
 import narwhals.stable.v2.typing as nwt
 import numpy as np
@@ -734,7 +733,22 @@ def _check_for_bad_narwhals_dtypes(data: nw.DataFrame) -> None:
             if not isinstance(dtype, pd_CategoricalDtype) and not _is_allowed_numpy_dtype(dtype.type)
         }
     else:
-        allowed_dtypes = (nw_dtypes.IntegerType, nw_dtypes.FloatType, nw.Boolean, nw.Categorical, nw.Enum)
+        # only the types that the Arrow reader in src/arrow/array.hpp supports (no Float16, Int128 or UInt128)
+        allowed_dtypes = (
+            nw.Int8,
+            nw.Int16,
+            nw.Int32,
+            nw.Int64,
+            nw.UInt8,
+            nw.UInt16,
+            nw.UInt32,
+            nw.UInt64,
+            nw.Float32,
+            nw.Float64,
+            nw.Boolean,
+            nw.Categorical,
+            nw.Enum,
+        )
         bad_types = {col: dtype for col, dtype in data.schema.items() if not isinstance(dtype, allowed_dtypes)}
     if bad_types:
         raise ValueError(
@@ -4894,6 +4908,8 @@ class Booster:
                 you can install the shap package (https://github.com/slundberg/shap).
                 Note that unlike the shap package, with ``pred_contrib`` we return a matrix with an extra
                 column, where the last column is the expected value.
+                Summing each row's Shapley values with its expected value gives you the model's raw score
+                (as returned by ``predict(X, raw_score=True)``).
 
         data_has_header : bool, optional (default=False)
             Whether the data has header.
