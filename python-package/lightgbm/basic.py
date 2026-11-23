@@ -786,8 +786,8 @@ def _data_from_narwhals(
     data = nw.from_native(data)
 
     # validation
-    if len(data.shape) != 2 or data.shape[0] < 1:
-        raise ValueError("Input data must be 2 dimensional and non empty.")
+    if len(data.shape) != 2 or data.shape[1] < 1:
+        raise ValueError("Input data must be 2 dimensional and have at least one column.")
     _check_for_bad_narwhals_dtypes(data)
 
     # determine feature names
@@ -3142,6 +3142,8 @@ class Dataset:
                 label_array = _list_to_1d_numpy(data=label, dtype=np.float32, name="label")
             self.set_field("label", label_array)
             self.label = self.get_field("label")  # original values can be modified at cpp side
+            if self.label is None and len(label_array) == 0:
+                self.label = label_array
         return self
 
     def set_weight(
