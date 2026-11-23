@@ -1048,6 +1048,42 @@ def test_early_stopping_via_global_params(first_metric_only):
     assert "error" in gbm.best_score[valid_set_name]
 
 
+@pytest.mark.parametrize("param_name", ["early_stopping_round", "n_iter_no_change"])
+def test_cv_early_stopping_via_global_params(param_name):
+    X, y = load_breast_cancer(return_X_y=True)
+    num_boost_round = 10
+    params = {
+        "objective": "binary",
+        "metric": "None",
+        "verbose": -1,
+        param_name: 2,
+    }
+    lgb_train = lgb.Dataset(X, y)
+    # constant_metric never improves, so early stopping should keep only the first iteration
+    cv_res = lgb.cv(
+        params,
+        lgb_train,
+        num_boost_round=num_boost_round,
+        nfold=3,
+        feval=constant_metric,
+        return_cvbooster=True,
+    )
+    assert cv_res["cvbooster"].best_iteration == 1
+    assert len(cv_res["valid error-mean"]) == 1
+
+    # without the parameter, all iterations are kept
+    params.pop(param_name)
+    cv_res = lgb.cv(
+        params,
+        lgb_train,
+        num_boost_round=num_boost_round,
+        nfold=3,
+        feval=constant_metric,
+        return_cvbooster=True,
+    )
+    assert len(cv_res["valid error-mean"]) == num_boost_round
+
+
 @pytest.mark.parametrize("early_stopping_round", [-10, -1, 0, None, "None"])
 def test_early_stopping_is_not_enabled_for_non_positive_stopping_rounds(early_stopping_round):
     X, y = load_breast_cancer(return_X_y=True)
