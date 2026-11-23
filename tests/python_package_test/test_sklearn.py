@@ -2030,7 +2030,7 @@ def test_classifier_predict_and_predict_proba_docstrings_are_consistent():
             @@ -1 +1 @@
             -Return the predicted value for each sample.
             +Return the predicted probability for each class for each sample.
-            @@ -38 +38 @@
+            @@ -40 +40 @@
             -predicted_result : array-like of shape = [n_samples] or shape = [n_samples, n_classes]
             +predicted_probability : array-like of shape = [n_samples] or shape = [n_samples, n_classes]
         """),
