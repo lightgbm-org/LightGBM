@@ -1,6 +1,7 @@
 # coding: utf-8
 """Callbacks library."""
 
+import numbers
 from collections import OrderedDict
 from dataclasses import dataclass
 from functools import partial
@@ -289,7 +290,7 @@ class _EarlyStoppingCallback:
         self.order = 30
         self.before_iteration = False
 
-        self.stopping_rounds = stopping_rounds
+        self.stopping_rounds = int(stopping_rounds)
         self.first_metric_only = first_metric_only
         self.verbose = verbose
         self.min_delta = min_delta
@@ -458,9 +459,9 @@ def _should_enable_early_stopping(stopping_rounds: Any) -> bool:
     activated (i.e. stopping_rounds > 0).  It also provides an informative error if the
     type is not int.
     """
-    if not isinstance(stopping_rounds, int):
+    if isinstance(stopping_rounds, bool) or not isinstance(stopping_rounds, numbers.Integral):
         raise TypeError(f"early_stopping_round should be an integer. Got '{type(stopping_rounds).__name__}'")
-    return stopping_rounds > 0
+    return bool(stopping_rounds > 0)
 
 
 def early_stopping(
