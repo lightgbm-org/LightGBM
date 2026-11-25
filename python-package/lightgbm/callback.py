@@ -6,8 +6,6 @@ from dataclasses import dataclass
 from functools import partial
 from typing import TYPE_CHECKING, Any, Callable, Dict, List, Optional, Tuple, Union
 
-import numpy as np
-
 from .basic import (
     Booster,
     EvalResult,
@@ -281,7 +279,7 @@ class _EarlyStoppingCallback:
 
     def __init__(
         self,
-        stopping_rounds: Union[int, np.integer],
+        stopping_rounds: int,
         first_metric_only: bool = False,
         verbose: bool = True,
         min_delta: Union[float, List[float]] = 0.0,
@@ -291,7 +289,7 @@ class _EarlyStoppingCallback:
         self.order = 30
         self.before_iteration = False
 
-        self.stopping_rounds = int(stopping_rounds)
+        self.stopping_rounds = stopping_rounds
         self.first_metric_only = first_metric_only
         self.verbose = verbose
         self.min_delta = min_delta
@@ -462,15 +460,14 @@ def _should_enable_early_stopping(stopping_rounds: Any) -> bool:
     """
     # 'bool' is technically an int, avoid accidentally treating `stopping_rounds=True` as `stopping_rounds=1`,
     # which is really unlikely to be intentional
-    if isinstance(stopping_rounds, bool) or not isinstance(stopping_rounds, (int, np.integer)):
+    if isinstance(stopping_rounds, bool) or not isinstance(stopping_rounds, int):
         raise TypeError(f"early_stopping_round should be an integer. Got '{type(stopping_rounds).__name__}'")
 
-    # bool() because '>' comparison for a numpy integer returns `numpy.bool` and we want this to literally be a Python 'bool'
-    return bool(stopping_rounds > 0)
+    return stopping_rounds > 0
 
 
 def early_stopping(
-    stopping_rounds: Union[int, np.integer],
+    stopping_rounds: int,
     first_metric_only: bool = False,
     verbose: bool = True,
     min_delta: Union[float, List[float]] = 0.0,
@@ -493,7 +490,7 @@ def early_stopping(
 
     Parameters
     ----------
-    stopping_rounds : int or ``numpy`` int scalar (e.g. ``np.int8(15)``)
+    stopping_rounds : int
         The possible number of rounds without the trend occurrence.
     first_metric_only : bool, optional (default=False)
         Whether to use only the first metric for early stopping.
