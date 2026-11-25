@@ -65,7 +65,6 @@ CVBooster <- R6::R6Class(
 #' )
 #' }
 #'
-#' @importFrom data.table data.table setorderv
 #' @export
 lgb.cv <- function(params = list()
                    , data
@@ -172,6 +171,7 @@ lgb.cv <- function(params = list()
 
   # Construct datasets, if needed
   data$update_params(params = params)
+  data$.__enclos_env__$private$set_predictor(predictor = predictor)
   data$construct()
 
   # Check interaction constraints
@@ -182,9 +182,6 @@ lgb.cv <- function(params = list()
 
   # Update parameters with parsed parameters
   data$update_params(params = params)
-
-  # Create the predictor set
-  data$.__enclos_env__$private$set_predictor(predictor = predictor)
 
   if (!is.null(folds)) {
 
@@ -264,10 +261,7 @@ lgb.cv <- function(params = list()
 
   cb <- .categorize_callbacks(cb_list = callbacks)
 
-  # Construct booster for each fold. The data.table() code below is used to
-  # guarantee that indices are sorted while keeping init_score and weight together
-  # with the correct indices. Note that it takes advantage of the fact that
-  # someDT$some_column returns NULL is 'some_column' does not exist in the data.table
+  # Dataset slices sort the row indices and preserve weights and initial scores.
   bst_folds <- lapply(
     X = seq_along(folds)
     , FUN = function(k) {
@@ -288,27 +282,8 @@ lgb.cv <- function(params = list()
       }
       train_indices <- seq_len(nrow(data))[-test_indices]
 
-      # set up test set
-      indexDT <- data.table::data.table(
-        indices = test_indices
-        , weight = get_field(dataset = data, field_name = "weight")[test_indices]
-        , init_score = get_field(dataset = data, field_name = "init_score")[test_indices]
-      )
-      data.table::setorderv(x = indexDT, cols = "indices", order = 1L)
-      dtest <- lgb.slice.Dataset(data, indexDT$indices)
-      set_field(dataset = dtest, field_name = "weight", data = indexDT$weight)
-      set_field(dataset = dtest, field_name = "init_score", data = indexDT$init_score)
-
-      # set up training set
-      indexDT <- data.table::data.table(
-        indices = train_indices
-        , weight = get_field(dataset = data, field_name = "weight")[train_indices]
-        , init_score = get_field(dataset = data, field_name = "init_score")[train_indices]
-      )
-      data.table::setorderv(x = indexDT, cols = "indices", order = 1L)
-      dtrain <- lgb.slice.Dataset(data, indexDT$indices)
-      set_field(dataset = dtrain, field_name = "weight", data = indexDT$weight)
-      set_field(dataset = dtrain, field_name = "init_score", data = indexDT$init_score)
+      dtest <- lgb.slice.Dataset(data, test_indices)
+      dtrain <- lgb.slice.Dataset(data, train_indices)
 
       if (folds_have_group) {
         set_field(dataset = dtest, field_name = "group", data = test_groups)
@@ -394,14 +369,10 @@ lgb.cv <- function(params = list()
     if (isTRUE(env$eval_list[[1L]]$higher_better[1L])) {
       .find_best <- which.max
     }
-    cv_booster$best_iter <- unname(
-      .find_best(
-        unlist(
-          cv_booster$record_evals[["valid"]][[first_metric]][[.EVAL_KEY()]]
-        )
-      )
-    )
-    cv_booster$best_score <- cv_booster$record_evals[["valid"]][[first_metric]][[.EVAL_KEY()]][[cv_booster$best_iter]]
+    scores <- unlist(cv_booster$record_evals[["valid"]][[first_metric]][[.EVAL_KEY()]])
+    best_score_index <- unname(.find_best(scores))
+    cv_booster$best_iter <- begin_iteration + best_score_index - 1L
+    cv_booster$best_score <- scores[[best_score_index]]
   }
   # Propagate the best_iter attribute from the cv_booster to the individual boosters
   for (bst in cv_booster$boosters) {
@@ -441,8 +412,9 @@ lgb.cv <- function(params = list()
     # Shuffle
     rnd_idx <- sample.int(nrows)
 
-    # Request stratified folds
-    if (isTRUE(stratified) && params$objective %in% c("binary", "multiclass") && length(label) == length(rnd_idx)) {
+    # When no objective was specified, LightGBM defaults to regression.
+    is_classification <- isTRUE(params$objective %in% c("binary", "multiclass"))
+    if (isTRUE(stratified) && is_classification && length(label) == length(rnd_idx)) {
 
       y <- label[rnd_idx]
       y <- as.factor(y)

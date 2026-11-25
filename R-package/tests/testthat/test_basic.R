@@ -387,6 +387,79 @@ test_that("cv works", {
   expect_false(is.null(bst$record_evals))
 })
 
+test_that("lgb.cv() continues training with the default objective", {
+  dtrain <- lgb.Dataset(
+    data = data.matrix(mtcars[, c("cyl", "disp", "hp")])
+    , label = mtcars$mpg
+    , free_raw_data = FALSE
+  )
+  params <- list(
+    max_depth = 2L
+    , num_leaves = 4L
+    , min_data_in_leaf = 1L
+    , num_threads = .LGB_MAX_THREADS
+    , verbosity = .LGB_VERBOSITY
+  )
+  init_model <- lgb.train(params = params, data = dtrain, nrounds = 2L)
+  cv_bst <- lgb.cv(params = params, data = dtrain, nrounds = 1L, init_model = init_model)
+  expect_length(cv_bst$boosters, 3L)
+  for (fold in cv_bst$boosters) {
+    expect_identical(fold$booster$current_iter(), 3L)
+  }
+})
+
+test_that("lgb.cv() continues multiclass training from an initial model", {
+  features <- as.matrix(iris[, 1:4])
+  dtrain <- lgb.Dataset(
+    data = features
+    , label = as.integer(iris$Species) - 1L
+    , free_raw_data = FALSE
+  )
+  params <- list(
+    objective = "multiclass"
+    , num_class = 3L
+    , metric = "None"
+    , min_data_in_leaf = 1L
+    , num_threads = .LGB_MAX_THREADS
+    , verbosity = .LGB_VERBOSITY
+  )
+  n_initial_rounds <- 2L
+  init_model <- lgb.train(params = params, data = dtrain, nrounds = n_initial_rounds)
+  model_file <- tempfile(fileext = ".model")
+  lgb.save(init_model, model_file)
+
+  for (model in list(init_model, model_file)) {
+    for (stopping_rounds in list(NULL, 1L)) {
+      nrounds <- if (is.null(stopping_rounds)) 1L else 3L
+      cv_bst <- lgb.cv(
+        params = params
+        , data = dtrain
+        , nrounds = nrounds
+        , init_model = model
+        , eval = .constant_metric
+        , early_stopping_rounds = stopping_rounds
+      )
+      best_iter <- n_initial_rounds + 1L
+      expected_rounds <- if (is.null(stopping_rounds)) best_iter else best_iter + stopping_rounds
+      expect_identical(cv_bst$best_iter, best_iter)
+      expect_equal(cv_bst$best_score, 0.2)
+      for (fold in cv_bst$boosters) {
+        expect_identical(fold$booster$current_iter(), expected_rounds)
+        expect_equal(
+          predict(fold$booster, features, num_iteration = n_initial_rounds)
+          , predict(init_model, features)
+        )
+        expected_prediction <- predict(fold$booster, features, num_iteration = best_iter)
+        expect_equal(predict(fold$booster, features), expected_prediction)
+        restored <- lgb.load(model_str = fold$booster$save_model_to_string())
+        expect_identical(restored$current_iter(), best_iter)
+        expect_equal(predict(restored, features), expected_prediction)
+      }
+    }
+  }
+  unlink(model_file)
+})
+
 test_that("CVBooster$reset_parameter() works as expected", {
   dtrain <- lgb.Dataset(train$data, label = train$label)
   n_folds <- 2L
