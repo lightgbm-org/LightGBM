@@ -1,4 +1,5 @@
 # coding: utf-8
+import numpy as np
 import pytest
 
 import lightgbm as lgb
@@ -21,9 +22,14 @@ def test_early_stopping_callback_is_picklable(serializer):
     assert callback.stopping_rounds == rounds
 
 
-def test_early_stopping_callback_rejects_invalid_stopping_rounds_with_informative_errors():
-    with pytest.raises(TypeError, match="early_stopping_round should be an integer. Got 'str'"):
-        lgb.early_stopping(stopping_rounds="neverrrr")
+@pytest.mark.parametrize(
+    "invalid_stopping_rounds",
+    ["neverrrr", True, np.int8(5), np.bool_(True), 1.5, None],
+)
+def test_early_stopping_callback_rejects_invalid_stopping_rounds_with_informative_errors(invalid_stopping_rounds):
+    expected_type = type(invalid_stopping_rounds).__name__
+    with pytest.raises(TypeError, match=f"early_stopping_round should be an integer. Got '{expected_type}'"):
+        lgb.early_stopping(stopping_rounds=invalid_stopping_rounds)
 
 
 @pytest.mark.parametrize("stopping_rounds", [-10, -1, 0])

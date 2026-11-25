@@ -1048,7 +1048,7 @@ def test_early_stopping_via_global_params(first_metric_only):
     assert "error" in gbm.best_score[valid_set_name]
 
 
-@pytest.mark.parametrize("early_stopping_round", [-10, -1, 0, None, "None"])
+@pytest.mark.parametrize("early_stopping_round", [-10, -1, 0, None, "None", True])
 def test_early_stopping_is_not_enabled_for_non_positive_stopping_rounds(early_stopping_round):
     X, y = load_breast_cancer(return_X_y=True)
     num_trees = 5
@@ -1077,6 +1077,15 @@ def test_early_stopping_is_not_enabled_for_non_positive_stopping_rounds(early_st
         assert gbm.num_trees() == num_trees
     elif early_stopping_round == "None":
         with pytest.raises(TypeError, match="early_stopping_round should be an integer. Got 'str'"):
+            gbm = lgb.train(
+                params,
+                lgb_train,
+                feval=[constant_metric],
+                valid_sets=lgb_eval,
+                valid_names=valid_set_name,
+            )
+    elif isinstance(early_stopping_round, bool):
+        with pytest.raises(TypeError, match="early_stopping_round should be an integer. Got 'bool'"):
             gbm = lgb.train(
                 params,
                 lgb_train,

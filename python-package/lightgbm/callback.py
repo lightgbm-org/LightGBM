@@ -458,8 +458,11 @@ def _should_enable_early_stopping(stopping_rounds: Any) -> bool:
     activated (i.e. stopping_rounds > 0).  It also provides an informative error if the
     type is not int.
     """
-    if not isinstance(stopping_rounds, int):
+    # 'bool' is technically an int, avoid accidentally treating `stopping_rounds=True` as `stopping_rounds=1`,
+    # which is really unlikely to be intentional
+    if isinstance(stopping_rounds, bool) or not isinstance(stopping_rounds, int):
         raise TypeError(f"early_stopping_round should be an integer. Got '{type(stopping_rounds).__name__}'")
+
     return stopping_rounds > 0
 
 
