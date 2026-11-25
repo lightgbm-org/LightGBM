@@ -67,6 +67,25 @@ test_that("lgb.convert_with_rules() should work correctly for a dataset with onl
     }
 })
 
+test_that("lgb.convert_with_rules() converts logical values by their rule names", {
+    testDF <- data.frame(
+        mixed = c(FALSE, TRUE, NA)
+        , repeated = c(TRUE, TRUE, NA)
+    )
+    testDT <- data.table::as.data.table(testDF)
+    for (input_data in list(testDF, testDT)) {
+        conversion_result <- lgb.convert_with_rules(data.table::copy(input_data))
+        expect_identical(conversion_result$data$mixed, c(0L, 1L, -1L))
+        expect_identical(conversion_result$data$repeated, c(1L, 1L, -1L))
+        expect_identical(conversion_result$rules$mixed, c("FALSE" = 0L, "TRUE" = 1L))
+
+        custom_rules <- conversion_result$rules
+        custom_rules$mixed <- c("TRUE" = 5L, "FALSE" = 2L)
+        converted_data <- lgb.convert_with_rules(input_data, custom_rules)$data
+        expect_identical(converted_data$mixed, c(2L, 5L, -1L))
+    }
+})
+
 test_that("lgb.convert_with_rules() should not change a dataset with only integer columns", {
     testDF <- data.frame(
         col1 = 11L:15L

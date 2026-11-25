@@ -160,20 +160,23 @@ lgb.convert_with_rules <- function(data, rules = NULL) {
     }
 
     for (col_name in names(rules)) {
+        col_values <- data[[col_name]]
         if (column_classes[[col_name]] == "logical") {
+            col_values <- as.character(col_values)
             default_value_for_na <- .LGB_CONVERT_DEFAULT_FOR_LOGICAL_NA()
         } else {
             default_value_for_na <- .LGB_CONVERT_DEFAULT_FOR_NON_LOGICAL_NA()
         }
+        converted_values <- unname(rules[[col_name]][col_values])
         if (is_data_table) {
             data.table::set(
                 x = data
                 , j = col_name
-                , value = unname(rules[[col_name]][data[[col_name]]])
+                , value = converted_values
             )
             data[is.na(get(col_name)), (col_name) := default_value_for_na]
         } else {
-            data[[col_name]] <- unname(rules[[col_name]][data[[col_name]]])
+            data[[col_name]] <- converted_values
             data[is.na(data[col_name]), col_name] <- default_value_for_na
         }
     }
