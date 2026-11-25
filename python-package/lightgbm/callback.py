@@ -1,11 +1,12 @@
 # coding: utf-8
 """Callbacks library."""
 
-import numbers
 from collections import OrderedDict
 from dataclasses import dataclass
 from functools import partial
 from typing import TYPE_CHECKING, Any, Callable, Dict, List, Optional, Tuple, Union
+
+import numpy as np
 
 from .basic import (
     Booster,
@@ -280,7 +281,7 @@ class _EarlyStoppingCallback:
 
     def __init__(
         self,
-        stopping_rounds: int,
+        stopping_rounds: Union[int, np.integer],
         first_metric_only: bool = False,
         verbose: bool = True,
         min_delta: Union[float, List[float]] = 0.0,
@@ -459,13 +460,17 @@ def _should_enable_early_stopping(stopping_rounds: Any) -> bool:
     activated (i.e. stopping_rounds > 0).  It also provides an informative error if the
     type is not int.
     """
-    if isinstance(stopping_rounds, bool) or not isinstance(stopping_rounds, numbers.Integral):
+    # 'bool' is technically an int, avoid accidentally treating `stopping_rounds=True` as `stopping_rounds=1`,
+    # which is really unlikely to be intentional
+    if isinstance(stopping_rounds, bool) or not isinstance(stopping_rounds, (int, np.integer)):
         raise TypeError(f"early_stopping_round should be an integer. Got '{type(stopping_rounds).__name__}'")
+
+    # bool() because '>' comparison for a numpy integer returns `numpy.bool` and we want this to literally be a Python 'bool'
     return bool(stopping_rounds > 0)
 
 
 def early_stopping(
-    stopping_rounds: int,
+    stopping_rounds: Union[int, np.integer],
     first_metric_only: bool = False,
     verbose: bool = True,
     min_delta: Union[float, List[float]] = 0.0,
@@ -488,7 +493,7 @@ def early_stopping(
 
     Parameters
     ----------
-    stopping_rounds : int
+    stopping_rounds : int or ``numpy`` int scalar (e.g. ``np.int8(15)``)
         The possible number of rounds without the trend occurrence.
     first_metric_only : bool, optional (default=False)
         Whether to use only the first metric for early stopping.
