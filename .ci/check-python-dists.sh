@@ -33,7 +33,7 @@ if [ "$PY_MINOR_VER" -gt 7 ]; then
             --ignore 'compiled-objects-have-debug-symbols' \
             --ignore 'distro-too-large-compressed' \
             --max-allowed-size-uncompressed '550M' \
-            --max-allowed-files 807 \
+            --max-allowed-files 809 \
             "$(echo "${DIST_DIR}"/*)" || exit 1
     elif { test "${METHOD}" = "wheel"; }; then
         pydistcheck \
@@ -48,7 +48,7 @@ if [ "$PY_MINOR_VER" -gt 7 ]; then
             --inspect \
             --max-allowed-size-compressed '2M' \
             --max-allowed-size-uncompressed '12M' \
-            --max-allowed-files 807 \
+            --max-allowed-files 809 \
             "$(echo "${DIST_DIR}"/*)" || exit 1
     fi
 else

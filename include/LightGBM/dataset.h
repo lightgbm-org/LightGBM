@@ -154,6 +154,17 @@ class Metadata {
   inline const label_t* label() const { return label_.data(); }
 
   /*!
+  * \brief Get number of label columns (>1 only for multi-target regression)
+  * \note Labels are stored column-major: label()[k * num_data + i]
+  */
+  inline int num_label_columns() const {
+    if (num_data_ > 0 && !label_.empty()) {
+      return static_cast<int>(label_.size() / num_data_);
+    }
+    return 1;
+  }
+
+  /*!
   * \brief Set label for one record
   * \param idx Index of this record
   * \param value Label value of this record

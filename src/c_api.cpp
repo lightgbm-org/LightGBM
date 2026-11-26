@@ -368,6 +368,9 @@ class Booster {
     if (param.count("num_class") && new_config.num_class != config_.num_class) {
       Log::Fatal("Cannot change num_class during training");
     }
+    if (param.count("num_target") && new_config.num_target != config_.num_target) {
+      Log::Fatal("Cannot change num_target during training");
+    }
     if (param.count("boosting") && new_config.boosting != config_.boosting) {
       Log::Fatal("Cannot change boosting during training");
     }

@@ -10,6 +10,7 @@
 
 #include "binary_objective.hpp"
 #include "multiclass_objective.hpp"
+#include "multi_regression_objective.hpp"
 #include "rank_objective.hpp"
 #include "regression_objective.hpp"
 #include "xentropy_objective.hpp"
@@ -25,6 +26,9 @@ namespace LightGBM {
 
 #ifdef USE_CUDA
 ObjectiveFunction* ObjectiveFunction::CreateObjectiveFunctionCUDA(const std::string& type, const Config& config) {
+  if (config.num_target > 1) {
+    Log::Fatal("num_target > 1 is not supported by the CUDA version");
+  }
   if (type == std::string("regression")) {
     return new CUDARegressionL2loss(config);
   } else if (type == std::string("regression_l1")) {
@@ -78,6 +82,9 @@ ObjectiveFunction* ObjectiveFunction::CreateObjectiveFunction(const std::string&
   } else {
   #endif  // USE_CUDA
     if (type == std::string("regression")) {
+      if (config.num_target > 1) {
+        return new MultiRegressionL2loss(config);
+      }
       return new RegressionL2loss(config);
     } else if (type == std::string("regression_l1")) {
       return new RegressionL1loss(config);
@@ -123,6 +130,9 @@ ObjectiveFunction* ObjectiveFunction::CreateObjectiveFunction(const std::string&
   auto strs = Common::Split(str.c_str(), ' ');
   auto type = strs[0];
   if (type == std::string("regression")) {
+    if (MultiRegressionL2loss::ParseNumTarget(strs) > 1) {
+      return new MultiRegressionL2loss(strs);
+    }
     return new RegressionL2loss(strs);
   } else if (type == std::string("regression_l1")) {
     return new RegressionL1loss(strs);

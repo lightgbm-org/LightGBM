@@ -163,6 +163,7 @@ const std::unordered_map<std::string, std::string>& Config::alias_table() {
   {"name_pred", "output_result"},
   {"convert_model_file", "convert_model"},
   {"num_classes", "num_class"},
+  {"num_targets", "num_target"},
   {"unbalance", "is_unbalance"},
   {"unbalanced_sets", "is_unbalance"},
   {"metrics", "metric"},
@@ -301,6 +302,7 @@ const std::unordered_set<std::string>& Config::parameter_set() {
   "convert_model",
   "objective_seed",
   "num_class",
+  "num_target",
   "is_unbalance",
   "scale_pos_weight",
   "sigmoid",
@@ -601,6 +603,9 @@ void Config::GetMembersFromString(const std::unordered_map<std::string, std::str
   GetInt(params, "num_class", &num_class);
   CHECK_GT(num_class, 0);
 
+  GetInt(params, "num_target", &num_target);
+  CHECK_GT(num_target, 0);
+
   GetBool(params, "is_unbalance", &is_unbalance);
 
   GetDouble(params, "scale_pos_weight", &scale_pos_weight);
@@ -771,6 +776,7 @@ std::string Config::SaveMembersToString() const {
   str_buf << "[parser_config_file: " << parser_config_file << "]\n";
   str_buf << "[objective_seed: " << objective_seed << "]\n";
   str_buf << "[num_class: " << num_class << "]\n";
+  str_buf << "[num_target: " << num_target << "]\n";
   str_buf << "[is_unbalance: " << is_unbalance << "]\n";
   str_buf << "[scale_pos_weight: " << scale_pos_weight << "]\n";
   str_buf << "[sigmoid: " << sigmoid << "]\n";
@@ -914,6 +920,7 @@ const std::unordered_map<std::string, std::vector<std::string>>& Config::paramet
     {"convert_model", {"convert_model_file"}},
     {"objective_seed", {}},
     {"num_class", {"num_classes"}},
+    {"num_target", {"num_targets"}},
     {"is_unbalance", {"unbalance", "unbalanced_sets"}},
     {"scale_pos_weight", {}},
     {"sigmoid", {}},
@@ -1060,6 +1067,7 @@ const std::unordered_map<std::string, std::string>& Config::ParameterTypes() {
     {"convert_model", "string"},
     {"objective_seed", "int"},
     {"num_class", "int"},
+    {"num_target", "int"},
     {"is_unbalance", "bool"},
     {"scale_pos_weight", "double"},
     {"sigmoid", "double"},

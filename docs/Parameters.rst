@@ -120,7 +120,7 @@ Core Parameters
 
    -  regression application
 
-      -  ``regression``, L2 loss, aliases: ``regression_l2``, ``l2``, ``mean_squared_error``, ``mse``, ``l2_root``, ``root_mean_squared_error``, ``rmse``
+      -  ``regression``, L2 loss, aliases: ``regression_l2``, ``l2``, ``mean_squared_error``, ``mse``, ``l2_root``, ``root_mean_squared_error``, ``rmse``. Supports multi-target regression, see ``num_target``
 
       -  ``regression_l1``, L1 loss, aliases: ``l1``, ``mean_absolute_error``, ``mae``
 
@@ -1121,6 +1121,16 @@ Objective Parameters
 -  ``num_class`` :raw-html:`<a id="num_class" title="Permalink to this parameter" href="#num_class">&#x1F517;&#xFE0E;</a>`, default = ``1``, type = int, aliases: ``num_classes``, constraints: ``num_class > 0``
 
    -  used only in ``multi-class`` classification application
+
+-  ``num_target`` :raw-html:`<a id="num_target" title="Permalink to this parameter" href="#num_target">&#x1F517;&#xFE0E;</a>`, default = ``1``, type = int, aliases: ``num_targets``, constraints: ``num_target > 0``
+
+   -  number of targets, used only in ``regression`` application
+
+   -  when ``num_target > 1``, label must have ``num_data * num_target`` values, stored column-major (all rows of target 0, then all rows of target 1, ...), and ``num_target`` trees are trained per iteration, one per target
+
+   -  when ``num_target > 1``, only ``l2`` and ``rmse`` metrics are supported, computed over all samples and targets
+
+   -  **Note**: ``num_target > 1`` is not supported by the CUDA version or by saving Dataset to binary file
 
 -  ``is_unbalance`` :raw-html:`<a id="is_unbalance" title="Permalink to this parameter" href="#is_unbalance">&#x1F517;&#xFE0E;</a>`, default = ``false``, type = bool, aliases: ``unbalance``, ``unbalanced_sets``
 

@@ -575,6 +575,7 @@ class LGBMModel(_LGBMModelBase):
         self._n_features_in: int = -1
         self._classes: Optional[np.ndarray] = None
         self._n_classes: int = -1
+        self._n_targets: int = 1
         self.set_params(**kwargs)
 
     # scikit-learn 1.6 introduced an __sklearn__tags() method intended to replace _more_tags().
@@ -782,6 +783,10 @@ class LGBMModel(_LGBMModelBase):
             for alias in _ConfigAliases.get("num_class"):
                 params.pop(alias, None)
             params["num_class"] = self._n_classes
+        if self._n_targets > 1:
+            for alias in _ConfigAliases.get("num_target"):
+                params.pop(alias, None)
+            params["num_target"] = self._n_targets
         if hasattr(self, "_eval_at"):
             eval_at = self._eval_at
             for alias in _ConfigAliases.get("eval_at"):
@@ -1032,6 +1037,8 @@ class LGBMModel(_LGBMModelBase):
                 ensure_all_finite=False,
                 # raise an error on 0-row and 1-row inputs
                 ensure_min_samples=2,
+                # 2-D y is only meaningful for multi-target regression
+                multi_output=isinstance(self, LGBMRegressor),
             )
             if sample_weight is not None:
                 if SKLEARN_CHECK_SAMPLE_WEIGHT_HAS_ALLOW_ZERO_WEIGHTS_ARG:
@@ -1603,10 +1610,14 @@ class LGBMRegressor(_LGBMRegressorBase, LGBMModel):
             tags = {}
         # override those with LightGBM-specific preferences
         tags.update(LGBMModel._more_tags(self))
+        tags["multioutput"] = True
         return tags
 
     def __sklearn_tags__(self) -> "_sklearn_Tags":
-        return super().__sklearn_tags__()
+        tags = super().__sklearn_tags__()
+        if tags is not None:
+            tags.target_tags.multi_output = True
+        return tags
 
     def fit(  # type: ignore[override]
         self,
@@ -1748,6 +1759,8 @@ class LGBMRegressor(_LGBMRegressorBase, LGBMModel):
             maximize : bool
                 Are higher values better? e.g. ``True`` for AUC and ``False`` for binary error.
         """  # noqa: DOC105
+        y_shape: Tuple[int, ...] = np.shape(y) if isinstance(y, list) else getattr(y, "shape", ())
+        self._n_targets = y_shape[1] if len(y_shape) == 2 else 1
         super().fit(
             X,
             y,
