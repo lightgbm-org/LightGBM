@@ -213,19 +213,32 @@ if(USE_OPENMP)
 endif()
 
 if(USE_GPU)
-    set(BOOST_COMPUTE_HEADER_DIR ${PROJECT_SOURCE_DIR}/external_libs/compute/include)
-    include_directories(${BOOST_COMPUTE_HEADER_DIR})
     find_package(OpenCL REQUIRED)
     include_directories(${OpenCL_INCLUDE_DIRS})
     message(STATUS "OpenCL include directory: " ${OpenCL_INCLUDE_DIRS})
     if(WIN32)
         set(Boost_USE_STATIC_LIBS ON)
     endif()
-    find_package(Boost 1.56.0 COMPONENTS filesystem system REQUIRED)
+
+    # Boost.System has been header-only since Boost 1.69, and its stub library
+    # was removed in Boost 1.89 (https://www.boost.org/users/history/version_1_89_0.html),
+    # so it must not be requested as a component. Boost.Filesystem is still a compiled library.
+    #
+    # The minimum is 1.69 because older Boost.Compute releases (bundled with Boost)
+    # fail to compile with modern compilers (e.g. 'svm_ptr.hpp' in Boost 1.66).
+    find_package(Boost 1.69.0 COMPONENTS filesystem REQUIRED)
+
+    # Boost's headers can request libraries themselves on MSVC ("auto-linking"), using names
+    # computed from compiler flags rather than the libraries CMake found.
+    #
+    # Turn that off so only 'Boost_LIBRARIES' is linked.
+    #
+    # details: https://www.boost.org/doc/libs/release/more/getting_started/windows.html#auto-linking
     if(WIN32)
-        # disable autolinking in boost
         add_definitions(-DBOOST_ALL_NO_LIB)
     endif()
+
+    # ensure the found sources are used
     include_directories(${Boost_INCLUDE_DIRS})
     add_definitions(-DUSE_GPU)
 endif()
