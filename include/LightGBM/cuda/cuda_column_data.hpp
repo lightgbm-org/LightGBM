@@ -45,6 +45,9 @@ class CUDAColumnData {
 
   void CopySubrow(const CUDAColumnData* full_set, const data_size_t* used_indices, const data_size_t num_used_indices);
 
+  /*! \brief CUDA device on which this object's buffers were allocated */
+  int gpu_device_id() const { return gpu_device_id_; }
+
   uint8_t* const* cuda_data_by_column() const { return cuda_data_by_column_.RawData(); }
 
   uint32_t feature_min_bin(const int feature_index) const { return feature_min_bin_[feature_index]; }
