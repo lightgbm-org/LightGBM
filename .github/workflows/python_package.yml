@@ -25,9 +25,21 @@ env:
 
 jobs:
   test-linux-aarch64:
-    name: bdist wheel (aarch64-manylinux2014, gcc, Python 3.12)
+    name: ${{ matrix.task }} (aarch64-manylinux2014, gcc, Python 3.12)
     runs-on: ubuntu-24.04-arm
     timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - task: bdist
+            method: wheel
+            artifact-name: linux-aarch64-wheel
+            artifact-path: artifacts/*.whl
+          - task: regular
+            method: source
+            artifact-name: linux-arm64-liblightgbm
+            artifact-path: artifacts/lib_lightgbm_arm64.so
     steps:
       - name: Checkout repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
@@ -58,11 +70,11 @@ jobs:
             --env BUILD_DIRECTORY=${{ env.BUILD_DIRECTORY }} \
             --env BUILD_ARTIFACTSTAGINGDIRECTORY=${{ env.BUILD_DIRECTORY }}/artifacts/ \
             --env COMPILER=gcc \
-            --env METHOD=wheel \
+            --env METHOD=${{ matrix.method }} \
             --env OS_NAME=linux \
             --env PRODUCES_ARTIFACTS=true \
             --env PYTHON_VERSION="3.12" \
-            --env TASK=bdist \
+            --env TASK=${{ matrix.task }} \
             -v "${PWD}":"${{ env.BUILD_DIRECTORY }}" \
             -w ${{ env.BUILD_DIRECTORY }} \
             "${IMAGE_URI}" \
@@ -70,8 +82,33 @@ jobs:
       - name: Upload artifacts
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9  # v7.0.2
         with:
-          name: linux-aarch64-wheel
-          path: artifacts/*.whl
+          name: ${{ matrix.artifact-name }}
+          path: ${{ matrix.artifact-path }}
+          if-no-files-found: error
+  build-windows-arm64:
+    name: Native library (Windows ARM64, MSVC)
+    runs-on: windows-11-arm
+    timeout-minutes: 30
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          persist-credentials: false
+          submodules: true
+      - name: Build native library
+        shell: pwsh
+        run: |
+          cmake -B build -S . -A ARM64
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          cmake --build build --target _lightgbm --config Release
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          New-Item -ItemType Directory -Force "$env:BUILD_ARTIFACTSTAGINGDIRECTORY"
+          Copy-Item Release/lib_lightgbm.dll "$env:BUILD_ARTIFACTSTAGINGDIRECTORY/lib_lightgbm_arm64.dll"
+      - name: Upload artifacts
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9  # v7.0.2
+        with:
+          name: windows-arm64-liblightgbm
+          path: artifacts/lib_lightgbm_arm64.dll
           if-no-files-found: error
   test:
     # yamllint disable-line rule:line-length
@@ -197,6 +234,12 @@ jobs:
             compiler: clang
             produces-artifacts: 'true'
             artifact-name: 'macosx-amd64-liblightgbm'
+            python_version: '3.12'
+          - os: macos-15
+            task: regular
+            compiler: clang
+            produces-artifacts: 'true'
+            artifact-name: 'macosx-arm64-liblightgbm'
             python_version: '3.12'
           - os: ubuntu-latest
             container: *manylinux_amd64_image
@@ -377,6 +420,8 @@ jobs:
     timeout-minutes: 30
     needs:
       - test
+      - test-linux-aarch64
+      - build-windows-arm64
     steps:
       - name: Checkout repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
@@ -389,15 +434,16 @@ jobs:
         with:
           merge-multiple: true
           path: ${{ env.BUILD_ARTIFACTSTAGINGDIRECTORY }}
-          pattern: '*amd64*-liblightgbm'
+          pattern: '*-liblightgbm'
           run-id: ${{ github.run_id }}
       - name: Setup NuGet CLI
         uses: NuGet/setup-nuget@fd55a6f3b34392fa83fde1454582407d8c714123  # v4.0
       # ref: https://github.com/NuGet/setup-nuget/issues/168
-      - name: Setup mono
+      - name: Setup mono and OpenMP
         run: |
           sudo apt-get update -y
           sudo apt-get install --no-install-recommends -y \
+            libgomp1 \
             mono-devel
       - name: Create NuGet package
         run: |
@@ -407,6 +453,23 @@ jobs:
             -NonInteractive \
             -Verbosity detailed \
             -OutputDirectory "${BUILD_ARTIFACTSTAGINGDIRECTORY}"
+      - name: Setup .NET
+        uses: actions/setup-dotnet@26b0ec14cb23fa6904739307f278c14f94c95bf1  # v5.4.0
+        with:
+          dotnet-version: '10.0.x'
+      - name: Test NuGet package
+        env:
+          NUGET_PACKAGES: '${{ runner.temp }}/nuget-packages'
+        run: |
+          LIGHTGBM_VERSION="$(sed 's/rc/-rc/' VERSION.txt)"
+          dotnet build tests/nuget/Smoke.csproj \
+            --configuration Release \
+            --source "${BUILD_ARTIFACTSTAGINGDIRECTORY}" \
+            -p:LightGBMVersion="${LIGHTGBM_VERSION}" \
+            -p:NuGetAudit=false \
+            --output "${RUNNER_TEMP}/nuget-smoke"
+          cd "${RUNNER_TEMP}/nuget-smoke"
+          dotnet Smoke.dll
       - name: Upload artifacts
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9  # v7.0.2
         with:

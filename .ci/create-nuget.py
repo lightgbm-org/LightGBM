@@ -10,19 +10,25 @@ if __name__ == "__main__":
     source = Path(sys.argv[1])
     nuget_dir = Path(__file__).absolute().parent / "nuget"
     print(f"Creating nuget directory '{nuget_dir}'")
-    linux_folder_path = nuget_dir / "runtimes" / "linux-x64" / "native"
-    linux_folder_path.mkdir(parents=True, exist_ok=True)
-    osx_folder_path = nuget_dir / "runtimes" / "osx-x64" / "native"
-    osx_folder_path.mkdir(parents=True, exist_ok=True)
-    windows_folder_path = nuget_dir / "runtimes" / "win-x64" / "native"
-    windows_folder_path.mkdir(parents=True, exist_ok=True)
+    libraries = {
+        "linux-x64": ("lib_lightgbm.so", "lib_lightgbm.so"),
+        "linux-arm64": ("lib_lightgbm_arm64.so", "lib_lightgbm.so"),
+        "osx-x64": ("lib_lightgbm.dylib", "lib_lightgbm.dylib"),
+        "osx-arm64": ("lib_lightgbm_arm64.dylib", "lib_lightgbm.dylib"),
+        "win-x64": ("lib_lightgbm.dll", "lib_lightgbm.dll"),
+        "win-arm64": ("lib_lightgbm_arm64.dll", "lib_lightgbm.dll"),
+    }
+    for filename in [*(source_name for source_name, _ in libraries.values()), "lightgbm.exe"]:
+        if not (source / filename).is_file():
+            raise FileNotFoundError(f"Required NuGet input is missing: {source / filename}")
     build_folder_path = nuget_dir / "build"
     build_folder_path.mkdir(parents=True, exist_ok=True)
     print(f"Looking for libraries in '{source}'")
-    copyfile(source / "lib_lightgbm.so", linux_folder_path / "lib_lightgbm.so")
-    copyfile(source / "lib_lightgbm.dylib", osx_folder_path / "lib_lightgbm.dylib")
-    copyfile(source / "lib_lightgbm.dll", windows_folder_path / "lib_lightgbm.dll")
-    copyfile(source / "lightgbm.exe", windows_folder_path / "lightgbm.exe")
+    for rid, (source_name, target_name) in libraries.items():
+        native_dir = nuget_dir / "runtimes" / rid / "native"
+        native_dir.mkdir(parents=True, exist_ok=True)
+        copyfile(source / source_name, native_dir / target_name)
+    copyfile(source / "lightgbm.exe", nuget_dir / "runtimes" / "win-x64" / "native" / "lightgbm.exe")
     version = (nuget_dir.parents[1] / "VERSION.txt").read_text(encoding="utf-8").strip().replace("rc", "-rc")
     print(f"Setting version to '{version}'")
     nuget_str = rf"""<?xml version="1.0"?>
@@ -61,6 +67,11 @@ if __name__ == "__main__":
         <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
         <Visible>false</Visible>
         </Content>
+        <Content Include="$(MSBuildThisFileDirectory)/../runtimes/win-arm64/native/*.dll"
+                Condition="'$(PlatformTarget)' == 'ARM64'">
+        <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+        <Visible>false</Visible>
+        </Content>
     </ItemGroup>
     </Project>
     """
@@ -73,9 +84,10 @@ if __name__ == "__main__":
             Condition="'$(EnableLightGBMUnsupportedPlatformTargetCheck)' == 'true'"
             AfterTargets="_CheckForInvalidConfigurationAndPlatform">
         <Error Condition="'$(PlatformTarget)' != 'x64' AND
+                        '$(PlatformTarget)' != 'ARM64' AND
                         ('$(OutputType)' == 'Exe' OR '$(OutputType)'=='WinExe') AND
                         !('$(TargetFrameworkIdentifier)' == '.NETCoreApp' AND '$(PlatformTarget)' == '')"
-            Text="LightGBM currently supports 'x64' processor architectures. Please ensure your application is targeting 'x64'." />
+            Text="LightGBM currently supports 'x64' and 'ARM64' processor architectures. Please ensure your application is targeting 'x64' or 'ARM64'." />
     </Target>
     </Project>
     """
