@@ -1874,6 +1874,52 @@ def test_all_expected_params_are_written_out_to_model_text(tmp_path):
         assert param_str in model_txt_from_memory
 
 
+@pytest.mark.parametrize("use_model_file", [False, True], ids=["init-model-booster", "init-model-file"])
+def test_pandas_categorical_continued_training(tmp_path, use_model_file):
+    pd = pytest.importorskip("pandas")
+
+    # Train the initial model on the first batch.
+    X_initial = pd.DataFrame({"category": pd.Categorical(["a", "b"] * 30)})
+    y_initial = np.tile([0, 1], 30)
+    params = {"objective": "binary", "verbosity": -1, "num_threads": 1}
+    initial_model = lgb.train(params, lgb.Dataset(X_initial, label=y_initial), num_boost_round=3)
+
+    # The new batch reverses the labels while retaining the same category definitions.
+    X_continuation = pd.DataFrame({"category": pd.Categorical(["a", "b"] * 40)})
+    y_continuation = np.tile([1, 0], 40)
+    # Validation uses the opposite category order to exercise category alignment.
+    X_valid = pd.DataFrame({"category": pd.Categorical(["b", "a"], categories=["b", "a"])})
+    y_valid = [0, 1]
+    expected_train_init_scores = initial_model.predict(X_continuation, raw_score=True)
+    expected_valid_init_scores = initial_model.predict(X_valid, raw_score=True)
+    init_model_arg = initial_model
+    if use_model_file:
+        init_model_arg = tmp_path / "initial.txt"
+        initial_model.save_model(init_model_arg)
+
+    # Continue on the new batch using fresh, unconstructed datasets.
+    continuation_train_set = lgb.Dataset(X_continuation, label=y_continuation)
+    continuation_valid_set = lgb.Dataset(X_valid, label=y_valid)
+    continued_model = lgb.train(
+        params,
+        continuation_train_set,
+        num_boost_round=2,
+        init_model=init_model_arg,
+        valid_sets=[continuation_valid_set],
+    )
+
+    # Check initialization, preservation of the original trees, and learning from the new batch.
+    np.testing.assert_allclose(continuation_train_set.get_init_score(), expected_train_init_scores)
+    np.testing.assert_allclose(continuation_valid_set.get_init_score(), expected_valid_init_scores)
+    assert continued_model.current_iteration() == 5
+    np.testing.assert_allclose(
+        continued_model.predict(X_continuation, raw_score=True, num_iteration=3), expected_train_init_scores
+    )
+    assert log_loss(y_continuation, continued_model.predict(X_continuation)) < log_loss(
+        y_continuation, initial_model.predict(X_continuation)
+    )
+
+
 # why fixed seed?
 # sometimes there is no difference how cols are treated (cat or not cat)
 def test_pandas_categorical(rng_fixed_seed, tmp_path):
