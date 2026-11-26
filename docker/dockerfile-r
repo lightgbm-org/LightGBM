@@ -10,7 +10,8 @@ RUN apt-get update && \
         libomp-dev && \
     git clone \
         --recursive \
-        "${LIGHTGBM_GIT_URL}" && \
+        "${LIGHTGBM_GIT_URL}" \
+        LightGBM && \
     git -C ./LightGBM checkout ${LIGHTGBM_GIT_REF} && \
     cd ./LightGBM && \
     sh build-cran-package.sh --no-build-vignettes && \
