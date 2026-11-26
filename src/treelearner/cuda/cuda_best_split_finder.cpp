@@ -95,11 +95,14 @@ void CUDABestSplitFinder::Init() {
   CUDASUCCESS_OR_FATAL(cudaStreamCreate(&cuda_streams_[1]));
   cuda_best_split_info_buffer_.Resize(8);
   if (use_global_memory_) {
-    cuda_feature_hist_grad_buffer_.Resize(static_cast<size_t>(num_total_bin_));
-    cuda_feature_hist_hess_buffer_.Resize(static_cast<size_t>(num_total_bin_));
+    // Global-memory kernels use hist_offset * 2 as each feature's scratch offset,
+    // matching the gradient/hessian pairs in the histogram. Use the same factor
+    // for the allocation so the last feature's scratch space stays in bounds.
+    cuda_feature_hist_grad_buffer_.Resize(static_cast<size_t>(num_total_bin_) * 2);
+    cuda_feature_hist_hess_buffer_.Resize(static_cast<size_t>(num_total_bin_) * 2);
     if (has_categorical_feature_) {
-      cuda_feature_hist_stat_buffer_.Resize(static_cast<size_t>(num_total_bin_));
-      cuda_feature_hist_index_buffer_.Resize(static_cast<size_t>(num_total_bin_));
+      cuda_feature_hist_stat_buffer_.Resize(static_cast<size_t>(num_total_bin_) * 2);
+      cuda_feature_hist_index_buffer_.Resize(static_cast<size_t>(num_total_bin_) * 2);
     }
   }
 
