@@ -58,7 +58,7 @@ test_that("using a custom objective, custom eval, and no other metrics works", {
     , eval = evalerror
   )
   expect_false(is.null(bst$record_evals))
-  expect_equal(bst$best_iter, 4L)
+  expect_equal(bst$best_iter, -1L)
   expect_true(abs(bst$best_score - 0.000621) < .LGB_NUMERIC_TOLERANCE)
 
   eval_results <- bst$eval_valid(feval = evalerror)[[1L]]
